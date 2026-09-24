@@ -2,7 +2,7 @@
 
 ## Project baseline
 
-Skies of Aerwyth is a new Godot project. Its game design and runtime architecture are not yet documented in this repository. Use the user's requirements and the code that exists as the authority for gameplay, controls, camera, and visual direction.
+Skies of Aerwyth is a new Godot project. Read the [game design document](src/game_design_document.md) for its gameplay concept and visual direction. Treat sections marked TBD as unresolved design decisions. Runtime architecture is not yet documented. Use the user's requirements, the design document, and the code that exists as the authority for implementation; the document describes intended systems, not implemented features.
 
 Current technical baseline:
 
@@ -35,7 +35,7 @@ Use role-based top-level folders with consistent feature names beneath them. Cre
 | `resources/<feature>/` | Authored `.tres` definitions and reusable configuration. |
 | `assets/` | Runtime-ready models, textures, sprites, audio, and fonts, grouped by asset type and then feature where useful. |
 | `materials/`, `shaders/`, `animations/` | Shared presentation resources when needed. Keep scene-specific subresources local when that is clearer. |
-| `src/` | Editable art sources and other authoring inputs. Add `src/.gdignore` when creating this directory, and export runtime assets into `assets/`. Gameplay code belongs in `scripts/`. |
+| `src/` | The [game design document](src/game_design_document.md), editable art sources, and other authoring inputs. Keep `src/.gdignore` in place, and export runtime assets into `assets/`. Gameplay code belongs in `scripts/`. |
 | `localization/` | Editable translation sources if localization is introduced. |
 | `scripts/tools/`, `scenes/tools/` | Purposeful validation and content-generation tools. |
 | `docs/` | Design decisions, technical notes, and reference material. |
