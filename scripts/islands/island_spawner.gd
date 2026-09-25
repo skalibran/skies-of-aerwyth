@@ -1,0 +1,88 @@
+class_name IslandSpawner
+extends Node
+
+@export var island_scene: PackedScene
+@export var container: Node3D
+@export var origin: FloatingOrigin
+@export var fleet: FleetController
+@export var world_seed: int = 84317
+@export_range(1.0, 300.0) var minimum_spacing: float = 8.0
+@export_range(1.0, 300.0) var maximum_spacing: float = 20.0
+@export_range(100.0, 4000.0) var look_ahead: float = 1500.0
+@export_range(100.0, 4000.0) var keep_behind: float = 1300.0
+@export_range(300.0, 3000.0) var field_half_width: float = 1600.0
+@export var altitude_range := Vector2(-180.0, 180.0)
+
+var records: Array[IslandRecord] = []
+var active: Dictionary[int, FloatingIsland] = {}
+var obstacles: Array[FloatingIsland] = []
+var next_position: RoutePosition
+var rng := RandomNumberGenerator.new()
+var _next_id: int = 1
+
+
+func initialize(start: RoutePosition) -> void:
+	assert(minimum_spacing > 0.0)
+	rng.seed = world_seed
+	# Fill the visible surroundings before the first frame, including behind us.
+	next_position = start.advanced(keep_behind)
+	var initial_budget := ceili((keep_behind + look_ahead) / minimum_spacing) + 1
+	_generate_through(start, initial_budget, true)
+
+
+func update_region(anchor_position: RoutePosition) -> void:
+	_generate_through(anchor_position, 32)
+	var trailing_edge := anchor_position.advanced(keep_behind)
+	for island_id in active.keys():
+		var island: FloatingIsland = active[island_id]
+		if island.record.route_position.compare(trailing_edge) > 0:
+			obstacles.erase(island)
+			origin.unregister_root(island)
+			island.queue_free()
+			active.erase(island_id)
+
+
+func _generate_through(anchor_position: RoutePosition, budget: int, clear_starting_fleet: bool = false) -> void:
+	var leading_edge := anchor_position.advanced(-look_ahead)
+	var trailing_edge := anchor_position.advanced(keep_behind)
+	# A bounded batch also handles several thresholds crossed in one step.
+	for spawn_index in range(budget):
+		if next_position.compare(leading_edge) < 0:
+			break
+		var record := _generate_record()
+		next_position = next_position.advanced(-rng.randf_range(minimum_spacing, maxf(minimum_spacing, maximum_spacing)))
+		if clear_starting_fleet and _overlaps_starting_fleet(record):
+			continue
+		records.append(record)
+		if record.route_position.compare(trailing_edge) <= 0:
+			_load_record(record)
+
+
+func _overlaps_starting_fleet(record: IslandRecord) -> bool:
+	var position := record.scene_position(origin.segment)
+	for ship in fleet.members:
+		var clearance := record.radius + record.depth + ship.hull_radius + ship.hull_half_segment + ship.island_clearance + 30.0
+		if position.distance_squared_to(ship.global_position) < clearance * clearance:
+			return true
+	return false
+
+
+func _generate_record() -> IslandRecord:
+	var record := IslandRecord.new()
+	record.entity_id = _next_id
+	_next_id += 1
+	record.route_position = next_position
+	record.altitude = rng.randf_range(altitude_range.x, altitude_range.y)
+	record.radius = rng.randf_range(13.0, 22.0)
+	record.depth = rng.randf_range(16.0, 30.0)
+	record.lateral_position = rng.randf_range(-field_half_width, field_half_width)
+	return record
+
+
+func _load_record(record: IslandRecord) -> void:
+	var island := island_scene.instantiate() as FloatingIsland
+	container.add_child(island)
+	island.configure(record, origin.segment)
+	origin.register_root(island)
+	active[record.entity_id] = island
+	obstacles.append(island)

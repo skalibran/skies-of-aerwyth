@@ -2,13 +2,18 @@
 
 ## Project baseline
 
-Skies of Aerwyth is a new Godot project. Read the [game design document](src/game_design_document.md) for its gameplay concept and visual direction. Treat sections marked TBD as unresolved design decisions. Runtime architecture is not yet documented. Use the user's requirements, the design document, and the code that exists as the authority for implementation; the document describes intended systems, not implemented features.
+Skies of Aerwyth has an initial movement prototype. Read the [game design document](src/game_design_document.md) for its gameplay concept and visual direction, and [movement runtime notes](src/docs/movement.md) for implemented ownership and validation contracts. Treat sections marked TBD as unresolved design decisions. Use the user's requirements, the design document, and the code that exists as the authority for implementation; the design document describes intended systems, not implementation status.
 
 Current technical baseline:
 
 - `project.godot` declares Godot 4.7 and Forward Plus, with Jolt Physics and D3D12 on Windows.
-- Display stretch uses `canvas_items` with `expand` aspect. No explicit design resolution is configured.
-- The project starts with an icon and configuration. There is no main scene, gameplay script, autoload, test framework, configured linter, localization pipeline, or export preset yet.
+- Display stretch uses `canvas_items` with `expand` aspect and a 1280 x 800 design resolution. Physics interpolation is enabled.
+- The main scene is `scenes/world/journey.tscn`: nine primitive airships, a moving fleet anchor, local avoidance, a bounded orbit/free camera, floating-origin travel along Z-, and streamed primitive islands. The fleet camera can follow the ship average or anchor through an Inspector setting; the final preference remains open. There is no on-screen UI in this milestone.
+- `scripts/tools/check_movement.gd` provides focused simulation and rendered/input checks. There is no general test framework, autoload, configured linter, localization pipeline, or export preset yet. Combat, production, save files, and island management/transitions are not implemented.
+- The camera supports scroll/D-pad orbit zoom, FPS-style free flight relative to the fleet anchor, and Shift/LT speed boosts. Free mode inherits anchor translation while keeping independent looking and movement within the mean-centered viewing sphere. F3 toggles in-world ship navigation debug; controls and geometry colors are documented in the movement runtime notes.
+- Endgame scale targets 100+ ships. Formation half-extents are 180/120/180 units and the camera sphere radius is 900 units. Starting ships occupy several altitude levels, and local wandering samples all three axes equally. `scripts/tools/check_fleet_scale.gd` exercises 128 ships and reports simulation-step timings; it does not replace endgame combat/render profiling.
+- Islands populate a broad field around the fleet from startup, with varied heights and upright capsule collision. Ships use local lateral detours around loaded islands, with height checks against the capsules for clear over/underflight. `scripts/tools/check_island_navigation.gd` covers routing, collision, rebasing, and unloading; navigation debug marks detours in pink.
+- Journey keeps a green ground plane below the fleet, centered along travel and registered for origin shifts. It is a visual placeholder for later noise-generated 3D voxel terrain; ground collision and terrain navigation are not implemented.
 - Use GDScript by default. Add languages, addons, and external dependencies only when the task justifies them.
 - `.godot/` contains generated editor and import state. Do not edit or commit it.
 
@@ -90,7 +95,7 @@ After preparing that environment, these command shapes apply:
 & "<godot-console.exe>" --path "<absolute-project-path>" --log-file "<absolute-runtime-log-path>"
 ```
 
-The runtime command requires a configured main scene. Until one exists, validate a specific scene when one is available, and do not claim the whole game is runnable.
+The runtime command starts the movement prototype. It does not yet implement the full game loop. For focused checks, use the commands and capture setup in [movement runtime notes](src/docs/movement.md).
 
 Validation should match the change:
 

@@ -1,0 +1,50 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/ships/airship.gd" id="1"]
+
+[sub_resource type="CapsuleShape3D" id="Hull"]
+radius = 2.2
+height = 10.0
+
+[sub_resource type="StandardMaterial3D" id="EnvelopeMaterial"]
+albedo_color = Color(0.78, 0.73, 0.53, 1)
+metallic = 0.18
+roughness = 0.72
+
+[sub_resource type="CapsuleMesh" id="Envelope"]
+material = SubResource("EnvelopeMaterial")
+radius = 1.7
+height = 8.7
+radial_segments = 16
+rings = 8
+
+[sub_resource type="StandardMaterial3D" id="GondolaMaterial"]
+albedo_color = Color(0.13, 0.25, 0.26, 1)
+metallic = 0.45
+roughness = 0.58
+
+[sub_resource type="BoxMesh" id="Gondola"]
+material = SubResource("GondolaMaterial")
+size = Vector3(1.6, 0.8, 3.7)
+
+[node name="Ship" type="CharacterBody3D" node_paths=PackedStringArray("visual_root", "hull_collider")]
+collision_layer = 1
+collision_mask = 3
+motion_mode = 1
+script = ExtResource("1")
+visual_root = NodePath("VisualRoot")
+hull_collider = NodePath("HullCollider")
+
+[node name="HullCollider" type="CollisionShape3D" parent="."]
+rotation = Vector3(1.5707964, 0, 0)
+shape = SubResource("Hull")
+
+[node name="VisualRoot" type="Node3D" parent="."]
+
+[node name="Envelope" type="MeshInstance3D" parent="VisualRoot"]
+rotation = Vector3(1.5707964, 0, 0)
+mesh = SubResource("Envelope")
+
+[node name="Gondola" type="MeshInstance3D" parent="VisualRoot"]
+position = Vector3(0, -1.5, 0.3)
+mesh = SubResource("Gondola")

@@ -37,11 +37,15 @@ Every active ship is fighting, moving to engage an opponent, or traveling onward
 
 ### Fleet anchor and airship movement
 
+Endgame play should support fleets of 100+ ships. Navigation space and camera range must accommodate those fleets while preserving nearby individual maneuvers. This is a scale target, not a new starting fleet size or a fixed ship cap.
+
 The anchor advances continuously along Z- while the journey simulation is running and friendly ships remain. Calculate the average position of the active friendly ships separately. The farther the anchor moves from that average, the more its forward speed decreases; as the ships catch up, it recovers speed. The average regulates the anchor's movement without replacing its position. Adding or losing a ship can affect the speed response, but must not teleport the anchor or advance milestones immediately.
 
-Each ship generates its own navigation destination around the anchor. These destinations move with the anchor. On reaching its destination, the ship chooses another within a limited nearby area, producing gentle movement within the fleet. Routine destination changes must not send a ship from the front to the back of the entire fleet. Combat pursuit takes priority over this travel behavior when opponents are present.
+Each ship generates its own navigation destination around the anchor. These destinations move with the anchor. Ships occupy a volume with meaningful vertical spread, and nearby destinations may move up or down as well as sideways and forward/back. On reaching its destination, the ship chooses another within a limited nearby area, producing gentle movement within the fleet. Routine destination changes must not send a ship from the front to the back of the entire fleet. Combat pursuit takes priority over this travel behavior when opponents are present.
 
 Ships avoid one another while allowing fairly close pass-bys. Their movement should convey heavy, sluggish airships: gradual acceleration, braking, and turns, with limited pitch and banking. They must not perform loops, flips, or abrupt model rotations.
+
+Floating islands occupy a broad surrounding landscape at varied heights above, through, and below the fleet, including directly in its path. The journey should feel like crossing an open world, with scenery beside and behind the fleet as well as ahead. Ships steer around solid islands, temporarily departing from their travel destinations as needed, then resume formation travel. Clear routes above or below an island remain usable. The anchor continues to drive progression and slows according to the existing fleet-average feedback while ships maneuver around obstacles.
 
 ### Encounters
 
@@ -70,12 +74,16 @@ Savegames preserve versioned gameplay state: the anchor's logical position, acti
 The player uses an orbit camera that can snap its focus to a selected ship or the fleet, then follow that target while orbiting it.
 
 - Mouse clicking a ship selects it and snaps the camera focus to that ship. Controller ship selection remains **TBD**.
-- WASD or the controller's left thumbstick releases tracking and pans the camera freely within the fleet viewing area.
+- WASD or the controller's left thumbstick releases tracking without a camera jump and enters free flight within the fleet viewing area. Free rotation turns around the camera's own position, as in an FPS camera; forward/back movement follows the view direction and left/right strafes.
 - With keyboard and mouse, hold the right mouse button while moving the mouse to rotate the camera. Releasing the button stops mouse-driven rotation; this is a hold action, not a latched toggle.
 - The controller's right thumbstick rotates the camera without a mouse-button modifier.
+- Mouse scroll zooms toward or away from the tracked fleet/ship by changing orbit distance. Controller D-pad up/down provides continuous zoom. Zoom is inactive in free flight.
+- Holding Shift or LT increases orbit zoom speed and free-flight movement speed. It does not change look sensitivity. Free flight permits looking above and below the horizon without flipping.
 - A fleet-focus action restores fleet tracking. If a followed ship disappears, fall back to fleet tracking.
 
 Ordinary fleet camera movement is constrained to a sphere around the fleet. This includes released camera movement; the viewing area follows the traveling fleet. Ordinary panning, orbiting, or selecting a ship does not pause gameplay. The separate island-view transition described below can leave this viewing area.
+
+In free movement, the camera retains an offset from the persistent fleet anchor and inherits its translation, so the fleet does not leave the camera behind while the player looks around. Looking rotates at the camera's own position; movement input changes the offset. Use the anchor for this translation because it is stable as ships maneuver or membership changes. The viewing sphere remains centered on the ship average and constrains the camera at its edge. This free-movement behavior is independent of the orbit tracking target choice below.
 
 **To evaluate:** Fleet tracking may follow the calculated average ship position, keeping the fleet visually centered, or the persistent anchor, providing a steadier focus slightly ahead of the ships. Compare both during the movement prototype before choosing. This camera choice does not change the anchor's ownership of progression.
 
@@ -99,13 +107,19 @@ Priority is a preference order, never an exclusion rule. Every opposing vessel r
 
 **TBD:** The actual priority categories, each vessel's predefined order, and whether players can later edit those priorities.
 
+### Preferred combat side
+
+Each ship has a **preferred combat side**: **front, back, left, right, top, or bottom**, relative to its own orientation. Combat positioning should try to present that side toward its main target while respecting the ship's sluggish movement and limited pitch and banking. Top and bottom preferences use relative altitude rather than requiring the ship to roll over or perform a loop.
+
+**TBD:** How a ship's preferred side is assigned, whether players can change it, and how positioning balances that preference with available firing lines and obstacle avoidance.
+
 ### Weapon-slot pass-by fire
 
 Each weapon slot has a configurable **fire at targets in range** option, enabled by default. With this option enabled, the mounted weapon can fire on opposing targets within its range while the vessel moves toward its main target. This allows pass-by fire against other ships encountered en route.
 
 The weapon's firing target can differ from the vessel's main target. Pass-by fire does not itself change which ship the vessel pursues. Disabling the option makes that slot focus on the vessel's main target and wait until it can fire at that target within range.
 
-Weapon range and normal firing constraints still apply. The option permits opportunistic attacks; it does not make every opposing ship simultaneously attackable. Friendly and enemy weapon slots follow the same rules and default.
+Weapon range, firing arcs, and obstruction by the ship's own hull or balloon still apply. The option permits opportunistic attacks; it does not make every opposing ship simultaneously attackable. Friendly and enemy weapon slots follow the same rules and default.
 
 **TBD:** Selection among multiple targets in range, preference when the main target is also in range, and detailed targeting rules for specialized weapons such as anti-projectile systems.
 
@@ -157,6 +171,8 @@ The ongoing economic tension is between spending resources ahead of need, spendi
 
 Vessel hulls are pre-built. Each has designated mounting spots labeled **S1, S2, S3, ...**. A spot determines which cannons or other weapons it can accept.
 
+Weapon slots can be **obstructed by the ship itself**, including its **hull and balloon**. A mounted weapon needs a clear firing line from its slot; it cannot fire through those parts merely because a target is within range. Slot placement and the ship's orientation relative to the target therefore affect which weapons can engage. This applies to both main-target fire and pass-by fire.
+
 Each slot also exposes the default-enabled [pass-by fire option](#weapon-slot-pass-by-fire), independently of the vessel's predefined main-target priority.
 
 Players can mount different compatible weapons on a vessel and save the resulting configuration as a new ship. Customization combines existing vessels and compatible armaments; the core concept does not require players to construct hulls themselves.
@@ -187,7 +203,7 @@ Open decisions include:
 
 The game uses a **voxel style** in a **steampunk fantasy** setting. The world, airships, floating islands, weapons, and production buildings should share that direction within the continuous 3D space.
 
-Voxel style describes the intended appearance. It does not yet specify a voxel engine, destructible terrain, or a technical asset pipeline.
+The fleet travels above a ground landscape, represented initially by a flat green plane. Later this will become a noise-generated 3D voxel landscape. The voxel implementation, terrain interaction, destructibility, and technical asset pipeline remain TBD.
 
 **TBD:** Final orbit-camera framing, voxel scale, palette, lighting, cloud-transition effects, UI style, animation, and audio direction.
 
@@ -196,12 +212,14 @@ Voxel style describes the intended appearance. It does not yet specify a voxel e
 The first implementation milestone establishes movement and camera behavior using primitive geometry:
 
 - A reusable ship scene shared across factions, hulls, and weapon configurations, initially shown as two primitives forming a zeppelin envelope and gondola.
-- An orbit camera with mouse ship selection, fleet/ship tracking, keyboard/controller panning and rotation, and a spherical fleet viewing boundary. Compare anchor and average-position fleet tracking.
-- A reusable floating-island scene, independent of its eventual resources and building spots, represented by primitives.
+- An orbit camera with mouse ship selection, fleet/ship tracking, scroll/controller zoom, released FPS-style free flight, a Shift/LT speed boost, and a spherical fleet viewing boundary. Compare anchor and average-position fleet tracking.
+- A reusable floating-island scene, independent of its eventual resources and building spots, represented by primitives with approximate capsule collision. Islands spawn throughout the route at varied heights, and ships navigate around them.
 - The advancing fleet anchor, average-position feedback, local ship destinations, close-range avoidance, and sluggish airship movement.
+- Toggleable in-world navigation debug showing ship destinations, arrival radii, island detours, desired velocity, and actual velocity.
 - Floating-origin travel along Z- with occasional island spawning and bounded loading of nearby scenery. Additional content, such as clouds, comes later.
+- A green ground plane below the fleet as a visual placeholder for the later noise-generated 3D voxel landscape.
 
-Combat systems, island management and travel transitions, their gameplay pause, production, and a complete save/load system are outside this milestone. The coordinate and ownership choices must support the documented later systems. Technical implementation tasks and validation criteria are recorded in [todo-movement.txt](../todo-movement.txt); this list describes planned work, not implemented features.
+Combat systems, island management and travel transitions, their gameplay pause, production, on-screen UI, and a complete save/load system are outside this milestone. The coordinate and ownership choices must support the documented later systems. Implementation status and validation criteria are tracked in [todo-movement.txt](../todo-movement.txt), with implemented system contracts in [movement runtime notes](docs/movement.md). The gameplay rules in this document remain design intent unless their implementation is recorded there.
 
 ## Scope of this draft
 

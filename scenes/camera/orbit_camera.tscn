@@ -1,0 +1,15 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/camera/fleet_camera.gd" id="1"]
+
+[node name="OrbitCamera" type="Node3D" node_paths=PackedStringArray("camera")]
+physics_interpolation_mode = 2
+script = ExtResource("1")
+camera = NodePath("Camera3D")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+position = Vector3(0, 0, 180)
+current = true
+fov = 55.0
+near = 0.3
+far = 3000.0

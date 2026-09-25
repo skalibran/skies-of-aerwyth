@@ -1,9 +1,17 @@
 SKIES OF AERWYTH - INITIAL MOVEMENT IMPLEMENTATION PLAN
 
-Status: Planning only. Every implementation item below is outstanding.
+Status: The first movement prototype is implemented and runnable.
 Design authority: src/game_design_document.md.
-Current authorization: edit the GDD and this file only. Scene, script, resource,
-project-setting, and AGENTS.md changes below describe future implementation.
+Implementation was authorized after the planning stage. Checked items record
+implemented behavior and completed checks; input automation uses simulated events.
+Runtime ownership, controls, and check commands: src/docs/movement.md.
+
+REMAINING EVALUATION
+
+[ ] Choose the preferred fleet camera target after hands-on comparison. Both
+    average-position and anchor tracking are implemented and exercised.
+[ ] Evaluate physical controller feel and tune movement/camera values through
+    play. Controller ship selection and Focus fleet bindings remain TBD.
 
 SCOPE AND DECISIONS
 
@@ -11,11 +19,19 @@ SCOPE AND DECISIONS
   floating origin, and occasional islands along forward travel (Z-).
 - The persistent fleet anchor drives movement and owns journey progression.
   The average of active friendly ship positions regulates its forward speed.
+- Endgame scale targets 100+ ships. Use a 360 x 240 x 360 navigation ellipsoid
+  and 900-unit camera sphere; validate with 128 ships while retaining the
+  nine-ship starting roster. These dimensions remain prototype tuning values.
 - Fleet camera tracking remains an evaluation choice: average ship position
   for visual centering, or the anchor for a steadier, slightly forward focus.
   Support both as an editor setting for comparison; neither changes progression.
 - Ordinary camera movement stays inside a sphere around the fleet and never
   pauses the simulation.
+- On-screen UI is outside this milestone. Compare fleet camera targets through
+  the OrbitCamera Inspector; do not add HUD labels, buttons, or control overlays.
+- In-world navigation debug is enabled initially, with an F3/Inspector toggle.
+  Released camera movement uses FPS-style free flight. Orbit zoom supports the
+  mouse wheel and D-pad; Shift/LT boosts zoom and free-flight movement speed.
 - Island management, island panning, cloud transitions, and their gameplay
   pause are documented in the GDD only and are outside this implementation plan.
 - Combat, weapons, production, building placement, atmosphere animation, and
@@ -26,64 +42,64 @@ SCOPE AND DECISIONS
 
 1. SCENE COMPOSITION AND OWNERSHIP
 
-[ ] Compose scenes/world/journey.tscn as the eventual playable prototype, with
+[x] Compose scenes/world/journey.tscn as the eventual playable prototype, with
     matching orchestration under scripts/world/. Add lighting and a simple
     environment sufficient to inspect movement; no art generation is needed.
-[ ] Compose scenes/ships/ship.tscn, scenes/islands/island.tscn, and
+[x] Compose scenes/ships/ship.tscn, scenes/islands/island.tscn, and
     scenes/camera/orbit_camera.tscn with scripts in matching feature folders.
     Add a fleet scene under scenes/fleet/ if needed for its anchor and references.
     Create only files with a concrete responsibility; no empty feature framework.
-[ ] Keep the journey owner responsible for world lifetime, origin shifts, island
+[x] Keep the journey owner responsible for world lifetime, origin shifts, island
     loading, and registration of all live ships for avoidance. Keep friendly
     fleet membership, the anchor, and the calculated mean with a FleetController.
     Each ship owns its velocity and navigation offset. The camera owns
     selection/follow state and free-pan state.
-[ ] Keep ship bodies and islands independent of the translating anchor in the
+[x] Keep ship bodies and islands independent of the translating anchor in the
     scene tree. Moving the anchor must not translate ships automatically.
     Keep the world container transform small and stable as travel continues.
-[ ] Use exported typed references and explicit registration/unregistration for
+[x] Use exported typed references and explicit registration/unregistration for
     members, targets, and shiftable roots. Do not scan the scene tree every tick
     or infer another object's methods from strings. No autoload is needed yet.
-[ ] Author tunable movement/camera values as exported properties; use a typed
+[x] Author tunable movement/camera values as exported properties; use a typed
     Resource if several instances share a coherent movement definition. Shared
     definitions stay immutable; velocity, goals, and RNG state are per instance.
-[ ] Once the scene exists, register the startup scene and required Input Map
+[x] Once the scene exists, register the startup scene and required Input Map
     actions in project.godot. Update AGENTS.md's baseline only when implementation
     actually introduces those systems, not during this documentation task.
 
 2. GENERIC SHIP SCENE (a)
 
-[ ] Use one base ship scene for all factions and eventual hull/weapon choices.
+[x] Use one base ship scene for all factions and eventual hull/weapon choices.
     Fleet membership is supplied externally; movement must not require a weapon
     or a specific hull. Do not implement combat or catalogs to fill placeholders.
-[ ] Use a CharacterBody3D root in MOTION_MODE_FLOATING with explicit scripted
+[x] Use a CharacterBody3D root in MOTION_MODE_FLOATING with explicit scripted
     acceleration and velocity, no gravity or floor snapping. This gives control
     over heavy motion without relying on rigid-body impulses or angular physics.
-[ ] Add a VisualRoot and exactly two visible primitives: an elongated capsule
+[x] Add a VisualRoot and exactly two visible primitives: an elongated capsule
     mesh aligned with Z for the envelope, and a smaller box below as the gondola.
     Orient the ship's forward direction along local -Z.
-[ ] Start with a compact capsule collision shape aligned to the hull, allowing
+[x] Start with a compact capsule collision shape aligned to the hull, allowing
     close side-by-side passes without an oversized bounding sphere. Use spherical
     distance checks for the broader avoidance neighborhood described in section 6.
     Size the collider to cover the intended solid silhouette and inspect it in
     motion. This is the prototype alternative to a single spherical collider.
-[ ] Keep physical translation owned by the body. Use VisualRoot for controlled
+[x] Keep physical translation owned by the body. Use VisualRoot for controlled
     pitch and bank; its presentation must never write back into navigation.
     Keep the model centered on its collider rather than leaving it behind.
-[ ] Expose a stable entity ID and a typed selection/follow target. Reuse the
+[x] Expose a stable entity ID and a typed selection/follow target. Reuse the
     physical collider for mouse picking where adequate; use an explicit ship
-    collision layer/mask so scenery and UI cannot be mistaken for ships.
+    collision layer/mask so scenery cannot be mistaken for ships.
 
 3. PERSISTENT ANCHOR AND AVERAGE POSITION (d)
 
-[ ] Maintain a registered collection of active friendly ships. Calculate their
+[x] Maintain a registered collection of active friendly ships. Calculate their
     arithmetic mean once per physics step; enemy ships must not affect it.
     Initialize the anchor from the initial formation once. Later membership
     changes update the mean without reinitializing or teleporting the anchor.
-[ ] Give the anchor a constant forward direction Vector3(0, 0, -1), a tunable
+[x] Give the anchor a constant forward direction Vector3(0, 0, -1), a tunable
     cruise speed, and an acceleration limit. Its X/Y position stays on the route
     for this prototype. Ships may move locally around it in all three dimensions.
-[ ] Use distance to the mean as speed feedback. Starting mathematical pseudocode:
+[x] Use distance to the mean as speed feedback. Starting mathematical pseudocode:
       gap = length(anchor_position - average_ship_position)
       excess = max(0, gap - comfortable_gap)
       ratio = excess / slowdown_distance
@@ -92,12 +108,12 @@ SCOPE AND DECISIONS
     acceleration, then advance the anchor along -Z. The function remains
     nonnegative, slows smoothly, and allows ships to catch up. Tune the curve
     against a lagging fleet; do not create a hard tether or snap ships forward.
-[ ] Give ships enough maximum speed to catch up with the anchor while making
+[x] Give ships enough maximum speed to catch up with the anchor while making
     small local maneuvers. Avoid an equilibrium in which all ships permanently
     trail an unreachable destination.
-[ ] With no active friendly ships, stop advancing the anchor and retain a valid
+[x] With no active friendly ships, stop advancing the anchor and retain a valid
     camera fallback position. Do not divide by zero or decide defeat/wipe rules.
-[ ] Define one fixed-step order: snapshot ship positions and velocities; derive
+[x] Define one fixed-step order: snapshot ship positions and velocities; derive
     the mean and advance the anchor; calculate ship steering from that snapshot;
     move each ship once; refresh presentation data; perform any origin shift at
     the agreed boundary. The controller orchestrates named operations; ships
@@ -105,171 +121,236 @@ SCOPE AND DECISIONS
 
 4. LOCAL NAVIGATION DESTINATIONS (d.1, d.2)
 
-[ ] Store each travel destination as an offset from the anchor. Its scene-space
+[x] Store each travel destination as an offset from the anchor. Its scene-space
     destination is anchor_position + navigation_offset. An origin shift does
     not change this offset, and an advancing anchor carries the destination.
-[ ] Sample initial offsets in a tunable formation volume, avoiding initial
+[x] Sample initial offsets in a tunable formation volume, avoiding initial
     collider overlap. No NavigationRegion3D or baked ground navmesh is needed
     for the initial open-air movement prototype.
-[ ] On reaching an arrival radius, choose another offset near the ship's current
+[x] Export formation half-extents (180/120/180) and nearby destination step (16)
+    on FleetController. Apply them when each ship joins; keep local wandering
+    independent of the much larger overall formation size.
+[x] Distribute the starting fleet from -40 to +40 in Y and give all three axes
+    equal weight when sampling nearby destinations. Preserve gradual climbing
+    and bounded pitch/bank so vertical spread does not cause abrupt maneuvers.
+[x] On reaching an arrival radius, choose another offset near the ship's current
     anchor-relative position. Limit the per-choice displacement and keep normal
     destinations inside the formation volume. Do not resample across the entire
     formation when a ship reaches a point at its front edge.
-[ ] Use a minimum goal separation greater than the arrival tolerance and a short
+[x] Use a minimum goal separation greater than the arrival tolerance and a short
     retarget interval to avoid churning random goals every tick. Bound candidate
     retries. If a ship lies outside the formation, steer back gradually using a
     reachable recovery destination rather than teleporting or retrying forever.
-[ ] Seek destinations relative to the moving anchor: include anchor velocity
+[x] Seek destinations relative to the moving anchor: include anchor velocity
     when constructing the ship's preferred velocity, then apply speed and
     acceleration limits. Arrival must be measured in that moving reference frame
     so ships can reach their destinations even while the fleet advances.
-[ ] Keep the destination provider distinct from steering. The GDD's future
+[x] Keep the destination provider distinct from steering. The GDD's future
     combat pursuit can supply a destination through the same movement contract;
     travel wandering must not compete with it. Do not implement combat yet.
+[x] Draw navigation debug for registered ships using a reusable ImmediateMesh.
+    Cyan links/crosses/rings show fleet travel destinations and arrival radii;
+    pink links/crosses show temporary island detours. Orange arrows show intended
+    velocity after island routing, green arrows show actual velocity.
+    Non-fleet ships show their velocities without invented travel destinations.
+    Read interpolated positions, inherit origin shifts, and leave goals/RNG
+    untouched. F3 or the Inspector toggles visibility and geometry rebuilding.
 
 5. SLUGGISH AIRSHIP MOTION (d.4)
 
-[ ] Apply bounded acceleration, braking, climb speed, and yaw rate. Allow gentle
+[x] Apply bounded acceleration, braking, climb speed, and yaw rate. Allow gentle
     lateral drift rather than forcing every small waypoint change into a tight
     forward-facing turn. Keep all rates independent of render frame rate.
-[ ] Use the actual velocity after collision handling as movement feedback.
+[x] Use the actual velocity after collision handling as movement feedback.
     Call move_and_slide() once per physics step with velocity in units/second;
     do not multiply that velocity by delta before passing it to the body.
-[ ] Keep the body upright with controlled yaw. Turn toward horizontal travel
+[x] Keep the body upright with controlled yaw. Turn toward horizontal travel
     gradually, preserving heading when horizontal speed is near zero. Never
     apply unrestricted look_at() toward a vertically displaced destination.
-[ ] Animate VisualRoot pitch from climb/descent and bank from turning, with
+[x] Animate VisualRoot pitch from climb/descent and bank from turning, with
     small exported angle limits and gradual settling. Return toward level flight
     when the maneuver ends. Pitch and bank cannot accumulate into loops or flips.
-[ ] Keep visual position tied to the physical root so the hull cannot drift
+[x] Keep visual position tied to the physical root so the hull cannot drift
     outside its collision envelope. A separately animated visual child is enough;
     do not introduce a second authoritative ship position.
 
 6. AVOIDANCE AND CLOSE PASS-BYS (d.3)
 
-[ ] Combine destination seeking with local predictive separation. Use a spherical
+[x] Combine destination seeking with local predictive separation. Use a spherical
     neighborhood around each ship to find nearby ships from the registered
     position/velocity snapshot; inspect every relevant nearby faction.
-[ ] Predict closest approach over a short time horizon using relative position
+[x] Predict closest approach over a short time horizon using relative position
     and relative velocity, accounting for hull clearance. Steer away before
     contact and increase separation strongly near collision distance. Handle
     coincident positions and near-zero relative velocity without division errors.
-[ ] Keep the soft comfort distance only moderately larger than physical hull
+[x] Keep the soft comfort distance only moderately larger than physical hull
     clearance. Relax avoidance for ships whose predicted paths are safely
     separating, allowing close parallel and opposing passes.
-[ ] Bound the avoidance contribution and preserve acceleration limits. For a
+[x] Bound the avoidance contribution and preserve acceleration limits. For a
     symmetric head-on encounter, use a consistent passing convention and stable
     IDs to break exact overlaps/ties; do not choose a new random side every tick.
-[ ] Let solid-body collision remain the final overlap safeguard. Inspect capsule
+[x] Let solid-body collision remain the final overlap safeguard. Inspect capsule
     rotation and visual banking under contact so the slender hulls do not visibly
     clip even when the movement centerlines remain separated.
-[ ] Start with a simple neighbor pass for a small prototype fleet. Measure its
+[x] Start with a simple neighbor pass for a small prototype fleet. Measure its
     cost before adding a spatial grid; avoid per-frame scene scans and temporary
     node creation. Add a broad phase only when demonstrated fleet size needs it.
+    Use the 128-ship check, including island routing, to report current scripted
+    simulation timings. Retain all-pairs avoidance for now and re-profile with
+    denser fleets and combat before introducing spatial partitioning.
 
 7. ORBIT CAMERA, SELECTION, AND VIEWING SPHERE (b.1-b.3)
 
-[ ] Give one CameraController explicit FLEET, SHIP, and FREE modes. Its authored
+[x] Give one CameraController explicit FLEET, SHIP, and FREE modes. Its authored
     rig contains an orbit focus, yaw/pitch controls, and Camera3D at an orbit
-    distance. Clamp pitch to avoid inversion. Preserve orbit orientation when
-    changing targets, while snapping the focus onto the newly selected target.
-[ ] Expose the fleet focus source as an editor enum: AVERAGE or ANCHOR. Compare
-    both in the prototype, including uneven formations and membership changes.
-    Keep the choice marked unresolved until the user evaluates it.
-[ ] On an unhandled left mouse click, raycast from Camera3D through the cursor
-    using the ship picking mask. Resolve a typed ship reference and enter SHIP
-    mode. UI-consumed clicks do not pick ships. An empty click does not silently
-    invent a deselection or fleet-focus rule.
-[ ] Add an on-screen Focus fleet action to restore FLEET mode. Its keyboard and
-    controller bindings remain TBD; controller ship cycling/selection is absent.
+    distance during tracking. In FREE mode the rig sits at the camera eye with
+    zero orbit distance. Clamp pitch to avoid inversion. Preserve orientation
+    within each mode's angle limits when changing targets.
+[x] Expose the fleet focus source as an editor enum: AVERAGE or ANCHOR.
+    Both modes run; the user preference remains unresolved under
+    REMAINING EVALUATION above.
+[x] On an unhandled left mouse click, raycast from Camera3D through the cursor
+    against ships and islands, so islands occlude ships behind them.
+    Resolve a typed ship reference and enter SHIP
+    mode. An empty click does not silently invent a deselection or fleet-focus rule.
+[x] Retain the focus_fleet() method and unbound camera_focus_fleet action.
+    Keyboard/controller bindings remain TBD; no on-screen control is in scope.
+    Controller ship cycling/selection is absent.
     On removal of a tracked ship, return to FLEET mode safely. Disconnect target
     subscriptions and clear references when targets or the camera exit the scene.
-[ ] Add Input Map actions with their consumers together:
+[x] Add Input Map actions with their consumers together:
       camera_pan_forward/back/left/right: W/S/A/D and left thumbstick axes.
       camera_rotate_hold: right mouse button, held rather than toggled.
       camera_look_left/right/up/down: right thumbstick axes.
       select_ship: left mouse button.
-      camera_focus_fleet: shared action invoked by the fleet-focus UI.
-[ ] Meaningful WASD/left-stick input enters FREE mode from the current focus,
-    without a position jump. Map pan input to camera-yaw-relative horizontal
-    movement; normalize diagonal input and apply a controller deadzone. Right
+      camera_focus_fleet: unbound action; input binding remains TBD.
+      camera_zoom_in/out: mouse wheel up/down, applied once per scroll event.
+      camera_zoom_in_hold/out_hold: D-pad up/down, continuous zoom rates.
+      camera_sprint: Shift and LT.
+      debug_navigation: F3.
+[x] Meaningful WASD/left-stick input enters FREE mode from the camera's current
+    world position and orientation, without a jump. Rotate at that eye position;
+    forward/back follows the full view direction, left/right strafes. Allow
+    looking above the horizon. Normalize input and apply a deadzone. Right
     stick rotation alone does not release tracking. Mouse motion rotates only
     while the right button is held; mouse motion and stick rates use appropriate
     units so the result does not depend on render frame rate.
-[ ] Clear held rotation state on focus loss and restore normal cursor behavior
-    on release. Do not let movement keys pan through a UI text field or let
-    controller drift continuously release tracking.
-[ ] Center the fleet viewing sphere on the calculated ship mean, independently
+[x] Zoom changes orbit distance while tracking either a ship or the fleet. Clamp
+    to exported distance limits and the viewing sphere. Zooming inward responds
+    immediately after reaching the outer boundary; free mode ignores zoom.
+[x] Keep free-camera position as an offset from the persistent anchor. Derive
+    the rendered eye from the interpolated anchor plus this offset, so idle free
+    movement travels with the fleet. Input changes the offset; looking changes
+    only orientation. Keep this independent of the orbit fleet-focus setting.
+    The mean-centered viewing sphere still clamps at its edge and updates the
+    offset. Origin shifts leave the offset unchanged.
+[x] Holding Shift/LT boosts orbit zoom and free-flight movement speed by an
+    exported multiplier (initially 3). Release restores normal speed. Keep look
+    sensitivity unchanged and all continuous rates independent of frame rate.
+[x] Clear held rotation state on focus loss and restore normal cursor behavior
+    on release. Do not let controller drift continuously release tracking.
+[x] Center the fleet viewing sphere on the calculated ship mean, independently
     of which point is chosen for FLEET tracking. Retain the last valid center
     when the fleet is empty. Expose a radius large enough for the prototype's
     formation and orbit clearance.
-[ ] Constrain the final camera position, accounting for both free-pan offset and
-    orbit distance, to this moving sphere. Enforce the boundary during panning,
+[x] Enlarge the camera sphere to radius 900, the maximum orbit distance setting
+    to 1200 (still sphere-constrained), and the far plane to 3000. Use an initial
+    orbit distance of 180, pan speed 100, scroll step 20, and held zoom speed 120.
+[x] Constrain the final camera position, accounting for orbit distance while
+    tracking and eye position while free, to this moving sphere. Enforce during panning,
     orbiting, following, and origin shifts. At the edge, clamp the requested
     displacement/available orbit distance without flipping the camera. Let the
     advancing sphere carry a released camera when it would otherwise fall out.
     Validate that selected ships throughout the formation can still be framed.
-[ ] Camera movement, target selection, and sphere clamping must never pause the
+[x] Camera movement, target selection, and sphere clamping must never pause the
     world, change anchor progression, or cause island spawning by themselves.
     Do not add a distance-triggered pause.
 
 8. GENERIC ISLAND AND ROUTE SPAWNING (c, e)
 
-[ ] Make island.tscn a reusable Node3D independent of its future resources and
+[x] Make island.tscn a reusable Node3D independent of its future resources and
     building spots. Use a flattened cylinder for its top and a downward-tapering
     cone/cylinder below it to read as a floating island. Use simple materials.
-[ ] Give each island a stable ID, definition/shape parameters, and logical route
+[x] Give each island a stable ID, definition/shape parameters, and logical route
     position. Its visual instance is disposable. Building sockets, production,
     liberation rewards, and editing UI are not implemented by this prototype.
-[ ] Spawn islands ahead along Z- using an exported positive spacing range and
+[x] Spawn islands ahead along Z- using an exported positive spacing range and
     a bounded look-ahead distance. Use a dedicated RNG and a persistent next
     spawn coordinate. Neither camera movement nor origin shifts advance that RNG
     or reschedule content. Determine thresholds from the anchor's logical Z.
-[ ] Put initial island scenery outside the ship travel corridor with enough
-    clearance for its primitive geometry. Island obstacle navigation and ramming
-    rules remain future design work; do not silently introduce those mechanics.
-[ ] Load scenery that could enter the bounded fleet camera view, with a margin.
+[x] Populate a broad island field rather than a narrow strip tied to formation
+    width. Sample X from -1600 to +1600 and altitude from -180 to +180, using
+    8-20 units of Z spacing. Keep these ranges exported for tuning.
+[x] Fill the bounded streaming window at initialization, including beside and
+    behind the fleet. Reject only initial candidates near starting ships for
+    hull clearance and approach room; do not reserve a lane during later travel.
+[x] Give each island one unscaled StaticBody3D with an upright capsule collider
+    centered on the combined primitive bounds. Use their horizontal radius and
+    a height of at least 2.2 radii; an approximate silhouette is intentional.
+    Derive steering height bounds from the capsule, including its caps. Ships
+    collide with ships and islands; no ramming damage or combat rules are added.
+[x] Maintain a loaded island registry. Route blocked ships around conservative
+    horizontal island footprints padded for their hull and an exported clearance
+    (initially 8). Check island height bounds so clear over/underflight stays
+    direct. Use a small local visibility graph that considers neighboring islands
+    and persistent waypoints to avoid switching sides every frame.
+[x] Slow ships into detour corners, preserve acceleration and ship separation,
+    and resume travel steering when clear. Plan past a moving travel goal inside
+    an island. Brake and retry at a bounded interval if no local route exists.
+    This is lateral routing; choosing climb-over paths remains future work.
+[x] Store detour waypoints relative to their island so origin shifts preserve
+    them. Clear references when an island unloads. Keep travel goals and RNG
+    independent of these temporary detours.
+[x] Extend streaming to 1500 ahead and 1300 behind the anchor to cover the
+    enlarged camera sphere and fleet spread, including island collision.
+[x] Add a green 8000 x 8000 PlaneMesh at Y = -320 as a visual ground placeholder.
+    Keep it centered on the anchor in X/Z at fixed altitude, register it for
+    origin shifts, and reduce fog density to 0.0004 so the ground remains legible.
+    Noise-generated 3D voxel landscape replaces this later; no terrain collision
+    or terrain navigation is introduced with the placeholder.
+[x] Load scenery that could enter the bounded fleet camera view, with a margin.
     Unload island visuals once they are sufficiently far behind that area.
     Retain island records so a later management view can reconstruct them.
     Long travel should keep live nodes bounded; persistent records may grow.
-[ ] Prevent duplicate IDs/spawns at segment boundaries and handle crossing more
+[x] Prevent duplicate IDs/spawns at segment boundaries and handle crossing more
     than one spawn threshold in a step. Keep generation separate from scene
     instantiation so logical content does not depend on whether it is visible.
     Keep the spawn implementation specific to islands until another type exists.
 
 9. LOGICAL COORDINATES AND FLOATING ORIGIN (e)
 
-[ ] Represent logical Z as a signed 64-bit segment index plus a scalar offset
+[x] Represent logical Z as a signed 64-bit segment index plus a scalar offset
     normalized to [0, segment_length). Use floor-based normalization for negative
     travel: crossing below zero decrements the segment and wraps the offset.
     A starting segment length of 1024 units is a tuning choice, not game balance.
-[ ] Store the active origin as origin_segment_z. For a nearby logical position:
+[x] Store the active origin as origin_segment_z. For a nearby logical position:
       scene_z = (entity_segment_z - origin_segment_z) * segment_length + offset_z
     Subtract integer segments before conversion to a scene float. Do not first
     form an enormous absolute float or Vector3. Compare distant logical positions
     as segment/offset pairs; route progress increases as anchor logical Z decreases.
-[ ] Keep one authoritative runtime position per object. For loaded moving ships,
+[x] Keep one authoritative runtime position per object. For loaded moving ships,
     derive logical coordinates from body position and origin when needed; do not
     maintain an independently integrated second position. Island records own
     their fixed logical positions and generate scene transforms from those.
-[ ] Rebase when the anchor passes a tunable local-Z threshold. Choose a shift S
+[x] Rebase when the anchor passes a tunable local-Z threshold. Choose a shift S
     that is a whole number of segment lengths. At one physics boundary:
       origin_segment_z += S.z / segment_length
       each registered scene root's position -= S
     Choose the threshold/segment size to leave room for the fleet, camera sphere,
     and loaded scenery within the desired local precision budget.
-[ ] Shift all live world roots exactly once: ships, islands, anchor, and camera
-    rig. Shift cached scene-space means, free-camera focus, and smoothing history
+[x] Shift all live world roots exactly once: ships, islands, anchor, and camera
+    rig. Shift cached scene-space means and scene-space smoothing history
     in the same operation. Descendants inherit their root's shift and must not
-    be shifted again. Anchor-relative navigation offsets stay unchanged.
-[ ] Preserve velocities, orientations, IDs, RNG state, timers, logical positions,
+    be shifted again. Anchor-relative navigation and free-camera offsets stay
+    unchanged.
+[x] Preserve velocities, orientations, IDs, RNG state, timers, logical positions,
     selection, and spawn thresholds. Emit one typed origin-shift notification
     for owners of cached coordinates. Do not treat rebasing as traveled distance
     or derive velocity from a discontinuity in raw scene positions.
-[ ] After moving affected roots, reset physics interpolation when enabled, and
+[x] After moving affected roots, reset physics interpolation when enabled, and
     update any custom camera interpolation history. Verify with the configured
     Jolt backend; a visually hidden jump alone does not prove physics correctness.
-[ ] Bound X/Y movement in this prototype through formation and camera limits.
+[x] Bound X/Y movement in this prototype through formation and camera limits.
     Rebasing only Z does not solve an infinitely wide active region. Do not
     introduce a general multidimensional world-streaming framework in advance.
 
@@ -290,38 +371,60 @@ The movement milestone does not implement save files. Preserve these contracts:
 
 10. IMPLEMENTATION ORDER AND ACCEPTANCE CHECKS
 
-[ ] Build the ship/island scenes and a small authored starting fleet; establish
+[x] Build the ship/island scenes and a small authored starting fleet; establish
     the origin conversion functions and explicit owner/reference contracts.
-[ ] Implement anchor feedback, moving destinations, heavy movement, and local
+[x] Implement anchor feedback, moving destinations, heavy movement, and local
     avoidance. Then add orbit/selection/free-pan controls and the viewing sphere.
-[ ] Wire coordinated origin shifts and logical island spawning. Compare average
+[x] Wire coordinated origin shifts and logical island spawning. Compare average
     and anchor camera targets before declaring the camera choice settled.
-[ ] Inspect git status before/after implementation and preserve unrelated files.
+[x] Inspect git status before/after implementation and preserve unrelated files.
     Use a Godot 4.7-compatible console executable, serial launches, an absolute
     project path, task-scoped logs outside the repository, and process-local
     APPDATA isolation as required by AGENTS.md. Do not disturb the user's editor.
-[ ] Run the headless editor import/check and inspect logs plus exit status for
+[x] Run the headless editor import/check and inspect logs plus exit status for
     parser errors, missing resources, invalid UIDs, and startup failures.
-[ ] Run the composed scene with rendering and inspect mouse and controller input,
-    window resizing, snapping/following, right-button release, UI input capture,
+[x] Run the composed scene with rendering and inspect mouse and controller input,
+    window resizing, snapping/following, right-button release,
     stick deadzones, both fleet-focus choices, and camera-sphere edges.
-[ ] Exercise single/multiple ships, membership changes, removal of a followed
+[x] Check free-camera release without jumps, rotation without orbital movement,
+    pitched forward flight, scroll/controller zoom, Shift/LT boosts and release,
+    frame-rate independence, zoom/sphere limits, and free-camera origin shifts.
+    Inspect navigation debug in rendered ship/fleet views and across rebasing.
+[x] Check idle free-camera travel and stopping with the anchor, stable orientation,
+    no mean-driven tug after membership changes inside the sphere, and retention
+    of the relative offset and clamped position after rendering and rebasing.
+[x] Exercise single/multiple ships, membership changes, removal of a followed
     ship, and an empty fleet. Verify that the anchor never jumps, reverses, or
     gains progression from camera movement or membership changes.
-[ ] Hold ships behind the anchor and release them: the anchor slows and recovers
+[x] Hold ships behind the anchor and release them: the anchor slows and recovers
     smoothly, and ships catch up. Verify that destinations move with the anchor,
     arrival produces a nearby goal, and no immediate front-to-back trips occur.
-[ ] Exercise head-on, crossing, overtaking, and close parallel passes; check for
+[x] Exercise head-on, crossing, overtaking, and close parallel passes; check for
     overlaps, symmetric deadlocks, jitter, unstable retargeting, and excessive
     clearance. Inspect heading at low speed, bounded pitch/bank, and no loops.
-[ ] Add focused regression checks for signed coordinate normalization, invariant
+[x] Add focused regression checks for signed coordinate normalization, invariant
     logical positions across rebasing, unchanged relative transforms/velocities,
     and no duplicate island spawning at boundaries. Use a task-sized check,
     not a general test framework.
-[ ] Force several origin shifts and initialize at a very large signed segment
+[x] Force several origin shifts and initialize at a very large signed segment
     index. Inspect rendering, picking, physics, camera bounds, steering, and spawn
     spacing before/after shifts. Verify long travel keeps live scenery bounded.
-[ ] Review serialized scene/resource/project diffs, preserve generated .uid and
+[x] Verify initial islands surround the fleet in all four horizontal directions,
+    starting ships are clear of island solids, and the ground stays aligned
+    through origin shifts. Inspect wide views ahead and behind the fleet.
+[x] Run scripts/tools/check_fleet_scale.gd with 128 ships for 30 simulated seconds.
+    Distribute them over four altitude layers to exercise a volumetric fleet.
+    Verify forward progress, formation limits, origin shifts, island detours,
+    hull penetration, route-wide spawning, and streaming coverage. Inspect
+    rendered fleet/maximum-zoom and ship views. Scripted simulation timings
+    exclude debug drawing and the rest of rendering.
+[x] Run scripts/tools/check_island_navigation.gd headlessly and with rendering.
+    Check head-on and clustered islands, capsule-cap clearance, clear
+    over/underflight, a moving goal inside an island, physical collision,
+    hull penetration, origin shifts during
+    a detour, and safe waypoint removal when its island unloads. Inspect the pink
+    detour markers in captured views.
+[x] Review serialized scene/resource/project diffs, preserve generated .uid and
     source-adjacent import settings, keep temporary logs/captures out of commits,
     and report actual checks plus remaining limitations. Do not push without
     separate authorization.
@@ -332,6 +435,8 @@ The engine facts above use the official Godot documentation; the coordinate
 model, ownership, steering, and prototype choices are project design proposals.
 - CharacterBody3D floating movement and velocity:
   https://docs.godotengine.org/en/stable/classes/class_characterbody3d.html
+- Capsule collision shapes and height/radius constraints:
+  https://docs.godotengine.org/en/stable/classes/class_capsuleshape3d.html
 - Vector precision and origin shifting:
   https://docs.godotengine.org/en/stable/tutorials/physics/large_world_coordinates.html
 - Resetting interpolation after moving a root:

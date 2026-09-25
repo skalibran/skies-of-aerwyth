@@ -1,0 +1,130 @@
+[gd_scene load_steps=14 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/journey.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/ships/ship.tscn" id="2"]
+[ext_resource type="Script" path="res://scripts/fleet/fleet_controller.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/world/floating_origin.gd" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/camera/orbit_camera.tscn" id="5"]
+[ext_resource type="Script" path="res://scripts/islands/island_spawner.gd" id="6"]
+[ext_resource type="PackedScene" path="res://scenes/islands/island.tscn" id="7"]
+[ext_resource type="Script" path="res://scripts/ships/ship_navigation_debug.gd" id="8"]
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMaterial"]
+sky_top_color = Color(0.10, 0.24, 0.34, 1)
+sky_horizon_color = Color(0.63, 0.76, 0.77, 1)
+ground_bottom_color = Color(0.25, 0.38, 0.44, 1)
+ground_horizon_color = Color(0.63, 0.76, 0.77, 1)
+
+[sub_resource type="Sky" id="Sky"]
+sky_material = SubResource("SkyMaterial")
+
+[sub_resource type="Environment" id="Environment"]
+background_mode = 2
+sky = SubResource("Sky")
+ambient_light_source = 3
+ambient_light_energy = 0.85
+tonemap_mode = 2
+fog_enabled = true
+fog_light_color = Color(0.55, 0.69, 0.73, 1)
+fog_density = 0.0004
+
+[sub_resource type="StandardMaterial3D" id="GroundMaterial"]
+albedo_color = Color(0.20, 0.40, 0.09, 1)
+roughness = 1.0
+cull_mode = 2
+
+[sub_resource type="PlaneMesh" id="GroundMesh"]
+material = SubResource("GroundMaterial")
+size = Vector2(8000, 8000)
+
+[node name="Journey" type="Node3D" node_paths=PackedStringArray("initial_ships", "fleet", "origin", "island_spawner", "camera_rig", "ground")]
+script = ExtResource("1")
+initial_ships = Array[NodePath]([NodePath("Ships/Ship1"), NodePath("Ships/Ship2"), NodePath("Ships/Ship3"), NodePath("Ships/Ship4"), NodePath("Ships/Ship5"), NodePath("Ships/Ship6"), NodePath("Ships/Ship7"), NodePath("Ships/Ship8"), NodePath("Ships/Ship9")])
+fleet = NodePath("FleetController")
+origin = NodePath("FloatingOrigin")
+island_spawner = NodePath("IslandSpawner")
+camera_rig = NodePath("OrbitCamera")
+ground = NodePath("Ground")
+
+[node name="Ground" type="MeshInstance3D" parent="."]
+position = Vector3(0, -320, 0)
+cast_shadow = 0
+mesh = SubResource("GroundMesh")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-38, -28, 0)
+light_color = Color(1, 0.89, 0.70, 1)
+light_energy = 1.65
+shadow_enabled = true
+directional_shadow_max_distance = 250.0
+
+[node name="FleetAnchor" type="Node3D" parent="."]
+
+[node name="NavigationDebug" type="MeshInstance3D" parent="FleetAnchor" node_paths=PackedStringArray("journey")]
+physics_interpolation_mode = 2
+cast_shadow = 0
+script = ExtResource("8")
+journey = NodePath("../..")
+
+[node name="FleetAverage" type="Node3D" parent="."]
+
+[node name="FleetController" type="Node" parent="." node_paths=PackedStringArray("anchor", "average_focus")]
+script = ExtResource("3")
+anchor = NodePath("../FleetAnchor")
+average_focus = NodePath("../FleetAverage")
+
+[node name="FloatingOrigin" type="Node" parent="."]
+script = ExtResource("4")
+
+[node name="Ships" type="Node3D" parent="."]
+
+[node name="Ship1" parent="Ships" instance=ExtResource("2")]
+position = Vector3(-40, -40, -40)
+entity_id = 1
+
+[node name="Ship2" parent="Ships" instance=ExtResource("2")]
+position = Vector3(0, 40, -40)
+entity_id = 2
+
+[node name="Ship3" parent="Ships" instance=ExtResource("2")]
+position = Vector3(40, 0, -40)
+entity_id = 3
+
+[node name="Ship4" parent="Ships" instance=ExtResource("2")]
+position = Vector3(-40, 20, 0)
+entity_id = 4
+
+[node name="Ship5" parent="Ships" instance=ExtResource("2")]
+position = Vector3(0, 0, 0)
+entity_id = 5
+
+[node name="Ship6" parent="Ships" instance=ExtResource("2")]
+position = Vector3(40, -40, 0)
+entity_id = 6
+
+[node name="Ship7" parent="Ships" instance=ExtResource("2")]
+position = Vector3(-40, 40, 40)
+entity_id = 7
+
+[node name="Ship8" parent="Ships" instance=ExtResource("2")]
+position = Vector3(0, -20, 40)
+entity_id = 8
+
+[node name="Ship9" parent="Ships" instance=ExtResource("2")]
+position = Vector3(40, 0, 40)
+entity_id = 9
+
+[node name="Islands" type="Node3D" parent="."]
+
+[node name="IslandSpawner" type="Node" parent="." node_paths=PackedStringArray("container", "origin", "fleet")]
+script = ExtResource("6")
+island_scene = ExtResource("7")
+container = NodePath("../Islands")
+origin = NodePath("../FloatingOrigin")
+fleet = NodePath("../FleetController")
+
+[node name="OrbitCamera" parent="." node_paths=PackedStringArray("fleet") instance=ExtResource("5")]
+fleet = NodePath("../FleetController")
