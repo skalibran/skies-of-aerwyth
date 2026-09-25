@@ -1,6 +1,8 @@
 # Generation production review
 
-Reviewed 2026-09-25 against the current five-unit terrain, water, progression, island streaming, and fleet integration. **The architecture is coherent and suitable for the current scenery prototype. Production sign-off remains blocked by the items below.** A terrain rewrite is not justified by this pass.
+Reviewed 2026-09-25 against the current five-unit terrain, water, progression, island streaming, and fleet integration. **The architecture is coherent and suitable for the current scenery prototype. This review does not establish production readiness.** Active blockers and completion criteria live in the [generation task list](todo/blockers-terrain.txt). A terrain rewrite is not justified by this pass.
+
+Subsequent combat work added spatial filtering for ship avoidance and loaded-island navigation. The measurements below preserve the pre-combat review baseline; see [combat runtime notes](combat.md#recorded-validation-and-limits) for the 220-ship workload and its measured CPU limits.
 
 ## Ownership and wiring
 
@@ -15,7 +17,7 @@ Reviewed 2026-09-25 against the current five-unit terrain, water, progression, i
 | [WaterSurface](../../scripts/water/water_surface.gd) | Keep scenery water at Y = 0, recenter its finite coverage, and preserve shader alignment through origin shifts. There is no water physics. |
 | [IslandSpawner](../../scripts/islands/island_spawner.gd) | Generate logical island records from a dedicated RNG, maintain loaded views and navigation obstacles, and unload trailing views. Records currently remain in memory. |
 
-The main scene supplies explicit references to these owners. Terrain coverage includes the permitted camera position plus its far plane; water coverage also covers that view. Default terrain remains below ship/island flight space. Terrain detail changes do not alter progression, source sampling, or island placement. Island visibility has a different coverage limitation, recorded as GEN-03.
+The main scene supplies explicit references to these owners. Terrain coverage includes the permitted camera position plus its far plane; water coverage also covers that view. Default terrain remains below ship/island flight space. Terrain detail changes do not alter progression, source sampling, or island placement. Island visibility has a different coverage limitation, described below.
 
 There were no missing static resource paths or orphan script/shader UID sidecars in the reviewed files. The former flat-ground implementation is no longer a parallel runtime path. Existing model authoring files were preserved. `surface_height()`, synchronous `build_pending()`, the mesh-returning builder wrapper, and build timing hooks have deliberate query/check/profiling uses; they are not abandoned generation code.
 
@@ -26,7 +28,7 @@ There were no missing static resource paths or orphan script/shader UID sidecars
 - Removed the unused biome ridge mode and the floating-origin signal with no subscribers. Current authored biomes already used ordinary height noise; root registration remains the origin-shift contract.
 - Made height contrast approach flat terrain continuously at zero. Previously a tiny positive contrast could restore almost full relief. Current authored contrast values retain their output.
 - Avoided sampling an unused palette outside the biome transition. Replaced the duplicated segment-length literal and asserted positive grid divisors.
-- Cached navigation-debug circle points and one inverse transform per redraw. The same overlay remains enabled by default; it no longer repeats trigonometry and transform inversion for every ship/vertex.
+- Cached navigation-debug circle points and one inverse transform per redraw. The overlay no longer repeats trigonometry and transform inversion for every ship/vertex.
 - Extended existing tools to measure the biome transition, close fast camera movement, settled streaming backlog, and a rendered 128-ship scene with debug off/on. Fleet captures restore fleet focus after the profiling camera pass.
 - Corrected stale documentation paths and removed documentation for the deleted ridge option. Added lifecycle and contrast regression coverage.
 
@@ -62,37 +64,15 @@ The script simulation step was 8.283 ms median / 10.149 ms p95. All 128 ships re
 
 Verdict: landscape generation/streaming passes the measured prototype workload and does not justify discarding the existing merging, adaptive detail, or worker implementation. The complete endgame budget is not yet proven: the 128-ship script step already consumes substantial CPU time before combat, production assets, vegetation, or wreck physics.
 
-## Larger blockers and follow-up gates
+## Recorded limitations
 
-### GEN-01 - Persistent generation identity and old-island reconstruction
+The reviewed runtime supports forward travel without saved generator/profile identity or a world snapshot. Island records grow with travel and survive unloading, but `update_region()` does not reconstruct unloaded records for revisits. Terrain has no colliders. Its source height queries are stable while distant display patches approximate the source, so display detail alone does not establish stable support for physics or placed models.
 
-**Required before save/load or distant island management.** Current resources/seeds reproduce the current terrain algorithm, but there is no saved generator version/profile identity or world snapshot. Island records grow with forward travel; unloading retains the record, but `update_region()` does not reconstruct unloaded records for a revisit. The code currently supports the forward prototype, not the GDD's persistent world lifecycle.
+Islands load 1500 units ahead, remain 1300 behind, and occupy a field with 1600-unit half-width. A camera up to 900 units from the fleet can look another 3000 units. Islands can therefore appear or disappear inside a permitted view; current fog does not establish an opaque cutoff at the streaming edge. Terrain and water cover a wider area.
 
-Acceptance: persist the journey start, anchor state, generator/profile identity, island records/deltas, next island coordinate/ID, and RNG state; bound resident record storage; reload a passed island and surrounding terrain after restart without duplicates or layout changes. Define how generator changes affect existing saves. This is a separate persistence/streaming task, not a seed-variable patch.
+Coarse startup builds all 81 root patches synchronously, blocking for roughly one second here. Later publication has a soft budget and whole-layout swaps, not a hard maximum frame cost. Configuration validation relies on assertions, and worker completion assumes valid mesh results without a recoverable generation-failure path. No loading UI was added during this review.
 
-### GEN-02 - Stable support for wrecks and placed models
-
-**Required before downed-ship contact or ground props.** There are no terrain colliders. Source height queries are stable, but distant render patches approximate the source and may change their visible tops when camera detail changes. Attaching physics or trees directly to whichever display mesh is present would make support depend on the camera.
-
-Acceptance: use bounded source-grid collision/placement coverage, pin matching visible detail while occupied, and handle release after wreck cleanup. Test fast falls, rest, origin shifts, and streaming boundaries with several simultaneous wrecks. Water landing behavior remains a design decision. See the [collision proposal](terrain_performance.md#planned-collision-for-downed-ships).
-
-### GEN-03 - Island visibility does not cover the full view
-
-**Visual production blocker.** Islands load 1500 units ahead, remain 1300 behind, and occupy a field with 1600-unit half-width. Those distances protect local fleet/camera movement, but a camera up to 900 units from the fleet can look another 3000 units. Islands can therefore appear/disappear inside a permitted view; current fog does not establish an opaque cutoff at the streaming edge. Terrain/water cover a much wider area.
-
-Acceptance: define distant island visibility/prefetch or fading separately from nearby collision/navigation interest, then inspect both route directions from the camera sphere edge. Profile the resulting view with 128 ships. Simply enlarging the current solid-island registry would also increase navigation work.
-
-### GEN-04 - Startup and generation failure handling
-
-**Required before shipping/loading-flow sign-off.** Coarse startup builds all 81 root patches synchronously, blocking for roughly one second here. Later publication has a soft budget and whole-layout swaps; it is not a hard maximum frame cost. Configuration validation relies on assertions, and worker completion assumes valid mesh results rather than providing a recoverable generation-failure path.
-
-Acceptance: define a cancellable bootstrap/loading contract, validate authored generation settings in release builds, and retain valid coverage or report failure if a build cannot produce a mesh. Measure startup and worst publication frames in the intended export build. No loading UI was added during this review; the prototype's no-UI scope remains intact.
-
-### GEN-05 - Endgame CPU budget
-
-**Required before 100+ ships with combat is signed off.** Ship separation scans other ships for each ship, and island route queries inspect the loaded obstacle registry. The current combined measurements expose limited CPU headroom even though terrain/GPU costs are small. Debug caching helped presentation but did not change simulation cost.
-
-Acceptance: profile an agreed target scene and frame budget with combat, final assets, vegetation, and simultaneous wrecks. Use that workload to size a ship/island broad phase and any navigation scheduling changes; verify collision/detour behavior remains unchanged. Include target export mode, resolutions, hardware, and long-running streaming. This pass does not claim an endgame performance guarantee from terrain-only timing.
+The pre-combat measurements above expose limited CPU headroom despite small terrain/GPU costs. The subsequent spatial filters are documented with their results in the combat notes; neither set of measurements establishes whole-game performance with production assets, vegetation, and wreck physics. The corresponding work and acceptance criteria are maintained only in [GEN-01 through GEN-05](todo/blockers-terrain.txt).
 
 ## Verification and reproduction
 

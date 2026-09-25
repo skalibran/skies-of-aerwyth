@@ -1,8 +1,8 @@
 # Movement prototype
 
-Run the project to open [journey.tscn](../../scenes/world/journey.tscn). It contains nine primitive airships, a fleet anchor, an orbit camera, and floating islands. There is no on-screen UI in this milestone. Combat, production, save files, island management, and cloud transitions are not implemented.
+Run the project to open [journey.tscn](../../scenes/world/journey.tscn). It starts with nine player Kestrels using primitive geometry, a fleet anchor, an orbit camera, and floating islands. The [combat slice](combat.md) adds mounted cannons and debug spawning of two ships per faction each second, replenishing each side up to 100 living ships. There is no on-screen UI. Production, save files, island management, and cloud transitions are not implemented. Movement checks disable combat and spawning through Journey's validation setting.
 
-The endgame target is 100+ ships. The starting nine ships are spaced farther apart; a separate 128-ship check exercises the larger fleet without changing the starting roster, including a solid island placed across its path.
+The endgame combat target is roughly seventy player ships and 150 enemies. The starting nine ships are spaced farther apart; a separate 128-ship movement check exercises the larger fleet without changing the starting roster, including a solid island placed across its path. The separate combat-scale check includes both fleets and projectiles.
 
 ## Space and camera scale
 
@@ -10,7 +10,7 @@ The endgame target is 100+ ships. The starting nine ships are spaced farther apa
 | --- | --- |
 | Formation half-extents, X/Y/Z | 180 / 120 / 180 units (an ellipsoid spanning 360 × 240 × 360) |
 | Maximum nearby destination step | 16 units |
-| Camera viewing sphere radius | 900 units |
+| Camera viewing sphere radius | 900 units, centered on the persistent fleet anchor |
 | Starting orbit distance | 180 units |
 | Orbit distance setting limits | 10–1200 units, further constrained by the viewing sphere |
 | Free-flight speed | 100 units/second; 300 with sprint |
@@ -41,30 +41,34 @@ The ground is stepped voxel scenery generated with FastNoiseLite, currently tria
 | Hold Shift / LT | Triple orbit zoom speed and free-camera movement speed. |
 | F3 | Toggle every ship's navigation debug geometry. |
 
-The camera starts in fleet tracking. Compare the calculated ship center with the persistent anchor using OrbitCamera's exported Fleet Focus Source property in the Inspector. The final choice remains open. The `camera_focus_fleet` action and `focus_fleet()` method remain available, but keyboard/controller bindings are still TBD; no replacement shortcut has been chosen. Controller ship selection also remains TBD. Ordinary camera movement never pauses simulation. The final camera position, including its orbit arm, stays inside the moving viewing sphere.
+The camera starts in fleet tracking and follows the persistent fleet anchor. Fleet focus and the viewing sphere both use that anchor, so ship spawns and deaths do not shift the view with the calculated average. The `camera_focus_fleet` action and `focus_fleet()` method are available without keyboard/controller bindings. Ship selection currently uses the mouse. Camera decisions and follow-up checks live in the [movement task list](todo/todo-movement.txt). Ordinary camera movement never pauses simulation. The final camera position, including its orbit arm, stays inside the moving viewing sphere.
 
 Releasing focus preserves the camera's position and orientation, then removes the orbit arm. Free mode rotates around the camera itself and permits looking above the horizon. Forward/back follows the full view direction; left/right strafes. Zoom changes the orbit distance, with near/far limits and the fleet sphere providing an additional limit. It does nothing in free mode. Sprint changes movement and zoom speed; look sensitivity stays constant. The multiplier, speeds, zoom step, and distance limits are exported on OrbitCamera.
 
-Free flight is relative to the persistent fleet anchor: without input, the camera travels with the anchor and retains its offset and viewing direction. The anchor provides steady translation without following changes in the ship average as ships maneuver or membership changes. This is independent of the orbit mode's Fleet Focus Source setting. The existing viewing sphere remains centered on the ship average and may adjust the offset at its boundary.
+Free flight is relative to the persistent fleet anchor: without input, the camera travels with the anchor and retains its offset and viewing direction. The anchor provides steady translation without following changes in the ship average as ships maneuver or membership changes. The viewing sphere is also centered on the anchor, including while following an individual ship. Clamping a free camera at its boundary updates the retained anchor-relative offset.
 
 ## Navigation debug
 
-Debug geometry starts enabled and can also be switched with `FleetAnchor/NavigationDebug`'s Enabled Inspector property. Cyan lines link each fleet ship to its current moving destination; crosses and rings mark that destination and its arrival radius. Pink lines/crosses show temporary island-detour waypoints. Orange arrows show the intended velocity after island routing but before ship separation, and green arrows show actual velocity. Arrow length represents 0.7 seconds of motion, configurable in the Inspector. Non-fleet ships show velocities and any detour, without a fleet travel destination.
+A purple four-unit cube at `FleetAnchor/AnchorMarker` marks the persistent anchor's exact position. It follows anchor movement and origin shifts, has no collision, and remains visible independently of the F3 navigation overlay.
+
+Debug geometry starts disabled. Toggle it with F3 or `FleetAnchor/NavigationDebug`'s Enabled Inspector property. Cyan lines link each traveling fleet ship to its current moving destination; crosses and rings mark that destination and its arrival radius. Red goals show combat approach positions or a point three seconds along the current firing pass. Pink lines/crosses show temporary island-detour waypoints. Orange arrows show the intended velocity after island routing but before ship separation, and green arrows show actual velocity. Arrow length represents 0.7 seconds of motion, configurable in the Inspector. Non-fleet ships without a combat target show velocities and any detour.
 
 The geometry is drawn in 3D and remains visible through ship hulls. It reads the registered ships and interpolated anchor/ship transforms without changing navigation or consuming random numbers. One reusable [ImmediateMesh](https://docs.godotengine.org/en/stable/classes/class_immediatemesh.html) rebuilds the simple lines each rendered frame while enabled; disabling debug stops rebuilding. It inherits origin shifts from the anchor and retains no absolute world-position history. No HUD or controls overlay is added.
 
 ## Ownership and update order
 
 - Journey registers all physical ships and orchestrates their single physics update. Its reusable snapshot arrays supply the same positions, velocities, and hull axes to every avoidance calculation.
-- FleetController owns friendly membership and anchor motion. It calculates the average before movement, advances the anchor, and supplies moving travel destinations. A separate FleetAverage node exposes that calculated center to interpolated camera presentation.
-- Airship owns physical velocity and constrained attitude. ShipTravel owns its anchor-relative goal and random state. ShipIslandNavigation owns a temporary waypoint relative to its island. ShipAvoidance uses predicted closest approach of capsule hulls and a stable passing side for degenerate approaches.
+- FleetController owns friendly membership, anchor motion, and the shared combat radii. It calculates the average before movement and advances the anchor. Journey chooses combat or formation travel intent; FleetController no longer overwrites ship intent during anchor advancement. A separate FleetAverage node stores that calculated center for travel slowdown. Camera focus, combat boundaries, and debug spawn placement use the persistent anchor.
+- Airship owns physical velocity and collision. ShipFlight integrates propulsion and heading and owns angular velocity; visual pitch/bank reflect that motion. ShipTravel owns its anchor-relative goal and random state. ShipIslandNavigation owns a temporary waypoint relative to its island. ShipAvoidance uses predicted closest approach of capsule hulls and a stable passing side for degenerate approaches.
 - FloatingOrigin owns the logical origin and explicitly registered scene roots. IslandSpawner owns island records, its RNG, the next route coordinate, and loaded island views. Records survive unloading.
 - JourneyProgress exposes `journey.progression.distance`, a number in forward world units derived from the anchor relative to the logical journey start. Journey refreshes it after movement/rebasing. Terrain evaluates the same coordinate-to-distance rule for each sampled location, independently of when its view loads.
 - VoxelTerrain owns adaptive patches and two bounded worker jobs. Journey requests the anchor's region and camera detail focus alongside island streaming. Coarse startup coverage builds synchronously; workers prepare replacement mesh arrays, published on the main thread. Old coverage stays visible until replacements are complete. Each patch is an independent origin root, positioned against the current origin when its job completes. Camera movement changes display detail, not source terrain or progression. Sampling never consumes island or ship RNG.
 - WaterSurface owns a finite scenery plane at Y = 0. Journey registers it for origin shifts and recenters coverage around the anchor. Its world-aligned shader remains stable across shifts; submerged terrain shapes the visible ponds. It does not change navigation or progression.
 - FleetCamera owns tracking, selection, free flight, zoom, and bounds. Its root represents the tracked focus in orbit mode and the camera eye in free mode. Free position is an anchor-relative offset; each rendered frame derives the eye from the interpolated anchor plus that offset. Input and sphere clamping update the offset. Rebasing shifts the rig along with the anchor but leaves the offset unchanged. It reads interpolated target transforms and manages its own rendered transform without another interpolation pass.
 
-One physics step snapshots ships, advances the fleet controller, computes ship separation, routes each ship around stationary islands, moves each body once, and recenters if needed. Island streaming updates every quarter-second. Visual pitch/bank remain relative to each physical body. New travel goals are nearby offsets in the anchor's moving frame; anchor velocity is included when seeking them.
+One physics step handles scheduled combat spawns, snapshots ships, advances the fleet controller, chooses combat/travel intent, computes ship separation, routes each ship around stationary islands, and moves each body once. Existing projectiles then advance, surviving mounts fire, and destroyed ships are removed before rebasing/streaming. See [combat ownership](combat.md#ownership-and-cleanup). Island streaming updates every quarter-second. Visual pitch/bank remain relative to each physical body. New travel goals are nearby offsets in the anchor's moving frame; anchor velocity is included when seeking them.
+
+ShipAvoidance filters pairs with a conservative three-dimensional snapshot grid while retaining the existing capsule prediction and accumulation order. IslandSpawner supplies nearby obstacle candidates from a cached two-dimensional grid, rebuilt when the loaded registry or origin changes. ShipIslandNavigation still owns exact clearance, height checks, and detour selection. Focused checks compare filtering against the original full scans and cover origin shifts and unloading.
 
 ## Island collision and navigation
 
@@ -77,6 +81,28 @@ Ships slow into detour corners, keep their heavy acceleration/yaw limits, and re
 IslandSpawner maintains the loaded obstacle registry alongside its views. Initialization fills the finite streaming window before the first frame, rejecting candidates near the starting ships for hull clearance and approach room. That safety check applies only at startup; it does not carve an empty lane through the continuing field. Later generation extends ahead of the fleet in bounded batches. Detour points store an island reference and local offset, so origin shifts cannot stale their coordinates; unloading removes the obstacle and invalidates its waypoint safely. Navigation clearance is exported on each ship (initially 8 units beyond its conservative hull footprint).
 
 The anchor owns progression. Membership changes affect the mean and subsequent speed but never reposition the anchor. An empty friendly fleet stops it without inventing defeat or wipe behavior.
+
+## Forward flight and momentum
+
+Living ships remain `CharacterBody3D` objects. [`ShipFlight`](../../scripts/ships/ship_flight.gd) receives the desired velocity after island routing and ship avoidance. It turns the ship toward that course with angular acceleration and a maximum yaw rate. Propulsion acts along the ship's authored horizontal `primary_movement_direction`, normally local -Z. Changing heading does not rotate the existing velocity; sideways momentum decays with exponential drag. Forward thrust is reduced during sharp turns, and braking gradually lowers longitudinal speed. There is no random steering noise or unrestricted sideways thrust. Altitude remains a separate, climb-limited lift control; ships do not need to pitch vertically to climb.
+
+Both combat and formation travel use this controller. Combat supplies an approach or firing-pass course and no longer sets hull yaw independently. `move_and_slide()` remains the collision safeguard; actual post-collision motion becomes the next step's velocity. Contacts do not apply collision damage, bounce, mass-based momentum transfer, or impact torque.
+
+Combat gradually biases courses toward the anchor beyond 180 units and requests regrouping beyond 260 until the ship returns inside 180. FleetController exposes these distances as Combat Radii for both factions. Ships retain their flight response and avoidance during regrouping; see [combat positioning](combat.md#targeting-and-movement).
+
+Tune these exported Airship properties in the Inspector:
+
+| Property | Default | Effect |
+| --- | ---: | --- |
+| `primary_movement_direction` | `(0, 0, -1)` | Local horizontal propulsion axis; normalized, with forward fallback for a zero horizontal vector. |
+| `acceleration` / `braking` | 3 / 4 units/s² | Forward speed response; acceleration also controls lift response. |
+| `yaw_speed_degrees` | 24°/s | Maximum turning rate. |
+| `yaw_acceleration_degrees` | 45°/s² | How quickly turning builds and brakes. |
+| `lateral_drag` | 1.4/s | Higher values reduce sideways momentum sooner; lower values widen drifting turns. |
+| `combat_speed_ratio` | 0.5 | Firing-pass cruise contribution relative to maximum speed; target velocity is added before the global speed limit. |
+| `combat_pass_seconds` | 6 s | Time before choosing a fresh firing-pass course, unless range/altitude requires an earlier approach. |
+
+Floating-origin translation preserves velocity, angular velocity, and the current world-space pass direction. This is the scripted flight trial; a rigid-body alternative has not been implemented.
 
 ## Coordinates and content
 
@@ -104,13 +130,15 @@ For rendering and input checks, omit --headless and append the user argument --v
 
 Both commands also require the absolute --path and unique --log-file before the -- separator. For visual checks, set AERWYTH_CAPTURE_DIR in the validation process environment to an existing temporary directory outside the repository. The checker captures the fleet, a ship view, zoomed and free-camera views, a resized window, and a view after rebasing at a huge logical coordinate, then exits. Inspect those images as well as the log and exit status. It does not write save data.
 
-Simulation checks cover signed boundaries and segment indices beyond 2^53, origin-shift invariants (including terrain alignment), initial scenery in all four horizontal directions, starting hull clearance, spawn uniqueness, several minutes of accelerated travel, recovery from lag, changing membership, a single/empty fleet, and head-on/crossing/overtaking/parallel encounters. Rendered checks also capture wide views ahead and behind the fleet. Input checks inject keyboard, mouse, and controller events through Godot; physical controller feel still needs hands-on evaluation.
+Simulation checks cover signed boundaries and segment indices beyond 2^53, origin-shift invariants (including terrain alignment), initial scenery in all four horizontal directions, starting hull clearance, spawn uniqueness, several minutes of accelerated travel, recovery from lag, changing membership, a single/empty fleet, and head-on/crossing/overtaking/parallel encounters. Rendered checks also capture wide views ahead and behind the fleet. Input checks inject keyboard, mouse, and controller events through Godot; these do not establish physical controller feel.
 
 Camera regression checks cover releasing either focus without a jump, rotation at the eye in free mode, movement along the pitched view direction, free-camera rebasing, scroll/controller zoom, Shift/LT speed boosts, release behavior, frame-rate independence, and sphere/zoom limits. Navigation debug toggling must leave goals and RNG state unchanged.
 
-Free-camera tracking checks cover idle travel with either orbit-focus setting, retaining orientation, stopping with the anchor, membership changes without shifting an interior camera, keeping the anchor-relative offset after rebasing, and retaining sphere-clamped positions.
+Camera tracking checks cover idle travel, retaining orientation, stopping with the anchor, keeping the anchor-relative offset after rebasing, and retaining sphere-clamped positions. Spawn/death fixtures shift the ship average while checking stable fleet, ship, and free views at the sphere boundary. Destroying a followed ship restores anchor tracking, including when the fleet becomes empty.
 
-For the endgame scale check, substitute `res://scripts/tools/check_fleet_scale.gd` in the commands above. It builds 128 ships and a solid island across their path, simulates 30 seconds, checks detours, hull penetration, formation bounds, progression, rebasing, route-wide island placement, and streaming coverage, and prints median/p95 scripted simulation-step times. Its `--visual` mode also captures the fleet, maximum zoom, and an individual ship. These timings exclude debug drawing and the rest of frame rendering; they are not an endgame frame-rate guarantee with combat and production. Re-profile with denser formations, larger counts, and the later combat workload before choosing further optimization.
+For the endgame scale check, substitute `res://scripts/tools/check_fleet_scale.gd` in the commands above. It builds 128 ships and a solid island across their path, simulates 30 seconds, checks detours, hull penetration, formation bounds, progression, rebasing, route-wide island placement, and streaming coverage, and prints median/p95 scripted simulation-step times. Its `--visual` mode also captures the fleet, maximum zoom, and an individual ship. These timings exclude debug drawing and the rest of frame rendering; they are not an endgame frame-rate guarantee with combat and production. Endgame performance work is tracked under GEN-05 in the [generation task list](todo/blockers-terrain.txt).
+
+`res://scripts/tools/check_ship_flight.gd` checks momentum through a turn, angular acceleration/rate limits, braking to rest, an alternate propulsion axis, lift limits, zero-duration steps, and 30/60/120 Hz trajectory agreement. Its stationary-target encounter checks approach-to-pass transitions, repeated broadside firing opportunities, forward alignment, and rebasing. Cohesion fixtures check inward pass selection, bounded pursuit, regrouping hysteresis, firing during return, and both factions recovering from horizontal/altitude drift around a moving anchor through a rebase. With `--visual` it captures `flight-pass.png`: green traces movement and orange marks the bow direction. Use the same fixed-rate launch and external capture directory as the other focused checks.
 
 For combined frame measurements, omit `--headless` and `--fixed-fps`, set an existing external `AERWYTH_PROFILE_DIR`, and append `-- --profile`. This mode renders at 1920 x 1080 with uncapped frames, pans within the fleet sphere to exercise streaming, and records separate navigation-debug off/on phases in `fleet-128.json`. Optional `--visual` captures still use `AERWYTH_CAPTURE_DIR`. The [generation review](generation_review.md) records the measured CPU headroom and the gap between island loading distances and the camera's full visible range.
 

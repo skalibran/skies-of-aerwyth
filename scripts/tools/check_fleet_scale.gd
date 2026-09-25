@@ -38,6 +38,7 @@ func _run() -> void:
 		RenderingServer.viewport_set_measure_render_time(root.get_viewport_rid(), true)
 		process_frame.connect(_sample_frame)
 	_journey = JOURNEY_SCENE.instantiate() as Journey
+	_journey.combat_enabled = false
 	root.add_child(_journey)
 	_journey.set_physics_process(false)
 	_build_fleet()
@@ -201,7 +202,7 @@ func _check_formation() -> void:
 		query.transform = ship.hull_collider.global_transform
 		_check(ship.get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty(), "Large-fleet hulls do not penetrate island solids.")
 	var rig := _journey.camera_rig
-	var center := _journey.fleet.average_focus.get_global_transform_interpolated().origin
+	var center := _journey.fleet.anchor.get_global_transform_interpolated().origin
 	_check(rig.camera.global_position.distance_to(center) <= rig.viewing_radius + 1.0, "The large-fleet camera stays inside its viewing sphere.")
 
 

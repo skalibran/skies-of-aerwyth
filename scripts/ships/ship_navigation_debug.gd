@@ -8,7 +8,7 @@ const DETOUR_COLOR := Color(1.0, 0.3, 0.85)
 const GOAL_RING_SEGMENTS: int = 24
 
 @export var journey: Journey
-@export var enabled: bool = true:
+@export var enabled: bool = false:
 	set(value):
 		enabled = value
 		visible = value
@@ -57,7 +57,13 @@ func redraw() -> void:
 	var anchor_position := journey.fleet.anchor.get_global_transform_interpolated().origin
 	for ship in journey.ships:
 		var ship_position := ship.get_global_transform_interpolated().origin
-		if ship in journey.fleet.members:
+		if ship.combat_engaged and ship.combat.returning_to_anchor:
+			_line(ship_position, anchor_position, Color(1.0, 0.25, 0.12))
+		elif ship.combat_engaged and ship.combat.has_target():
+			var goal := ship.combat.target.get_global_transform_interpolated().origin + ship.combat.goal_offset
+			_line(ship_position, goal, Color(1.0, 0.25, 0.12))
+			_draw_goal(goal, 1.5)
+		elif ship in journey.fleet.members:
 			var goal := anchor_position + ship.travel.goal_offset
 			_line(ship_position, goal, GOAL_COLOR)
 			_draw_goal(goal, ship.travel.arrival_radius)

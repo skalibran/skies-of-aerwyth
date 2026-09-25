@@ -1,0 +1,22 @@
+MOVEMENT FOLLOW-UP WORK
+
+Runtime contracts and checks: src/docs/movement.md.
+Reviewed scripted-flight baseline: src/docs/combat_review.md.
+Whole-game performance work: GEN-05 in blockers-terrain.txt.
+
+[x] Use the persistent fleet anchor for fleet camera focus and the viewing sphere.
+    Spawning/dying ships must not shift the view through changes to the average.
+[ ] Choose keyboard/controller bindings for the existing camera_focus_fleet
+    action and focus_fleet() method.
+[ ] Define controller-based ship selection; current selection uses the mouse.
+[ ] Evaluate camera feel with a physical controller. Injected input checks cover
+    behavior but cannot establish hands-on feel.
+
+[ ] Trial rigid-body flight after evaluating the scripted forward-flight controller.
+    Compare feel/result, maintainability, intended behavior, and performance.
+    Hold authored equipment, terrain, seeds, population, and launch conditions
+    constant between trials. Include contact response and retain the current
+    scripted controller's measurements as a baseline, not a controlled comparison
+    against a differently configured encounter.
+    Preserve check_combat_scale.gd's configuration snapshot and dense fleet layout;
+    its functional PASS and separate performance-budget results have distinct meanings.

@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="WeaponDefinition" format=3 uid="uid://dvlpdfkecaypi"]
+
+[ext_resource type="Script" uid="uid://ckmgt6ivf4fl3" path="res://scripts/weapons/weapon_definition.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Rusty cannon"
+launch_speed = 100.0

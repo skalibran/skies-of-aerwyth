@@ -2,8 +2,9 @@ SKIES OF AERWYTH - TERRAIN AND GENERATION BLOCKERS
 
 Recorded: 2026-09-25
 Status: All five blockers below are open.
-Source: src/docs/generation_review.md (GEN-01 through GEN-05).
+Review and factual limitations: src/docs/generation_review.md.
 Supporting measurements: src/docs/terrain_performance.md.
+This file owns GEN-01 through GEN-05 and their active completion criteria.
 
 The current five-unit scenery prototype passes its measured workload. These
 items block the associated production features or final shipping sign-off;
@@ -44,6 +45,38 @@ Completion criteria:
 - Test fast falls, resting contact, origin shifts, and streaming boundaries
   with several simultaneous wrecks; measure physics construction and runtime.
 - Resolve water landing/sinking behavior separately with the user.
+- For scenery-model placement, use source height/biome samples, stable cell
+  identities, and a dedicated placement seed. Reject underwater samples for
+  vegetation that belongs on dry land; never consume island or ship RNG.
+- Preserve nearby shoreline and occupied contact-area accuracy while camera
+  detail changes. Entire-layout replacement can postpone fine detail during
+  continuous rapid camera travel.
+
+Proposed wreck collision implementation (not implemented):
+1. Generate static collision tiles around a falling wreck's predicted landing
+   corridor, including neighboring coverage for its hull and lateral motion.
+   Request them before contact; avoid per-voxel colliders or collision across
+   all 81 visible root regions.
+2. Use merged source-grid top/cliff triangles independent of render LOD. Exclude
+   visual skirts and material/color subdivisions. Pin collision tiles and matching
+   visual detail while occupied, then release references after wreck cleanup.
+3. Give falling wrecks simple convex/capsule bodies. Use continuous collision
+   detection or swept movement for fast falls; allow settled wrecks to sleep or
+   freeze during their short lifetime. Test tunneling explicitly.
+4. Register collision roots for the same floating-origin shifts as wrecks. Bound
+   resource generation and publish live physics/tree changes on the main thread.
+
+Shape alternatives:
+- HeightMapShape3D triangulates between samples and can be cheaper when approximate
+  slope contact is acceptable; it does not reproduce vertical voxel steps exactly.
+  https://docs.godotengine.org/en/stable/classes/class_heightmapshape3d.html
+- ConcavePolygonShape3D preserves steps as static geometry. Use a convex shape on
+  the moving wreck, not a moving concave terrain shape.
+  https://docs.godotengine.org/en/stable/classes/class_concavepolygonshape3d.html
+
+Measure world insertion, contact solving, simultaneous wrecks, CCD, and sleeping,
+not just shape-resource creation. The existing estimate is documented in
+src/docs/terrain_performance.md under Collision construction estimate.
 
 [ ] GEN-03 - Island visibility does not cover the full camera view
 
@@ -87,19 +120,28 @@ Completion criteria:
 Required before: Performance sign-off for 100+ ships with combat.
 
 Problem:
-- At 128 ships, the measured script simulation step takes about 8.3 ms median
-  and 10.1 ms p95 before combat, vegetation, or wreck physics.
-- Ship separation scans other ships for each ship; island navigation queries
-  inspect the loaded obstacle registry.
+- Before spatial filtering, the 128-ship simulation measured about 8.3 ms median
+  and 10.1 ms p95 without combat, vegetation, or wreck physics.
+- Combat work has since added conservative ship/island spatial filters. The
+  scripted forward-flight 220-ship trial still measured 17.31 / 22.69 ms median/p95
+  in its first combat phase; see src/docs/combat.md for conditions and limits.
 - Navigation-debug caching improved presentation cost, but occasional frame
   spikes remain. Terrain-only timings do not establish a whole-game budget.
 
 Completion criteria:
 - Agree on the target workload and frame budget, then profile combat, final
   assets, vegetation, and simultaneous wrecks together with terrain streaming.
-- Use measurements to determine spatial filtering and navigation scheduling
-  changes; preserve collision and detour behavior with regression checks.
+- Include denser formations and larger populations when evaluating navigation
+  costs. Use measurements to choose further filtering/scheduling changes and
+  preserve collision and detour behavior with regression checks.
 - Include target export mode, resolutions, hardware, and long-running travel.
+
+Terrain tuning validation:
+- Re-profile when changing voxel size, landforms, camera range, or Detail Distance.
+  Preserve geometry/color/grid contracts in check_terrain.gd; smaller cells can
+  increase meshing/cliff costs.
+- Decide terrain interaction before raising landforms into ship/island flight
+  space; current navigation handles floating islands only.
 
 Reviewed hardware: Ryzen 7 9800X3D / RTX 4090, Godot 4.7.1, D3D12, 1920x1080.
 Preserve existing mesh merging, adaptive detail, bounded worker generation,
