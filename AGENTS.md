@@ -55,7 +55,8 @@ A feature normally connects its composed scene, attached script, and authored re
 
 ## Godot code and content conventions
 
-- Use tabs in GDScript, `snake_case` for files, functions, and members, and `PascalCase` for global classes. Use typed declarations where practical.
+- Follow [Godot's GDScript style guide](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html) and its naming conventions by default: `snake_case` for files, functions, variables, and signals; `PascalCase` for classes; and `CONSTANT_CASE` for constants and enum members. Use tabs in GDScript and typed declarations where practical.
+- Apply conventions pragmatically when they do not fit or would hinder readability. Prioritize clear code and local consistency over rigid formatting; do not force line breaks or reflow readable code solely to satisfy a fixed line-length limit.
 - Keep engine callbacks such as `_ready()`, `_process()`, `_physics_process()`, and input callbacks focused on orchestration. Put substantive operations in clearly named functions.
 - Write concise English comments for non-obvious intent, timing, and invariants. Use complete sentences and describe the code for a reader who has not seen the conversation.
 - Use Input Map actions for gameplay controls. Add actions and their consumers together when controls are introduced.
