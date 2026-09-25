@@ -23,7 +23,7 @@ var _next_ship_id: int = 1
 var _dead_ships: Array[Airship] = []
 var destroyed_count: int = 0
 var profile_steps: bool = false
-var step_timings_usec := PackedInt64Array([0, 0, 0, 0, 0, 0])
+var step_timings_usec := PackedInt64Array([0, 0, 0, 0, 0, 0, 0])
 var _avoidance := ShipAvoidance.new()
 
 
@@ -116,12 +116,16 @@ func step_simulation(delta: float) -> void:
 		measured_at = Time.get_ticks_usec()
 	if combat_enabled:
 		projectiles.step(delta)
+	if profile_steps:
+		step_timings_usec[4] = Time.get_ticks_usec() - measured_at
+		measured_at = Time.get_ticks_usec()
+	if combat_enabled:
 		for ship in ships:
 			if ship.alive:
 				for slot in ship.mounted_slots:
 					slot.step(delta, ship, ships, projectiles)
 	if profile_steps:
-		step_timings_usec[4] = Time.get_ticks_usec() - measured_at
+		step_timings_usec[5] = Time.get_ticks_usec() - measured_at
 		measured_at = Time.get_ticks_usec()
 	_remove_dead_ships()
 	origin.recenter_if_needed(fleet.anchor.global_position.z)
@@ -133,7 +137,7 @@ func step_simulation(delta: float) -> void:
 		island_spawner.update_region(anchor_route_position())
 		terrain.update_region(fleet.anchor.global_position.x, anchor_route_position(), camera_rig.camera.global_position)
 	if profile_steps:
-		step_timings_usec[5] = Time.get_ticks_usec() - measured_at
+		step_timings_usec[6] = Time.get_ticks_usec() - measured_at
 
 
 func allocate_ship_id() -> int:

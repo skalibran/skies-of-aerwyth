@@ -4,5 +4,5 @@
 
 [resource]
 script = ExtResource("1")
+reload_seconds = 0.2
 display_name = "Rusty cannon"
-launch_speed = 100.0

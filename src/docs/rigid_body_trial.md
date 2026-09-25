@@ -4,6 +4,8 @@ Implemented on `combat-rigid-body-3d`, compared with CharacterBody3D commit `644
 
 **Accepted on 2026-09-25:** the user chose rigid-body movement after playtesting because it feels much better. RigidBody3D is the maintained controller. The historical comparison below does not imply a runtime controller toggle or a retained CharacterBody implementation. Performance acceptance remains separate.
 
+These measurements precede the [predicted-projectile comparison](projectile_comparison.md), which increases the cannon demonstration rate from 0.5 to 5 shots per second and changes projectile hit rules. Its results use a different benchmark-only health value and separate projectile/weapon timers; the tables below remain the original controller comparison.
+
 ## Controller and contact behavior
 
 [`ship.tscn`](../../scenes/ships/ship.tscn) now supplies a RigidBody3D hull, inherited by Kestrel. [`ShipFlight`](../../scripts/ships/ship_flight.gd) computes primary-axis thrust, separate lift, lateral drag, and yaw torque. Forces are scaled by mass and yaw torque by actual inertia to retain the existing acceleration and turning units. Godot/Jolt owns integration, velocity, and capsule contact response. There is one controller and no per-frame position/yaw/velocity assignment or retained copy of angular velocity.

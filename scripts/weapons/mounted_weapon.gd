@@ -27,24 +27,29 @@ func initialize_phase(entity_id: int, slot_index: int) -> void:
 	_search_time = float((entity_id * 7 + slot_index * 3) % 12) / 60.0
 
 
-func launch_for(target: Airship) -> Vector3:
+func launch_for(target: Airship) -> Ballistics.LaunchSolution:
 	if not is_instance_valid(target) or not target.alive:
-		return Vector3.ZERO
+		return null
 	var relative := target.global_position - global_position
 	if relative.length_squared() > weapon.range_units * weapon.range_units:
-		return Vector3.ZERO
+		return null
 	solve_count += 1
 	var time := Ballistics.intercept_time(relative, target.linear_velocity, weapon.launch_speed, weapon.gravity, weapon.lifetime)
 	if time <= 0.0 or (relative + target.linear_velocity * time).length_squared() > weapon.range_units * weapon.range_units:
-		return Vector3.ZERO
+		return null
 	var launch := Ballistics.launch_velocity(relative, target.linear_velocity, weapon.gravity, time)
-	return launch if slot.accepts_direction(launch) else Vector3.ZERO
+	if not slot.accepts_direction(launch):
+		return null
+	var solution := Ballistics.LaunchSolution.new()
+	solution.velocity = launch
+	solution.time = time
+	return solution
 
 
 func step(delta: float, ship: Airship, ships: Array[Airship], projectiles: ProjectileController) -> void:
 	cooldown = maxf(0.0, cooldown - delta)
 	_search_time -= delta
-	if not ship.alive or cooldown > 0.0 or _search_time > 0.0:
+	if not ship.alive or cooldown > 0.000001 or _search_time > 0.000001:
 		return
 	_search_time = SEARCH_INTERVAL
 	var main := ship.combat.target
@@ -72,11 +77,11 @@ func step(delta: float, ship: Airship, ships: Array[Airship], projectiles: Proje
 
 func _try_fire(ship: Airship, target: Airship, projectiles: ProjectileController) -> bool:
 	var launch := launch_for(target)
-	if launch == Vector3.ZERO:
+	if launch == null:
 		return false
-	var up := Vector3.FORWARD if absf(launch.normalized().dot(Vector3.UP)) > 0.99 else Vector3.UP
-	aim_pivot.look_at(global_position + launch, up)
-	projectiles.fire(ship, global_position, launch, weapon)
+	var up := Vector3.FORWARD if absf(launch.velocity.normalized().dot(Vector3.UP)) > 0.99 else Vector3.UP
+	aim_pivot.look_at(global_position + launch.velocity, up)
+	projectiles.fire(ship, global_position, launch.velocity, weapon, target, launch.time)
 	cooldown = weapon.reload_seconds
 	shots_fired += 1
 	return true

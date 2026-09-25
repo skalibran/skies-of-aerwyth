@@ -4,6 +4,7 @@ const JOURNEY := preload("res://scenes/world/journey.tscn")
 const KESTREL := preload("res://scenes/ships/kestrel.tscn")
 const CANNON := preload("res://resources/weapons/rusty_cannon.tres")
 const MISS_HEIGHT: float = 1000.0
+const BENCHMARK_HEALTH: float = 1000000.0
 
 var _journey: Journey
 var _failures: Array[String] = []
@@ -19,8 +20,11 @@ var _previous_frame: int = 0
 var _peak_shots: int = 0
 var _peak_nodes: int = 0
 var _peak_memory: int = 0
-var _component_totals := PackedInt64Array([0, 0, 0, 0, 0, 0])
+var _component_totals := PackedInt64Array([0, 0, 0, 0, 0, 0, 0])
 var _component_samples: int = 0
+var _phase_start_fired: int = 0
+var _phase_start_rays: int = 0
+var _phase_start_checks: int = 0
 
 
 func _initialize() -> void:
@@ -43,6 +47,8 @@ func _run() -> void:
 		RenderingServer.viewport_set_measure_render_time(root.get_viewport_rid(), true)
 		process_frame.connect(_sample_frame)
 	_journey = JOURNEY.instantiate() as Journey
+	if "--live-projectiles" in OS.get_cmdline_user_args():
+		_journey.projectiles.hit_model = ProjectileController.HitModel.LIVE_SWEEP
 	root.add_child(_journey)
 	_journey.set_physics_process(false)
 	_journey.profile_steps = true
@@ -64,7 +70,7 @@ func _run() -> void:
 		_journey.step_simulation(1.0 / 60.0)
 		if not _phase.is_empty():
 			_steps.append(float(Time.get_ticks_usec() - start) / 1000.0)
-			for component in range(6):
+			for component in range(7):
 				_component_totals[component] += _journey.step_timings_usec[component]
 			_component_samples += 1
 		_sample_counts()
@@ -80,7 +86,7 @@ func _run() -> void:
 	_finish_phase()
 	_check(_journey.fleet.members.size() == 70, "Only seventy player ships contribute to the fleet average.")
 	_check(_journey.projectiles.damaging_hits > 0 and _journey.destroyed_count >= 10, "Large-fleet combat and replacement lifecycle are exercised.")
-	# A second phase isolates the documented full-rate miss workload alongside
+	# A second phase keeps the historical fixed-rate miss workload alongside
 	# movement, streaming, and rendering, without adding duplicate weapon fire.
 	debug.enabled = false
 	_journey.combat_enabled = false
@@ -90,12 +96,17 @@ func _run() -> void:
 		await physics_frame
 		var start := Time.get_ticks_usec()
 		_journey.step_simulation(1.0 / 60.0)
+		var projectile_start := Time.get_ticks_usec()
 		_journey.projectiles.step(1.0 / 60.0)
+		_journey.step_timings_usec[4] = Time.get_ticks_usec() - projectile_start
 		if tick % 120 == 0:
 			for ship in _journey.ships:
 				for side in [-1, 1]:
 					_journey.projectiles.fire(ship, ship.global_position + Vector3.UP * MISS_HEIGHT, Vector3(side * CANNON.launch_speed, 0, 0), CANNON)
 		_steps.append(float(Time.get_ticks_usec() - start) / 1000.0)
+		for component in range(7):
+			_component_totals[component] += _journey.step_timings_usec[component]
+		_component_samples += 1
 		_sample_counts()
 	_check(_peak_shots == 1760, "Synchronized miss volleys exercise the predicted 1,760-shot peak clear of scenery.")
 	_finish_phase()
@@ -143,7 +154,8 @@ func _spawn(faction: StringName, position: Vector3) -> void:
 	var ship := KESTREL.instantiate() as Airship
 	ship.entity_id = _journey.allocate_ship_id()
 	ship.faction = faction
-	ship.maximum_health = 5000
+	# Hold the population and movement workload stable across different hit rules.
+	ship.maximum_health = BENCHMARK_HEALTH
 	_journey.add_child(ship)
 	ship.global_position = position
 	_journey.register_ship(ship)
@@ -155,7 +167,7 @@ func _replace_casualty(faction: StringName) -> void:
 		if ship.faction != faction:
 			continue
 		var position := ship.global_position
-		ship.take_damage(10000, Factions.ENEMY if faction == Factions.PLAYER else Factions.PLAYER)
+		ship.take_damage(ship.maximum_health, Factions.ENEMY if faction == Factions.PLAYER else Factions.PLAYER)
 		_journey._remove_dead_ships()
 		_spawn(faction, position)
 		return
@@ -164,6 +176,9 @@ func _replace_casualty(faction: StringName) -> void:
 func _begin_phase(name: String) -> void:
 	_phase = name
 	_previous_frame = Time.get_ticks_usec()
+	_phase_start_fired = _journey.projectiles.fired_count
+	_phase_start_rays = _journey.projectiles.ray_query_count
+	_phase_start_checks = _journey.projectiles.predicted_check_count
 
 
 func _sample_frame() -> void:
@@ -185,6 +200,9 @@ func _sample_counts() -> void:
 func _finish_phase() -> void:
 	var result := {"name": _phase, "step_ms": _summary(_steps), "frame_ms": _summary(_frames), "gpu_ms": _summary(_gpu), "peak_shots": _peak_shots, "peak_nodes": _peak_nodes, "peak_memory_bytes": _peak_memory, "end_nodes": Performance.get_monitor(Performance.OBJECT_NODE_COUNT), "end_memory_bytes": Performance.get_monitor(Performance.MEMORY_STATIC)}
 	result["engine_physics_ms"] = _summary(_physics_ms)
+	result["shots_fired"] = _journey.projectiles.fired_count - _phase_start_fired
+	result["ray_queries"] = _journey.projectiles.ray_query_count - _phase_start_rays
+	result["predicted_checks"] = _journey.projectiles.predicted_check_count - _phase_start_checks
 	result["step_scope"] = "Journey GDScript work; excludes subsequent native rigid-body integration/contact solving"
 	var budget_ms := 1000.0 / Engine.physics_ticks_per_second
 	result["physics_budget_ms"] = budget_ms
@@ -192,8 +210,8 @@ func _finish_phase() -> void:
 	print("PERFORMANCE %s: script step p95 %.3f ms / %.3f ms budget (%s); assess engine physics and wall frames too." % [_phase, result.step_ms.p95, budget_ms, "within" if result.step_p95_within_budget else "EXCEEDED"])
 	if _component_samples > 0:
 		var components := {}
-		var names := ["decisions", "avoidance", "island_navigation", "force_submission", "projectiles_weapons", "cleanup_streaming"]
-		for index in range(6):
+		var names := ["decisions", "avoidance", "island_navigation", "force_submission", "projectiles", "weapons", "cleanup_streaming"]
+		for index in range(7):
 			components[names[index]] = float(_component_totals[index]) / (1000.0 * _component_samples)
 		result["component_mean_ms"] = components
 	_results.append(result)
@@ -219,6 +237,9 @@ func _configuration() -> Dictionary:
 	return {
 		"engine": Engine.get_version_info().string,
 		"controller": "RigidBody3D / force-controlled ShipFlight",
+		"projectile_model": "live_sweep" if _journey.projectiles.hit_model == ProjectileController.HitModel.LIVE_SWEEP else "predicted_impact",
+		"impact_tolerance": _journey.projectiles.impact_tolerance,
+		"miss_volley_interval": 2.0,
 		"mass": ship.mass, "gravity_scale": ship.gravity_scale,
 		"friction": ship.physics_material_override.friction, "bounce": ship.physics_material_override.bounce,
 		"angular_xz_locked": ship.axis_lock_angular_x and ship.axis_lock_angular_z,

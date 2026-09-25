@@ -195,7 +195,7 @@ func _check_pass() -> void:
 				aligned_ticks += 1
 		if tick % 12 == 0:
 			var weapon := ship.mounted_slots[1].equipment as MountedWeapon
-			armed_ticks += int(weapon.launch_for(target) != Vector3.ZERO)
+			armed_ticks += int(weapon.launch_for(target) != null)
 			if _visual:
 				_paths.append({"position": ship.global_position - target.global_position, "forward": -ship.global_basis.z})
 		if tick == 1000:

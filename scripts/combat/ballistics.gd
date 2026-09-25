@@ -4,6 +4,10 @@ extends RefCounted
 const MIN_TIME: float = 0.0001
 const ROOT_ITERATIONS: int = 28
 
+class LaunchSolution extends RefCounted:
+	var velocity: Vector3
+	var time: float
+
 
 static func intercept_time(relative: Vector3, target_velocity: Vector3, speed: float, gravity: float, lifetime: float) -> float:
 	if not relative.is_finite() or not target_velocity.is_finite():
