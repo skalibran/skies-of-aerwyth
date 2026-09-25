@@ -81,8 +81,7 @@ func step_simulation(delta: float) -> void:
 	var measured_at: int = Time.get_ticks_usec() if profile_steps else 0
 	_remove_dead_ships()
 	if delta <= 0.0:
-		# Allow registry/average refresh without move_and_slide using the engine's
-		# nonzero physics delta or ready weapons firing during a zero-time step.
+		# Refresh registries without submitting forces or firing ready weapons.
 		fleet.advance(0.0)
 		return
 	if combat_enabled:
@@ -106,8 +105,10 @@ func step_simulation(delta: float) -> void:
 		step_timings_usec[1] = Time.get_ticks_usec() - measured_at
 		measured_at = Time.get_ticks_usec()
 		step_timings_usec[2] = 0
+	# Submit control once per engine tick. Hull motion/contact solving happens in
+	# native physics; queries below still use the latest completed body state.
 	for index in range(ships.size()):
-		ships[index].move_ship(delta, _corrections[index], island_spawner.navigation_candidates(ships[index]), profile_steps)
+		ships[index].apply_movement_forces(delta, _corrections[index], island_spawner.navigation_candidates(ships[index]), profile_steps)
 		if profile_steps:
 			step_timings_usec[2] += ships[index].navigation_time_usec
 	if profile_steps:
@@ -162,7 +163,7 @@ func anchor_route_position() -> RoutePosition:
 func _snapshot_ships() -> void:
 	for index in range(ships.size()):
 		_positions[index] = ships[index].global_position
-		_velocities[index] = ships[index].velocity
+		_velocities[index] = ships[index].linear_velocity
 		_axes[index] = ships[index].global_basis.z
 
 

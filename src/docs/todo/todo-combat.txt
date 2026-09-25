@@ -1,7 +1,7 @@
 COMBAT VERTICAL SLICE
 
-Status: Playable slice and scripted forward-flight trial implemented. Remaining
-gates are listed at the end. The rigid-body comparison is tracked in
+Status: Playable slice implemented; rigid-body forward flight accepted. Remaining
+gates are listed at the end. The accepted rigid-body integration is tracked in
 src/docs/todo/todo-movement.txt.
 Reference: src/docs/game_design_document.md, src/docs/movement.md, and
 src/docs/combat.md for implemented ownership, checks, and measurements.
@@ -372,6 +372,9 @@ Evidence and completed fixes: src/docs/combat_review.md.
     isolated 1,760-shot misses are cheaper and cannot substitute for this gate.
     Agree on minimum CPU/GPU and a frame budget, then verify the sustained combined
     workload with frame-time headroom on that hardware and in a release export.
+    Rigid-body trial: 22.31 ms script p95 (native integration excluded), 164.60 ms
+    wall-frame p95 in the same early dense workload. This gate remains open;
+    src/docs/rigid_body_trial.md records the full comparison and engine timings.
 
 [ ] COMBAT-02 — Broader content authoring (blocks unrestricted hull/loadout support).
     Current Kestrel/Rusty cannon wiring works. The planner tests bearing feasibility
@@ -403,4 +406,5 @@ Evidence and completed fixes: src/docs/combat_review.md.
     Confirm the authored 100-unit/s trial against the desired visible cannon arc:
     at level range 100 and gravity 3 it rises only about 0.375 units, versus about
     11.29 units at the original speed 20. Preserve current authored values until
-    that decision. Hold all tuning constant during the rigid-body comparison.
+    that decision. The rigid-body comparison retained these values; its acceptance
+    does not resolve the separate cannon/bearing tuning decisions.

@@ -193,7 +193,7 @@ func _check_formation() -> void:
 	query.shape = probe
 	query.collision_mask = 2
 	for ship in _journey.ships:
-		_check(ship.global_position.is_finite() and ship.velocity.is_finite(), "Large-fleet movement stays finite.")
+		_check(ship.global_position.is_finite() and ship.linear_velocity.is_finite(), "Large-fleet movement stays finite.")
 		var relative := ship.global_position - _journey.fleet.anchor.global_position
 		_check((relative / extent).length() < 1.25, "Ships stay within reach of the expanded formation.")
 		_check((ship.travel.goal_offset / extent).length() < 1.25, "Travel goals stay within the formation while detours temporarily increase their distance.")

@@ -245,7 +245,7 @@ func _check_free_camera_follow() -> void:
 	_check((rig.camera.global_position - anchor_now).distance_to(offset) < 0.001, "An idle free camera keeps its offset from the anchor.")
 	_check(rig.camera.global_basis.is_equal_approx(orientation), "Following anchor translation does not change free-look orientation.")
 	# Stop translation, let interpolation settle, and change membership independently.
-	_journey.set_physics_process(false)
+	_freeze_fixture(true)
 	await _frames(2)
 	rig._process(0.0)
 	var stopped_eye := rig.camera.global_position
@@ -271,14 +271,14 @@ func _check_free_camera_follow() -> void:
 	var clamped_eye := rig.camera.global_position
 	rig._process(0.0)
 	_check(rig.camera.global_position.distance_to(clamped_eye) < 0.001, "Sphere clamping persists in the anchor-relative free position.")
-	_journey.set_physics_process(true)
+	_freeze_fixture(false)
 	rig.focus_fleet()
 
 
 func _check_camera_membership() -> void:
 	var rig := _journey.camera_rig
 	var fleet := _journey.fleet
-	_journey.set_physics_process(false)
+	_freeze_fixture(true)
 	await _frames(2)
 	var anchor_position := fleet.anchor.global_position
 	var saved_distance := rig.orbit_distance
@@ -314,7 +314,7 @@ func _check_camera_membership() -> void:
 		_check(view.origin.distance_to(anchor_position) <= rig.viewing_radius + 0.001, "Each camera mode respects the anchor-centered sphere.")
 	rig.orbit_distance = saved_distance
 	rig.focus_fleet()
-	_journey.set_physics_process(true)
+	_freeze_fixture(false)
 
 
 func _check_zoom() -> void:
@@ -455,7 +455,7 @@ func _check_rebase() -> void:
 	var before := _journey.anchor_route_position()
 	var first := _journey.ships[0]
 	var position := RoutePosition.from_scene(first.position.z, _journey.origin.segment)
-	var velocity := first.velocity
+	var velocity := first.linear_velocity
 	var goal := first.travel.goal_offset
 	var relative := first.global_position - _journey.ships[1].global_position
 	var rng_state := _journey.island_spawner.rng.state
@@ -471,7 +471,7 @@ func _check_rebase() -> void:
 	var shifted_position := RoutePosition.from_scene(first.position.z, _journey.origin.segment)
 	_check(before.segment == after.segment and absf(before.offset - after.offset) < 0.001, "Rebasing preserves anchor progression.")
 	_check(position.segment == shifted_position.segment and absf(position.offset - shifted_position.offset) < 0.001, "Rebasing preserves ship logical position.")
-	_check(first.velocity == velocity and first.travel.goal_offset == goal, "Rebasing preserves velocity and relative goals.")
+	_check(first.linear_velocity == velocity and first.travel.goal_offset == goal, "Rebasing preserves velocity and relative goals.")
 	_check(relative.distance_to(first.global_position - _journey.ships[1].global_position) < 0.001, "Rebasing preserves ship separation.")
 	_check(rng_state == _journey.island_spawner.rng.state and ship_rng == first.travel.rng.state, "Rebasing does not consume randomness.")
 	_check(camera_mode == _journey.camera_rig.mode, "Rebasing retains camera mode.")
@@ -496,7 +496,7 @@ func _check_long_travel() -> void:
 	for batch in range(12):
 		await _frames(1200)
 		for ship in _journey.ships:
-			_check(ship.global_position.is_finite() and ship.velocity.is_finite(), "Ship positions and velocities stay finite.")
+			_check(ship.global_position.is_finite() and ship.linear_velocity.is_finite(), "Ship positions and velocities stay finite.")
 			_check(absf(ship.visual_root.rotation.x) <= deg_to_rad(ship.pitch_limit_degrees) + 0.001, "Pitch remains bounded.")
 			_check(absf(ship.visual_root.rotation.z) <= deg_to_rad(ship.bank_limit_degrees) + 0.001, "Bank remains bounded.")
 			var relative := (ship.global_position - _journey.fleet.anchor.global_position) / _journey.fleet.formation_extent
@@ -517,14 +517,14 @@ func _check_long_travel() -> void:
 
 
 func _check_slowdown() -> void:
-	_journey.set_physics_process(false)
+	_freeze_fixture(true)
 	var fleet := _journey.fleet
 	fleet.anchor.position.z -= 60.0
 	for tick in range(240):
 		fleet.advance(1.0 / 60.0)
 	_check(fleet.speed < fleet.cruise_speed * 0.5, "The anchor slows when the fleet is held behind.")
 	var gap := fleet.anchor.position.distance_to(fleet.average_position)
-	_journey.set_physics_process(true)
+	_freeze_fixture(false)
 	await _frames(2400)
 	_check(fleet.anchor.position.distance_to(fleet.average_position) < gap * 0.6, "Ships recover after being held behind.")
 	_check(fleet.speed > fleet.cruise_speed * 0.8, "The anchor recovers cruising speed.")
@@ -638,3 +638,9 @@ func _capture(label: String) -> void:
 func _check(condition: bool, message: String) -> void:
 	if not condition:
 		_failures.append(message)
+
+
+func _freeze_fixture(frozen: bool) -> void:
+	_journey.set_physics_process(not frozen)
+	for ship in _journey.ships:
+		ship.freeze = frozen

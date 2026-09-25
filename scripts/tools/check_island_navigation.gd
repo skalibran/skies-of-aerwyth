@@ -84,8 +84,11 @@ func _encounter(label: String, height: float, cluster: bool, friendly: bool, blo
 	await physics_frame
 	_check(island.collider.shape is CapsuleShape3D, label + ": islands use capsule colliders.")
 	if blocked:
-		var contact := ship.move_and_collide(Vector3(0.0, 0.0, -180.0), true)
-		_check(contact != null and contact.get_collider() is StaticBody3D, label + ": the capsule island collider blocks direct physical travel.")
+		var motion := PhysicsTestMotionParameters3D.new()
+		motion.from = ship.global_transform
+		motion.motion = Vector3(0.0, 0.0, -180.0)
+		var contact := PhysicsTestMotionResult3D.new()
+		_check(PhysicsServer3D.body_test_motion(ship.get_rid(), motion, contact) and contact.get_collider() is StaticBody3D, label + ": the capsule island collider blocks direct physical travel.")
 	var query := PhysicsShapeQueryParameters3D.new()
 	var probe := CapsuleShape3D.new()
 	probe.radius = ship.hull_radius - 0.15

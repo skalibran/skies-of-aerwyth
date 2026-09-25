@@ -114,14 +114,14 @@ func _prepare_course(delta: float, ship: Airship, fleet: FleetController) -> voi
 		goal_offset = -horizontal + cruise * 3.0
 		goal_offset.y = -preferred.y * stand_off_distance
 		cruise.y = clampf(height_error * 0.45, -ship.climb_speed, ship.climb_speed)
-		ship.set_preferred_velocity(target.velocity + cruise)
+		ship.set_preferred_velocity(target.linear_velocity + cruise)
 	else:
 		if horizontal.length_squared() > 0.001:
 			_approach_axis = -horizontal.normalized()
 		goal_offset = _approach_axis * radius
 		goal_offset.y = -preferred.y * stand_off_distance
 		var error := relative + goal_offset
-		ship.set_preferred_velocity(target.velocity + (error * 0.45).limit_length(ship.maximum_speed))
+		ship.set_preferred_velocity(target.linear_velocity + (error * 0.45).limit_length(ship.maximum_speed))
 
 
 func _has_weapon(ship: Airship) -> bool:
@@ -172,7 +172,7 @@ func _pass_course(ship: Airship, relative: Vector3, preferred: Vector3) -> Vecto
 	var heading := ship.rotation.y
 	if Vector2(preferred.x, preferred.z).length_squared() > 0.001 and Vector2(relative.x, relative.z).length_squared() > 0.001:
 		heading = atan2(-relative.x, -relative.z) - atan2(-preferred.x, -preferred.z)
-	return Basis(Vector3.UP, heading) * ship.flight.primary_axis(ship)
+	return Basis(Vector3.UP, heading) * ShipFlight.primary_axis(ship)
 
 
 func _can_reach_target(ship: Airship) -> bool:
@@ -184,8 +184,8 @@ func _can_reach_target(ship: Airship) -> bool:
 			continue
 		var weapon := mounted.weapon
 		var relative := target.global_position - slot.global_position
-		var time := Ballistics.intercept_time(relative, target.velocity, weapon.launch_speed, weapon.gravity, weapon.lifetime)
-		if time > 0.0 and (relative + target.velocity * time).length_squared() <= weapon.range_units * weapon.range_units:
+		var time := Ballistics.intercept_time(relative, target.linear_velocity, weapon.launch_speed, weapon.gravity, weapon.lifetime)
+		if time > 0.0 and (relative + target.linear_velocity * time).length_squared() <= weapon.range_units * weapon.range_units:
 			return true
 	return false
 

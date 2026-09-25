@@ -21,7 +21,7 @@ func waypoint_position() -> Vector3:
 
 static func look_ahead_distance(ship: Airship) -> float:
 	var preferred := Vector2(ship.preferred_velocity.x, ship.preferred_velocity.z)
-	var speed := maxf(preferred.length(), ship.velocity.length())
+	var speed := maxf(preferred.length(), ship.linear_velocity.length())
 	return maxf(90.0, speed * 6.0 + speed * speed / (2.0 * ship.braking))
 
 

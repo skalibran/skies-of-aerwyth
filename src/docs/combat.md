@@ -2,7 +2,7 @@
 
 Run `scenes/world/journey.tscn` for nine starting player Kestrels and continuous debug spawning for both factions. [`CombatSpawner`](../../scripts/combat/combat_spawner.gd) adds up to two player ships and two enemy ships every simulation second, starting after one second. Each faction has its own cap of 100 living ships; starting ships count toward it. Casualties open capacity that is replenished at the same rate on subsequent ticks, including after either side is wiped out. Partial batches never exceed the cap, and capped or blocked ticks do not accumulate a later burst. Placement retries use the existing bounded ship/island clearance checks. Destroyed ships despawn. This is a debug population driver; production, purchased reinforcements, difficulty progression, defeat screens, wreck behavior, and combat UI remain unimplemented. The added Kestrel model is not used.
 
-The [combat and movement review](combat_review.md) records the current integration assessment and measurements. Outstanding combat work lives in the [combat task list](todo/todo-combat.txt); the flight-controller comparison is tracked in the [movement task list](todo/todo-movement.txt).
+The [combat and movement review](combat_review.md) preserves the CharacterBody3D baseline; the [rigid-body integration](rigid_body_trial.md) records the accepted controller, comparison, and replacement audit. Outstanding combat work lives in the [combat task list](todo/todo-combat.txt); controller acceptance is recorded in the [movement task list](todo/todo-movement.txt).
 
 Both factions spawn 100–150 horizontal units from the persistent fleet anchor, within 150 units above or below its altitude (a 300-unit vertical band). Tune **Altitude Spread** on CombatSpawner. The ship average and camera position do not move this spawn region. Origin shifts preserve its position relative to the anchor. Default spawn positions remain inside the 260-unit combat radius.
 
@@ -60,7 +60,7 @@ Regrouping follows the anchor's velocity and uses the same island routing, ship 
 
 The authored Kestrel set follows the literal request: `front_left`, `left_back`, `back`, `back_right`, `right`, `front_right`. This remains asymmetric: `left` is absent and `back` is present. The aft bearing is kept in the authored set but cannot be selected for these two outward cones, because neither cannon can fire from it.
 
-Combat supplies only preferred movement. [`ShipFlight`](../../scripts/ships/ship_flight.gd) turns and propels the hull along its primary movement axis while retaining momentum, after island detours and ship separation modify the course. Combat cannot independently turn the hull broadside while continuing sideways pursuit. Passes contribute half the ship's maximum speed by default, add the target's velocity, and remain subject to the ship's global speed limit. Preferred bearings are firing opportunities, not rigid poses maintained throughout a turn; weapons still apply their actual cone and ballistic tests.
+Combat supplies only preferred movement. [`ShipFlight`](../../scripts/ships/ship_flight.gd) applies thrust and yaw torque to the rigid hull along its primary movement axis while retaining momentum, after island detours and ship separation modify the course. Combat cannot independently turn the hull broadside while continuing sideways pursuit. Passes contribute half the ship's maximum speed by default and add the target's engine `linear_velocity`; propulsion demand is then limited by the flight controller. Contacts can transiently exceed commanded speeds and transfer momentum without damage. Preferred bearings are firing opportunities, not rigid poses maintained throughout a turn; weapons still apply their actual cone and ballistic tests.
 
 Near engagement range, a ballistic reachability check can reduce stand-off distance every two seconds, down to twelve units; that reduced distance remains until the target changes. Relative-height goals shrink with it. This makes ships try to close when a nominally in-range target cannot be intercepted; it cannot guarantee catching a faster fleeing target. Without an eligible opponent, players resume anchor-relative travel and enemies brake; any active regrouping finishes first. The capped spawner continues. The player fleet alone controls the average and anchor slowdown. See [flight tuning and checks](movement.md#forward-flight-and-momentum).
 
@@ -72,13 +72,15 @@ Mounted weapons first try the main target. With pass-by fire enabled, they then 
 
 1. Remove previously queued deaths, spawn the scheduled batch, snapshot ships, and advance the player anchor.
 2. Choose combat or travel intent; calculate ship separation from the common snapshot.
-3. Route around islands and move each ship once.
+3. Route around islands and submit each ship's thrust/lift/drag forces and yaw torque once.
 4. Advance existing projectiles, resolve damage, and let surviving weapons fire. New shots begin traveling on the following tick.
 5. Unregister and free destroyed ships, then rebase and update scenery/progression.
 
+Force submission does not immediately move the hull. Godot/Jolt integrates rigid-body motion and resolves contacts for the next physics snapshot. Avoidance, aiming, and projectile queries read the latest completed body state; aiming and debug velocity use the body's `linear_velocity`. Hull X/Z rotation is locked while the visual child banks/pitches. Ship control does not overwrite physical transforms or velocities each frame, and projectiles remain scripted point sweeps.
+
 Airship owns health and emits one death signal. Death immediately prevents targeting/firing; Journey removes list entries after active loops, updates all registries, invalidates pursuit references, disables collision, and queues deletion. The existing camera falls back to fleet focus when its selected ship exits. IDs are allocated monotonically through Journey. Spawning uses a dedicated RNG and bounded attempts against ship/island clearance.
 
-`health_changed` is the health owner's notification contract, including for later presentation; the slice has no health UI. Synchronous damage from a listener cannot repeat the death notification. `ShipCombat.clear_target()` clears pursuit/pass state while preserving anchor regrouping. A zero-duration Journey step only drains queued deaths and refreshes the fleet average/speed; it does not move bodies, fire weapons, spawn, or stream.
+`health_changed` is the health owner's notification contract, including for later presentation; the slice has no health UI. Synchronous damage from a listener cannot repeat the death notification. `ShipCombat.clear_target()` clears pursuit/pass state while preserving anchor regrouping. A zero-duration Journey step only drains queued deaths and refreshes the fleet average/speed; it does not submit forces, fire weapons, spawn, or stream. It does not pause native physics. Disabling Journey callbacks also leaves inertia active; stationary test fixtures freeze their bodies explicitly.
 
 The projectile root is registered once with FloatingOrigin. Shots store positions relative to that root; both ray endpoints use its current transform. A rebase changes neither velocity nor gravity/lifetime and never creates a long sweep between old and new world coordinates. Scene ownership releases projectiles, visuals, and subscriptions on exit.
 
@@ -90,7 +92,7 @@ Profiling the 220-ship scene justified two ordinary spatial filters. ShipAvoidan
 
 IslandSpawner owns a two-dimensional cell map of loaded island centers. Its conservative search radius comes from ShipIslandNavigation's existing look-ahead and hull/island clearance. It rebuilds after loading, unloading, or rebasing; the navigation algorithm still performs its exact height and segment tests. Neither filter changes the steering rules or creates another authoritative ship/island registry.
 
-In a short headless 220-ship component sample on the development workstation, ship avoidance decreased from 7.74 to 4.67 ms and island navigation from 8.57 to 1.17 ms per step. These samples explain the optimization, not an endgame frame-rate guarantee. `Journey.profile_steps` enables separate decision, avoidance, island-navigation, movement/candidate-query, weapon/projectile, and cleanup/streaming timings. Normal play does not enable these timers.
+In a short headless 220-ship component sample on the development workstation, ship avoidance decreased from 7.74 to 4.67 ms and island navigation from 8.57 to 1.17 ms per step. These historical scripted-flight samples explain the optimization, not an endgame frame-rate guarantee. `Journey.profile_steps` enables separate decision, avoidance, island-navigation, force-submission/candidate-query, weapon/projectile, and cleanup/streaming timings. Native rigid-body integration/contact solving happens outside this script timer. Normal play does not enable these timers.
 
 ## Validation
 
@@ -110,7 +112,7 @@ For combined rendering/simulation measurements, omit `--headless` and `--fixed-f
 --path <absolute-project-path> --script res://scripts/tools/check_combat_scale.gd --log-file <external-log-file> -- --profile
 ```
 
-This writes `combat-220.json` with hardware, renderer, frame/simulation/GPU percentiles, component timings, shot counts, memory/node counts, and effective flight/weapon settings for comparison. It reports the p95 simulation-step budget separately from functional assertions: a correctness PASS does not mean performance passed. Debug-off/on phases occur at different stages of the battle, so their difference does not isolate debug drawing cost. Append `--visual` with an external capture directory for a fleet image. Measurements on the development machine do not establish low-end hardware performance.
+This writes `combat-220.json` with hardware, renderer, frame/script-step/GPU percentiles, the sampled engine physics-time monitor, component timings, shot counts, memory/node counts, and effective flight/weapon/rigid-body settings for comparison. It reports the p95 script-step budget separately from functional assertions: a correctness PASS does not mean performance passed. `engine_physics_ms` samples Godot's `Performance.TIME_PHYSICS_PROCESS` monitor, whose reporting is coarser than the per-step script timer; it is not an isolated solver timer and must not be added to script time. Whole-frame measurements include the native integration cost. Debug-off/on phases occur at different stages of the battle, so their difference does not isolate debug drawing cost. Append `--visual` with an external capture directory for a fleet image. Measurements on the development machine do not establish low-end hardware performance.
 
 ## Anchor cohesion validation
 

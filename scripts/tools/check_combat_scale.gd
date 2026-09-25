@@ -12,6 +12,7 @@ var _visual: bool = false
 var _phase: String = ""
 var _frames: Array[float] = []
 var _gpu: Array[float] = []
+var _physics_ms: Array[float] = []
 var _steps: Array[float] = []
 var _results: Array[Dictionary] = []
 var _previous_frame: int = 0
@@ -172,6 +173,7 @@ func _sample_frame() -> void:
 	_frames.append(float(now - _previous_frame) / 1000.0)
 	_previous_frame = now
 	_gpu.append(RenderingServer.viewport_get_measured_render_time_gpu(root.get_viewport_rid()))
+	_physics_ms.append(Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0)
 
 
 func _sample_counts() -> void:
@@ -182,13 +184,15 @@ func _sample_counts() -> void:
 
 func _finish_phase() -> void:
 	var result := {"name": _phase, "step_ms": _summary(_steps), "frame_ms": _summary(_frames), "gpu_ms": _summary(_gpu), "peak_shots": _peak_shots, "peak_nodes": _peak_nodes, "peak_memory_bytes": _peak_memory, "end_nodes": Performance.get_monitor(Performance.OBJECT_NODE_COUNT), "end_memory_bytes": Performance.get_monitor(Performance.MEMORY_STATIC)}
+	result["engine_physics_ms"] = _summary(_physics_ms)
+	result["step_scope"] = "Journey GDScript work; excludes subsequent native rigid-body integration/contact solving"
 	var budget_ms := 1000.0 / Engine.physics_ticks_per_second
 	result["physics_budget_ms"] = budget_ms
 	result["step_p95_within_budget"] = result.step_ms.p95 <= budget_ms
-	print("PERFORMANCE %s: step p95 %.3f ms / %.3f ms budget (%s)." % [_phase, result.step_ms.p95, budget_ms, "within" if result.step_p95_within_budget else "EXCEEDED"])
+	print("PERFORMANCE %s: script step p95 %.3f ms / %.3f ms budget (%s); assess engine physics and wall frames too." % [_phase, result.step_ms.p95, budget_ms, "within" if result.step_p95_within_budget else "EXCEEDED"])
 	if _component_samples > 0:
 		var components := {}
-		var names := ["decisions", "avoidance", "island_navigation", "body_movement", "projectiles_weapons", "cleanup_streaming"]
+		var names := ["decisions", "avoidance", "island_navigation", "force_submission", "projectiles_weapons", "cleanup_streaming"]
 		for index in range(6):
 			components[names[index]] = float(_component_totals[index]) / (1000.0 * _component_samples)
 		result["component_mean_ms"] = components
@@ -198,6 +202,7 @@ func _finish_phase() -> void:
 	_steps.clear()
 	_frames.clear()
 	_gpu.clear()
+	_physics_ms.clear()
 	_peak_shots = 0
 	_peak_nodes = 0
 	_peak_memory = 0
@@ -213,7 +218,10 @@ func _configuration() -> Dictionary:
 	# Keep comparison inputs with the raw measurements; branches may change defaults.
 	return {
 		"engine": Engine.get_version_info().string,
-		"controller": "CharacterBody3D / ShipFlight",
+		"controller": "RigidBody3D / force-controlled ShipFlight",
+		"mass": ship.mass, "gravity_scale": ship.gravity_scale,
+		"friction": ship.physics_material_override.friction, "bounce": ship.physics_material_override.bounce,
+		"angular_xz_locked": ship.axis_lock_angular_x and ship.axis_lock_angular_z,
 		"combat_seconds": 60, "miss_seconds": 12, "miss_height": MISS_HEIGHT,
 		"health": ship.maximum_health, "speed": ship.maximum_speed,
 		"acceleration": ship.acceleration, "braking": ship.braking,

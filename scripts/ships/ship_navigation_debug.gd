@@ -73,7 +73,7 @@ func redraw() -> void:
 			for axis in [Vector3.RIGHT, Vector3.UP, Vector3.BACK]:
 				_line(detour - axis, detour + axis, DETOUR_COLOR)
 		_draw_arrow(ship_position, ship.navigation_velocity * velocity_seconds, DESIRED_COLOR)
-		_draw_arrow(ship_position, ship.velocity * velocity_seconds, VELOCITY_COLOR)
+		_draw_arrow(ship_position, ship.linear_velocity * velocity_seconds, VELOCITY_COLOR)
 	if _vertex_count > 0:
 		_lines.surface_end()
 

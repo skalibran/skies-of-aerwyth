@@ -34,10 +34,10 @@ func launch_for(target: Airship) -> Vector3:
 	if relative.length_squared() > weapon.range_units * weapon.range_units:
 		return Vector3.ZERO
 	solve_count += 1
-	var time := Ballistics.intercept_time(relative, target.velocity, weapon.launch_speed, weapon.gravity, weapon.lifetime)
-	if time <= 0.0 or (relative + target.velocity * time).length_squared() > weapon.range_units * weapon.range_units:
+	var time := Ballistics.intercept_time(relative, target.linear_velocity, weapon.launch_speed, weapon.gravity, weapon.lifetime)
+	if time <= 0.0 or (relative + target.linear_velocity * time).length_squared() > weapon.range_units * weapon.range_units:
 		return Vector3.ZERO
-	var launch := Ballistics.launch_velocity(relative, target.velocity, weapon.gravity, time)
+	var launch := Ballistics.launch_velocity(relative, target.linear_velocity, weapon.gravity, time)
 	return launch if slot.accepts_direction(launch) else Vector3.ZERO
 
 
