@@ -4,6 +4,8 @@ extends RefCounted
 
 static func floor_divide(value: int, divisor: int) -> int:
 	assert(divisor > 0)
+	# Keep int64 precision; correct truncation toward zero for negative values below.
+	@warning_ignore("integer_division")
 	var quotient := value / divisor
 	if value < 0 and value % divisor != 0:
 		quotient -= 1
@@ -15,6 +17,8 @@ static func tile_at(route: RoutePosition, width: int) -> int:
 	var segment_length := int(RoutePosition.SEGMENT_LENGTH)
 	var quotient := floor_divide(route.segment, width)
 	var remainder := posmod(route.segment, width) * segment_length + floori(route.offset)
+	# The nonnegative remainder contributes only complete tiles.
+	@warning_ignore("integer_division")
 	return quotient * segment_length + remainder / width
 
 
@@ -22,6 +26,8 @@ static func tile_start(tile: int, width: int) -> RoutePosition:
 	assert(width > 0)
 	var segment_length := int(RoutePosition.SEGMENT_LENGTH)
 	var remainder := posmod(tile, segment_length) * width
+	# Carry complete segments; preserve the leftover distance as the route offset.
+	@warning_ignore("integer_division")
 	return RoutePosition.new(floor_divide(tile, segment_length) * width + remainder / segment_length, posmod(remainder, segment_length))
 
 

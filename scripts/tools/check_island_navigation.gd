@@ -30,6 +30,7 @@ func _run() -> void:
 
 func _create_journey() -> void:
 	_journey = JOURNEY_SCENE.instantiate() as Journey
+	_journey.combat_enabled = false
 	root.add_child(_journey)
 	for ship in _journey.ships.duplicate():
 		_journey.unregister_ship(ship)
@@ -60,7 +61,7 @@ func _add_island(id: int, position: Vector3) -> FloatingIsland:
 func _add_ship(height: float, friendly: bool = false) -> Airship:
 	var ship := SHIP_SCENE.instantiate() as Airship
 	ship.entity_id = 9001
-	ship.faction = Airship.Faction.FRIENDLY if friendly else Airship.Faction.NEUTRAL
+	ship.faction = Factions.PLAYER if friendly else Factions.NEUTRAL
 	_journey.add_child(ship)
 	ship.global_position = Vector3(0.0, _journey.fleet.anchor.global_position.y + height, 90.0)
 	_journey.register_ship(ship)
@@ -83,8 +84,11 @@ func _encounter(label: String, height: float, cluster: bool, friendly: bool, blo
 	await physics_frame
 	_check(island.collider.shape is CapsuleShape3D, label + ": islands use capsule colliders.")
 	if blocked:
-		var contact := ship.move_and_collide(Vector3(0.0, 0.0, -180.0), true)
-		_check(contact != null and contact.get_collider() is StaticBody3D, label + ": the capsule island collider blocks direct physical travel.")
+		var motion := PhysicsTestMotionParameters3D.new()
+		motion.from = ship.global_transform
+		motion.motion = Vector3(0.0, 0.0, -180.0)
+		var contact := PhysicsTestMotionResult3D.new()
+		_check(PhysicsServer3D.body_test_motion(ship.get_rid(), motion, contact) and contact.get_collider() is StaticBody3D, label + ": the capsule island collider blocks direct physical travel.")
 	var query := PhysicsShapeQueryParameters3D.new()
 	var probe := CapsuleShape3D.new()
 	probe.radius = ship.hull_radius - 0.15

@@ -204,6 +204,8 @@ func _select_patch(x: int, segment: int, offset_z: int, size: int, view_x: int, 
 	var dz := maxf(maxf(local_z - view_route.offset, view_route.offset - (local_z + size)), 0.0)
 	var distance_squared := dx * dx + dz * dz + view_y * view_y
 	if size > TerrainProfile.CELLS_PER_PATCH * profile.voxel_size and distance_squared < pow(size * detail_distance, 2.0):
+		# Patch sizes double from the minimum grid size, so each split is exact.
+		@warning_ignore("integer_division")
 		var half := size / 2
 		for z in range(2):
 			for column in range(2):

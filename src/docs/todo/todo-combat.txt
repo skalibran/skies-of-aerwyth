@@ -1,0 +1,410 @@
+COMBAT VERTICAL SLICE
+
+Status: Playable slice implemented; rigid-body forward flight accepted. Remaining
+gates are listed at the end. The accepted rigid-body integration is tracked in
+src/docs/todo/todo-movement.txt.
+Reference: src/docs/game_design_document.md, src/docs/movement.md, and
+src/docs/combat.md for implemented ownership, checks, and measurements.
+
+Deliverable
+- Automatic combat between player and enemy Kestrels using the current primitive
+  ship model, two broadside Rusty cannons, health, and visible cannonballs following
+  gravity-driven arcs. Weapons calculate elevation and lead before firing.
+- Spawn up to two ships per faction every simulation second, continuously, with
+  at most 100 living ships per faction. Destroyed ships simply despawn.
+- No effects, audio, wrecks, difficulty curve, rewards, combat progression, ship
+  editor, purchased reinforcements, or new UI. Existing journey/terrain progression remains.
+- Ignore the added Kestrel model and preserve its authoring/import files.
+- Endgame measurement target: roughly 70 friendly ships and 150 enemies together.
+  Keep implementation readable; measure before adding low-level optimization.
+
+Original slice tuning choices (authorable, not final balance)
+Current authored trials use 500 health, launch speed 100, 65-degree cone half-angles, and
+muzzles at X = +/-1.4. The original 20-unit/s ballistic references below remain
+solver fixtures. See src/docs/combat.md for current tuning and measurements.
+- Kestrel maximum health: 50; Rusty cannon reload: 2 seconds per mounted weapon.
+- Rusty cannon launch speed: 20 world units/second. Apply constant downward
+  acceleration of 3 world units/second squared, authored on its weapon definition.
+  This is stylized projectile gravity, independent of Godot's global gravity.
+  Speed changes along the arc: vertical motion slows on ascent and speeds up on
+  descent. No drag, homing, inherited shooter velocity, or damage scaling by speed.
+- Prefer the earliest ballistic intercept, producing a direct, low cannon arc.
+  At equal muzzle/target height, a stationary target 60 units away needs about
+  13.4 degrees of elevation, 3.08 seconds of flight, and a 3.57-unit rise. At
+  100 units, these become 24.3 degrees, 5.49 seconds, and an 11.29-unit rise.
+  These are authoring references; inspect the resulting weight and curve in play.
+- At this launch speed, Earth-like gravity (9.81) would allow only about 40.8
+  units of level range. Gravity 3 allows 133.3 units theoretically, leaving margin
+  for the authored 100-unit targeting range. Elevated/moving targets can still
+  be unreachable; being in range alone does not guarantee a firing solution.
+- Range is muzzle-to-target distance, not distance traveled along the curve.
+  Give cannonballs an independent 8-second maximum lifetime; a five-second expiry
+  would remove a valid 100-unit shot before impact. Misses continue falling until
+  impact or expiry, and can intercept ships beyond the targeting range.
+- Begin testing engagement at 60 units from the target, leaving room inside range.
+- Kestrel broadside cones use an 89-degree half-angle (178-degree full opening),
+  widened from the initial 85-degree trial after primitive-model inspection.
+
+1. STRING-BASED FACTIONS
+[x] Replace Airship.Faction and the enum export with a string-based identifier
+    (StringName), initially "player" and "enemy". Centralize those identifiers and
+    the hostility predicate; avoid scattered literal comparisons.
+[x] For this slice, player and enemy are mutually hostile. Matching identifiers
+    are allied; other identifiers are non-hostile until explicitly configured.
+    Retain a non-hostile "neutral" identifier for existing navigation fixtures.
+    Do not add a diplomacy system or implement future factions.
+[x] Update FleetController and movement/island checks that reference the enum.
+    Journey registers every ship; only living player ships contribute to fleet
+    membership, the average, anchor slowdown, and formation travel.
+[x] Keep targeting, firing, damage eligibility, and presentation consistent with
+    that faction identity. Both combat factions use the same combat behavior.
+
+2. REUSABLE SHIP BASE AND KESTREL
+[x] Keep scenes/ships/ship.tscn as the reusable base and create an inherited
+    scenes/ships/kestrel.tscn. Preserve its movement values, capsule collision,
+    primitive geometry, camera selection, and navigation debug behavior.
+[x] Author Kestrel-specific mounts and enabled combat positions in the derived
+    scene. Do not copy the base ship's movement or combat scripts into a variant.
+[x] Replace the nine starting journey ships with Kestrel instances, preserving
+    transforms and stable IDs. Spawn enemy instances from the same Kestrel scene.
+    Faction remains instance data, not a separate enemy ship implementation.
+
+3. ENEMY TINT
+[x] Apply a reddish placeholder tint to the enemy's visible model, including its
+    mounted weapons, without changing player appearances or shared base materials.
+[x] Share immutable faction material variants where practical. Do not mutate the
+    authored shared mesh/material when assigning an enemy instance's appearance.
+[x] Inspect mixed player/enemy instances together in a rendered run.
+
+4. REUSABLE MOUNTED SLOTS
+[x] Create a ship-owned mounted-slot scene/script under scenes/ships/ and
+    scripts/ships/, with an authored local orientation, muzzle transform,
+    integer tier starting at 1, cone half-angle, and optional equipment scene.
+[x] Separate MountedEquipment/EquipmentDefinition from weapon-specific behavior.
+    Slots accept matching-tier weapons or utilities and can remain empty. Keep
+    Rusty cannon's visuals, aiming, and reload state in its own equipment scene.
+    Concrete utility effects remain later work.
+[x] Validate exact tier compatibility on assignment for all positive tiers. Reject
+    incompatible replacements without removing existing equipment; reset combat
+    positioning and apply faction tint when equipment changes. Empty or
+    utility-only platforms continue travel. Rusty cannon requires tier 1.
+[x] Define the cone as a 3D angular test from the muzzle around the slot's forward
+    axis. Transform it with the mounted visual assembly, including pitch/bank.
+    Cache the cone cosine. Slot cones never define weapon range.
+[x] Show an editor-only translucent cone using CylinderMesh with a zero top
+    radius. Derive it from the slot's half-angle and orientation; preview size
+    only affects authoring visibility. Keep preview geometry out of runtime.
+[x] Gate shots by the calculated initial launch direction inside the authored
+    cone, weapon range, a valid ballistic intercept, a living hostile target, and
+    cooldown. Include the upward elevation and target lead in this cone test;
+    testing only the direct target bearing can accept or reject the wrong shot.
+    Hull/balloon raycasts must not add a shoot/no-shoot rule.
+[x] Aim the primitive cannon/barrel along the launch vector. Keep that visual aim
+    separate from the slot's authored cone orientation; aiming must not rotate
+    the allowed cone itself. Inspect elevated launches for model clearance.
+[x] Retain the GDD's per-slot "fire at targets in range" option, enabled by default.
+    A slot can attack an eligible opponent independently of the ship's main target.
+    When disabled, it only attacks the main target. Start with main target first,
+    then nearest eligible opponent, using stable ID to break equal-distance ties.
+
+5. SHARED WEAPON SYSTEM
+[x] Add a typed shared weapon definition Resource and author Rusty cannon under
+    resources/weapons/: range 100 units, damage 5, launch speed 20 units/second,
+    downward acceleration 3 units/second squared, maximum lifetime 8 seconds,
+    tier 1, and the provisional reload value above.
+[x] Keep cooldowns and current firing targets on each mounted instance, never on
+    shared definition Resources. Health likewise belongs to the individual ship.
+[x] Calculate a ballistic intercept using the current muzzle position, target
+    position/velocity, launch speed, gravity, and lifetime as described in item 10.
+    Both sides use this same solver and the same flight model as the projectile.
+[x] Measure range as 3D distance from the muzzle to both the current target aim
+    point and the predicted intercept; both must be within 100 units. Validate
+    the solved launch direction against the slot cone. Recalculate from current
+    transforms/velocity when firing; target acceleration can still cause a miss.
+[x] If there is no valid solution, retain the main target and maneuver, or let
+    pass-by fire choose another eligible opponent. Do not fall back to a straight
+    shot, increase launch speed, or bend the projectile after launch to force a hit.
+[x] Start with independent cooldowns, one projectile per shot, no splash damage,
+    and no burst catch-up after a stall. A simple primitive cannon is sufficient.
+
+6. KESTREL BROADSIDES AND DESIGN RULE
+[x] Add one tier-1 mount on the left of the Kestrel hull and one on the right.
+    Equip each with Rusty cannon and place its muzzle outside the visible model.
+[x] Author outward-facing cones as broadly as the primitive model allows without
+    visibly sending shots through it. Verify elevated ballistic launches, boundary
+    shots, and pitched/banked poses. Muzzles at local X = +/-1.8 clear the visible
+    envelope; the final 89-degree half-angle retains a one-degree outward margin.
+[x] Keep cone eligibility separate from projectile impacts on other ships/islands.
+    Exclude only the firing ship from its projectile's collision query.
+[x] Update both GDD references to self-obstruction so authored slot cones govern
+    angular firing permission, while weapon definitions govern distance.
+
+7. PREFERRED COMBAT POSITIONS AND MOVEMENT
+[x] Author an enabled set of these 14 directions on each ship definition:
+    front, front_left, left, left_back, back, back_right, right, front_right,
+    front_up, up, back_up, back_bottom, bottom, front_bottom.
+    Normalize "top" to "up", "front top" to "front_up", and "back top" to
+    "back_up" in the request. Do not add a visual editor or toggle arrows yet.
+[x] Express directions as desired bearings to the main target in the engaging
+    ship's own frame, consistent with the existing GDD's preferred-side rule:
+    front = -Z, back = +Z, left = -X, right = +X, up = +Y, bottom = -Y.
+    Normalize diagonal vectors. Vertical preferences use relative altitude.
+[x] Author the literal Kestrel list as the plan's specified fallback. The request
+    excludes front, left, up, bottom, front_bottom, front_up, back_bottom, back_up,
+    leaving front_left, left_back, back, back_right, right, front_right enabled.
+    This excludes left and retains back despite the stated left/right broadside
+    intent. Keep back enabled in data, but skip it during positioning because no
+    mounted cannon can use it. A later symmetric set would be front_left, left,
+    left_back, back_right, right, front_right; that change remains a design choice.
+[x] Select a reachable enabled bearing and a stand-off distance inside weapon
+    range. Retain the choice with arrival tolerance/hysteresis rather than flipping
+    sides each tick. Account for ballistic reachability and the elevated launch
+    cone; close distance or change relative altitude when needed. Reconsider
+    blocked approaches at bounded intervals rather than settling out of reach.
+[x] Choose the nearest living opponent inside the combat area and retain it until
+    invalid or outside that area;
+    all Kestrels share one target category in this slice. Leave category catalogs
+    for later. Pass-by fire must not change the vessel's main target.
+[x] Give Journey ownership of the travel-versus-combat movement decision.
+    FleetController.advance() now advances the anchor without overwriting ship
+    intent; Journey chooses pursuit or travel before routing and avoidance.
+[x] Feed combat intent through existing island detours, avoidance, speed limits,
+    acceleration, and braking. All living ships participate in mutual avoidance.
+[x] Route combat and travel through one ShipFlight controller with an authored
+    primary horizontal propulsion axis (normally forward), angular acceleration,
+    retained velocity, lateral drag, and gradual acceleration/braking. Combat
+    supplies a course rather than directly controlling hull facing.
+[x] Approach the engagement band, then choose a firing-pass course presenting an
+    enabled bearing. Hold that course for an authored interval, then reconsider;
+    excessive range/altitude separation returns the ship to its approach. Keep
+    pitch/bank bounded and continue firing through the actual weapon cones.
+[x] Cover momentum through turns, braking, alternate propulsion axes, frame-rate
+    agreement, broadside firing opportunities, rebasing, and formation/island
+    navigation with focused checks and rendered inspection.
+[x] Keep both factions near the persistent anchor with authorable 180/260-unit
+    combat radii. Bias edge passes inward, break off outside pursuits, and retain
+    regrouping until inside the inner radius. Preserve flight, avoidance, and
+    weapon fire; cover displaced battles, altitude, a moving anchor, and rebasing.
+[x] With no opponents, player ships resume their existing anchor-relative travel.
+    With no player ships, enemies brake/idle and the anchor stops until debug
+    spawning replenishes players. No defeat UI or restart flow belongs to this slice.
+    Active regrouping finishes before either faction enters its idle/travel state.
+[x] Replace the GDD's single preferred side with authorable enabled directions and
+    record the later per-direction arrow toggles as future editor work.
+
+8. CONTINUOUS DEBUG SPAWNER
+[x] Add a journey-owned spawner using simulation time: first batch at one second,
+    then every second. Independently spawn min(2, 100 - living_faction_count) for
+    each faction, counting the nine starting players toward their cap. At the
+    cap, skip that batch; never accumulate a later catch-up burst.
+[x] Release capacity on death and refill on the next scheduled tick. Example:
+    99 living enemies permits one spawn; deaths do not trigger immediate spawns.
+[x] Author a nearby spawn region around the persistent anchor, within the loaded/viewable
+    area and near fleet altitude. Reject overlaps with ships and loaded islands;
+    bound placement attempts and skip unavailable placements until the next tick.
+    A displaced ship average must not move the spawn region, including on rebases.
+[x] Use unique monotonically allocated ship IDs and a dedicated spawn RNG. Register
+    both factions through Journey for navigation, collision, targeting, and origin
+    shifts. Only players join the fleet average; camera motion never drives spawning.
+[x] Keep the schedule running after either faction is wiped out, capped at 100 each.
+    Tie the spawner and timer lifetime to the journey; no progression scaling.
+
+9. HEALTH AND DESTRUCTION
+[x] Give ships an authored maximum health, per-instance current health, a single
+    damage entry point, and typed health/death signals. Clamp health at zero.
+[x] Increase all ships' default maximum health from 50 to 500 for the debug trial.
+[x] On lethal damage, immediately mark the ship dead and make it ineligible for
+    targeting/firing. Emit death once; duplicate impacts must not repeat cleanup.
+[x] Remove dead ships safely through Journey's registration lifecycle, including
+    fleet membership, avoidance snapshots, targeting references, origin roots,
+    debug views, and the spawner's living count. Defer list mutation/freeing until
+    active simulation loops finish. Handle external removal and scene exit too.
+[x] Despawn both destroyed enemies and player ships. Preserve camera fallback when
+    its selected ship disappears, and stop anchor motion for an empty player fleet.
+    No wreck physics, sinking, explosion effect, health bars, or death animation.
+
+10. PROJECTILES, HIT DETECTION, AND PERFORMANCE DESIGN
+Chosen starting approach to implement in item 11:
+- Treat the Rusty cannonball as a point mass under constant downward acceleration.
+  Its visible path and collision path share the same ballistic positions; do not
+  animate a decorative curve over a straight-moving damage projectile.
+- For aiming, let r = target_position - muzzle_position, u = target world velocity,
+  a = Vector3(0, -gravity, 0), and s = launch speed. Find the earliest positive
+  time t within the lifetime satisfying:
+      length_squared(r + u*t - 0.5*a*t*t) = s*s*t*t
+  Then v0 = (r + u*t - 0.5*a*t*t) / t. Use a bounded one-dimensional root search
+  with a checked intercept residual; handle near-tangent roots at the edge of
+  reachability, not just sign changes. Reject non-finite/invalid solutions.
+  Apply range/cone eligibility to that earliest intercept; do not select a high
+  lob to bypass a rejected low arc. No artillery-mode or general ballistics
+  framework is needed. The solver assumes constant target velocity only for aim;
+  the projectile is independent of the target after launch.
+- A journey-owned projectile controller advances a typed collection once per
+  physics tick. Each record holds position, velocity, gravity, remaining lifetime,
+  damage, and source faction/identity captured at launch; shots survive shooter
+  death. For dt clipped to the remaining lifetime, advance exactly under constant
+  acceleration: next_position = position + velocity*dt + 0.5*a*dt*dt, then
+  next_velocity = velocity + a*dt. Never renormalize velocity to the launch speed.
+- Draw small shared-mesh cannonballs. No RigidBody3D, Area3D, per-shot Timer, or
+  individual physics callback is needed. Keep physics queries on the main thread.
+- Sweep each short arc segment from its previous to next ballistic position using
+  Godot's direct physics-space ray query, including the final lifetime-clipped
+  step. Process segments in flight order and stop at the first hit against existing
+  ship capsules/island colliders. Never raycast just from muzzle to predicted hit.
+  The maximum arc-to-chord error is gravity*dt*dt/8; at gravity 3 and 60 Hz it is
+  about 0.0001 units. One query per normal physics tick is sufficient; subdivide
+  longer steps if needed to keep this error below 0.01 units. No projectile-by-ship
+  scan or custom collision engine is needed.
+- Include ships of both factions in the query mask and exclude the firing ship.
+  A friendly hit consumes the projectile but deals zero damage. A hostile hit
+  consumes it and applies 5 damage once. Island hits consume it without damage.
+  "Explode" means impact and removal in this effects-free slice; no splash damage.
+- Expire misses after the authored 8-second lifetime. Do not expire a valid arc
+  because its path exceeds 100 units or its flight exceeds range / launch speed.
+  Terrain and water currently have no colliders; do not introduce either as part
+  of combat. Projectiles do not collide with other projectiles.
+- Segment checks cover projectile travel between ticks, not full continuous
+  collision between two moving shapes. Verify crossing targets at the supported
+  speeds/tick rate; do not claim arbitrary-speed continuous collision support.
+- Keep target acquisition and opportunistic searches on a staggered, bounded
+  schedule (start at 0.2 seconds); steering, firing validation, and projectile
+  movement run at physics frequency. Apply cheap faction/range filters before
+  solving trajectories. Bound candidate solves per ready slot/search, rotating
+  through candidates without starvation; retry failed solutions on the scheduled
+  search rather than solving every ship/weapon pair every tick. Revalidate a
+  selected shot at firing time. Reuse registered ships and shared resources.
+- Store projectile positions relative to a single registered projectile root.
+  Rebase that root once and derive global query endpoints after rebasing; never
+  retain stale global previous positions that produce a world-spanning sweep.
+  Keep velocity, downward acceleration, and remaining lifetime unchanged by a
+  rebase; reset interpolation with existing origin contracts. Combat goals use
+  target references/local offsets or recomputation rather than stale coordinates.
+- Use straightforward GDScript and ordinary shared MeshInstance3D visuals.
+  Profiling justified conservative spatial neighbor queries for ship avoidance
+  and loaded islands. Pooling and MultiMesh remain deferred. Preserve existing
+  movement/terrain optimizations and compare filtering against full-scan results.
+- At 220 ships, two cannons each, a 2-second reload, and 8-second lifetime, firing
+  continuously with no impacts gives about 1,760 active shots / 220 shots per
+  second. Include synchronized volleys and unreachable moving targets to measure
+  both projectile work and failed aiming solves. These estimates do not establish
+  performance. Measure filtered ship-pair avoidance alongside combat.
+
+Godot API references for the chosen query approach:
+https://docs.godotengine.org/en/stable/tutorials/physics/ray-casting.html
+https://docs.godotengine.org/en/stable/classes/class_physicsdirectspacestate3d.html
+https://docs.godotengine.org/en/stable/classes/class_physicsrayqueryparameters3d.html
+
+11. IMPLEMENT, INTEGRATE, AND VERIFY
+[x] Implement item 10's projectile controller and impact routing under
+    scripts/combat/, with simple visuals under scenes/combat/ as needed. Implement
+    shared ballistic aiming/flight math so both use identical speed and gravity.
+[x] Define simulation order in Journey: scheduled spawns, snapshots/anchor update,
+    target and movement decisions, avoidance/movement, existing projectile sweeps
+    and damage, surviving slots firing new shots, then deferred removals and the
+    established origin/streaming update. New shots start at the current muzzle
+    and begin traveling on the next physics tick.
+[x] Keep queued deaths ineligible immediately and unregister them exactly once;
+    tolerate target/shooter deletion, island unload, rebasing, and scene exit.
+[x] Add focused scripts/tools/check_combat.gd checks for faction filtering,
+    inherited Kestrel defaults, independent health/cooldowns/materials, tier-1
+    mounting, all 14 direction mappings, the agreed enabled set, and cone/range
+    boundaries including elevated launch vectors, predicted aim, and rotated mounts.
+[x] Check the 60/100-unit stationary reference arcs, moving-target lead, targets
+    above/below the muzzle, near-vertical/near-coincident targets, unreachable
+    targets, near-tangent solutions, solver iteration limits, and invalid inputs.
+    Verify no solution means no shot and graceful repositioning; a target in the
+    direct cone can still require a launch vector outside it, and vice versa.
+[x] Check analytic positions/velocities and comparable impacts across supported
+    physics tick rates, curved-path ally/island interception away from the direct
+    muzzle-target line, final lifetime clipping, and preservation of a 100-unit
+    arc beyond five seconds. Check rebasing during ascent and descent, including
+    unchanged velocity/gravity/lifetime, and no steering after target motion changes.
+[x] Check pursuit -> broadside firing -> target death -> retarget/travel, left and
+    right firing, altitude differences, pass-by enabled/disabled, movement limits,
+    obstacle detours, and target removal without oscillation or stale references.
+[x] Check a 5-damage hit, ally interception with zero damage, nearest-hit ordering,
+    island interception, shooter exclusion, crossing targets, a segment that passes
+    entirely through a stationary hull, expiry/final-segment clipping, simultaneous
+    lethal hits, projectile survival after shooter death, and rebasing in flight.
+[x] Check one-second cadence, partial batches, both 100-ship caps, replenishment on
+    later ticks, unique IDs, blocked spawn attempts, and cleanup over many cycles.
+[x] Run the headless editor import and relevant existing movement, island, and
+    fleet-scale checks serially. Isolate APPDATA and use unique external logs and
+    captures as required by AGENTS.md; inspect logs as well as exit status.
+[x] Inspect a rendered mixed-fleet fight: tint, primitive Kestrels, broad cone
+    boundaries, elevated muzzle clearance, believable cannonball rise/fall, barrel
+    aim matching launch direction, broadside maneuvers, despawns, camera fallback,
+    and continued spawning through rebases. Confirm the visual follows hit detection.
+[x] Provide a separate scale scenario overriding the demo cap for 70 friendlies
+    versus 150 enemies. Sustain firing long enough to reach projectile steady
+    state and exercise deaths/replacements, misses, streaming, and origin shifts.
+    Keep these benchmark settings independent of the ordinary 100-per-faction caps.
+[x] Record hardware, resolution, renderer, physics rate, ship/projectile counts,
+    median/p95 frame and simulation times, GPU time where available, and memory/
+    node counts across repeated waves. Measure debug off, then debug on separately.
+    The current workstation alone cannot establish low-hardware suitability;
+    the separate hardware/performance gate below remains open.
+[x] Document measured bottlenecks and remaining limits under src/docs/. Update
+    movement ownership notes and AGENTS.md only as systems become implemented.
+[x] Review final diff/status; keep unrelated terrain/model work and generated
+    .godot state untouched. No push without explicit authorization.
+
+Done when
+- The ordinary journey visibly runs the specified repeating capped encounter,
+  both sides maneuver and calculate arcing shots through their mounts, allies
+  intercept along those arcs without damage, destroyed ships despawn, and surviving
+  player ships resume travel when no enemies remain. The Rusty cannon can reach a
+  stationary level target at its authored 100-unit range. No effects or escalation
+  systems are necessary.
+- The focused checks and rendered inspection pass, and the 220-ship combat
+  workload has recorded measurements and honest limits.
+
+Production gates (reviewed 2026-09-25)
+Evidence and completed fixes: src/docs/combat_review.md.
+
+[ ] COMBAT-01 — Dense-fleet CPU budget (blocks endgame performance sign-off).
+    The reviewed 220-ship debug-off battle costs 17.65 ms median / 21.16 ms p95
+    per scripted step on the Ryzen 7 9800X3D, exceeding 16.67 ms before rendering
+    and other engine work. Overload causes physics catch-up and long frames.
+    Avoidance averages 7.55 ms; weapons/projectiles average 4.67 ms. Continue
+    measured optimization of the dense encounter, preserving collision/steering
+    and targeting outcomes. The ordinary 200-ship vertical-spread scenario and
+    isolated 1,760-shot misses are cheaper and cannot substitute for this gate.
+    Agree on minimum CPU/GPU and a frame budget, then verify the sustained combined
+    workload with frame-time headroom on that hardware and in a release export.
+    Rigid-body trial: 22.31 ms script p95 (native integration excluded), 164.60 ms
+    wall-frame p95 in the same early dense workload. This gate remains open;
+    src/docs/rigid_body_trial.md records the full comparison and engine timings.
+
+[ ] COMBAT-02 — Broader content authoring (blocks unrestricted hull/loadout support).
+    Current Kestrel/Rusty cannon wiring works. The planner tests bearing feasibility
+    at the ship's engagement_distance before it can reduce stand-off distance.
+    A valid but slow weapon (e.g. speed 4, gravity 3, engagement distance 60) has
+    no usable bearing at that distance, leaving a target selected without combat
+    movement; the later approach correction never runs. Entirely unusable/empty
+    preference sets also silently fall back to travel/idle. Add explicit authoring
+    diagnostics and define a reachable approach distance/fallback for heterogeneous
+    loadouts before adding them. Cover empty/unknown bearings, short-range/slow
+    weapons, vertical mounts, and mounts removed/replaced during combat. Do not
+    silently rewrite the user's enabled bearings or add a generalized planner now.
+
+[ ] COMBAT-03 — Release reliability and acceptance coverage (blocks shipping).
+    Current checks cover finite runs, not session-length stability. Run extended
+    spawn/death/replacement/rebase and scene teardown cycles; verify stable live
+    node/memory counts after warm-up and cleanup. Add focused adversarial fixtures
+    for current-speed crossing shots at 30/60/120 Hz, several lethal projectiles
+    in one tick, full-hull tunneling sweeps, and an obstacle just past the final
+    lifetime-clipped segment. Existing impact checks chiefly use the original
+    20-unit/s reference; direct duplicate damage tests do not cover every projectile
+    ordering. Verify the release export as well as the editor executable. Whole-game
+    workloads with production assets, vegetation, and wrecks remain under GEN-05
+    in src/docs/todo/blockers-terrain.txt.
+
+[ ] COMBAT-04 — Confirm combat feel/tuning (design acceptance, not a wiring failure).
+    Decide whether to replace the literal asymmetric Kestrel directions with
+    symmetric broadsides. The current list omits left and retains unusable back.
+    Confirm the authored 100-unit/s trial against the desired visible cannon arc:
+    at level range 100 and gravity 3 it rises only about 0.375 units, versus about
+    11.29 units at the original speed 20. Preserve current authored values until
+    that decision. The rigid-body comparison retained these values; its acceptance
+    does not resolve the separate cannon/bearing tuning decisions.

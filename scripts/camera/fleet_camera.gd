@@ -2,11 +2,9 @@ class_name FleetCamera
 extends Node3D
 
 enum Mode { FLEET, SHIP, FREE }
-enum FleetFocus { AVERAGE, ANCHOR }
 
 @export var camera: Camera3D
 @export var fleet: FleetController
-@export var fleet_focus_source: FleetFocus = FleetFocus.AVERAGE
 @export_range(10.0, 1200.0) var orbit_distance: float = 180.0
 @export_range(5.0, 50.0) var minimum_orbit_distance: float = 10.0
 @export_range(50.0, 2000.0) var maximum_orbit_distance: float = 1200.0
@@ -141,13 +139,13 @@ func apply_view_bounds() -> void:
 	if not is_instance_valid(fleet) or not is_instance_valid(camera):
 		return
 	_update_rotation()
-	var center := fleet.average_focus.get_global_transform_interpolated().origin
+	var center := fleet.anchor.get_global_transform_interpolated().origin
 	var radius := maxf(viewing_radius, 10.0)
 	if mode == Mode.FREE:
 		var relative_eye := global_position - center
 		if relative_eye.length_squared() > radius * radius:
 			global_position = center + relative_eye.limit_length(radius)
-			_free_anchor_offset = global_position - fleet.anchor.get_global_transform_interpolated().origin
+			_free_anchor_offset = global_position - center
 		camera.position = Vector3.ZERO
 		return
 	var relative_focus := (global_position - center).limit_length(radius - 8.0)
@@ -168,8 +166,7 @@ func _update_follow_focus() -> void:
 			return
 		global_position = followed_ship.get_global_transform_interpolated().origin
 	elif mode == Mode.FLEET:
-		var target := fleet.average_focus if fleet_focus_source == FleetFocus.AVERAGE else fleet.anchor
-		global_position = target.get_global_transform_interpolated().origin
+		global_position = fleet.anchor.get_global_transform_interpolated().origin
 	elif mode == Mode.FREE:
 		# Follow translation only; the offset survives rebasing and never rotates with the anchor.
 		global_position = fleet.anchor.get_global_transform_interpolated().origin + _free_anchor_offset

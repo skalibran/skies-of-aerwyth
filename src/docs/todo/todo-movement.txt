@@ -1,0 +1,42 @@
+MOVEMENT FOLLOW-UP WORK
+
+Runtime contracts and checks: src/docs/movement.md.
+Reviewed scripted-flight baseline: src/docs/combat_review.md.
+Accepted rigid-body controller and comparison: src/docs/rigid_body_trial.md.
+Whole-game performance work: GEN-05 in blockers-terrain.txt.
+
+[x] Use the persistent fleet anchor for fleet camera focus and the viewing sphere.
+    Spawning/dying ships must not shift the view through changes to the average.
+[ ] Choose keyboard/controller bindings for the existing camera_focus_fleet
+    action and focus_fleet() method.
+[ ] Define controller-based ship selection; current selection uses the mouse.
+[ ] Evaluate camera feel with a physical controller. Injected input checks cover
+    behavior but cannot establish hands-on feel.
+
+[x] Playtest the rigid-body flight trial against commit 644e50a and choose a controller.
+    User chose RigidBody3D on 2026-09-25 because movement feels much better.
+    Keep the scripted measurements as historical comparison; COMBAT-01 remains open.
+
+RIGID-BODY INTEGRATION — implementation and validation
+Baseline: commit 644e50a; src/docs/combat_review.md records 10.06 ms ordinary-battle
+p95 and 21.16 ms dense-220 p95 on Ryzen 7 9800X3D / RTX 4090. Preserve that report.
+[x] Replace the hull with RigidBody3D, using force-based primary-axis propulsion,
+    bounded yaw torque, lateral drag and separate lift. Preserve authored response
+    rates and the combat/slot/weapon/spawn/camera/anchor owners. No collision damage.
+    Keep hulls upright through X/Z angular locks; retain visual pitch/bank.
+[x] Use engine linear/angular velocity as authoritative state. Remove scripted body
+    translation, yaw assignment and duplicated yaw velocity. Mass starts at 10,
+    restitution at 0, friction at 0.2, gravity at 0; control owns drag and lift.
+[x] Exercise actual physics at 30/60/120 Hz, momentum transfer at equal/unequal mass,
+    off-center yaw, upright constraints, broadside passes and active-body rebasing.
+[x] Verify movement/input, island navigation, combat lifecycle and both fleet scales
+    with rigid bodies. Freeze isolated fixtures explicitly when a stationary hull
+    is required; disabling Journey updates alone does not stop physical inertia.
+[x] Record rendered behavior and compare performance with identical scene tuning.
+    Native physics now runs outside Journey's script timer; include engine physics
+    and whole-frame measurements so a shorter script step cannot hide solver cost.
+[x] Update runtime ownership notes and record the comparison, retaining any measured
+    production blockers. Human playtesting selected rigid-body movement.
+[x] Audit for CharacterBody APIs, duplicate velocity/integration, and obsolete helpers.
+    Remove the now-stateless per-ship ShipFlight instance; retain static force helpers.
+    Record accepted ownership and retained navigation/control responsibilities.

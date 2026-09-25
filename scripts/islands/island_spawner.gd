@@ -1,6 +1,8 @@
 class_name IslandSpawner
 extends Node
 
+const NAVIGATION_CELL_SIZE: float = 256.0
+
 @export var island_scene: PackedScene
 @export var container: Node3D
 @export var origin: FloatingOrigin
@@ -19,6 +21,13 @@ var obstacles: Array[FloatingIsland] = []
 var next_position: RoutePosition
 var rng := RandomNumberGenerator.new()
 var _next_id: int = 1
+var _navigation_cells: Dictionary[Vector2i, PackedInt32Array] = {}
+var _navigation_dirty: bool = true
+var _navigation_count: int = -1
+var _navigation_segment: int = 0
+var _maximum_navigation_radius: float = 0.0
+var _candidate_indices := PackedInt32Array()
+var _navigation_candidates: Array[FloatingIsland] = []
 
 
 func initialize(start: RoutePosition) -> void:
@@ -40,6 +49,43 @@ func update_region(anchor_position: RoutePosition) -> void:
 			origin.unregister_root(island)
 			island.queue_free()
 			active.erase(island_id)
+			_navigation_dirty = true
+
+
+func navigation_candidates(ship: Airship) -> Array[FloatingIsland]:
+	if _navigation_dirty or _navigation_count != obstacles.size() or _navigation_segment != origin.segment:
+		_rebuild_navigation_cells()
+	var position := Vector2(ship.global_position.x, ship.global_position.z)
+	var radius := ShipIslandNavigation.search_radius(ship, _maximum_navigation_radius)
+	var minimum := Vector2i(((position - Vector2.ONE * radius) / NAVIGATION_CELL_SIZE).floor())
+	var maximum := Vector2i(((position + Vector2.ONE * radius) / NAVIGATION_CELL_SIZE).floor())
+	_candidate_indices.clear()
+	_navigation_candidates.clear()
+	for x in range(minimum.x, maximum.x + 1):
+		for z in range(minimum.y, maximum.y + 1):
+			var cell := Vector2i(x, z)
+			if _navigation_cells.has(cell):
+				_candidate_indices.append_array(_navigation_cells[cell])
+	_candidate_indices.sort()
+	for index in _candidate_indices:
+		_navigation_candidates.append(obstacles[index])
+	return _navigation_candidates
+
+
+func _rebuild_navigation_cells() -> void:
+	_navigation_cells.clear()
+	_maximum_navigation_radius = 0.0
+	for index in range(obstacles.size()):
+		var island := obstacles[index]
+		var position := Vector2(island.global_position.x, island.global_position.z)
+		var cell := Vector2i((position / NAVIGATION_CELL_SIZE).floor())
+		var indices: PackedInt32Array = _navigation_cells.get(cell, PackedInt32Array())
+		indices.append(index)
+		_navigation_cells[cell] = indices
+		_maximum_navigation_radius = maxf(_maximum_navigation_radius, island.navigation_radius)
+	_navigation_count = obstacles.size()
+	_navigation_segment = origin.segment
+	_navigation_dirty = false
 
 
 func _generate_through(anchor_position: RoutePosition, budget: int, clear_starting_fleet: bool = false) -> void:
@@ -86,3 +132,4 @@ func _load_record(record: IslandRecord) -> void:
 	origin.register_root(island)
 	active[record.entity_id] = island
 	obstacles.append(island)
+	_navigation_dirty = true

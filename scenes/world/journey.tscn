@@ -1,7 +1,7 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/journey.gd" id="1"]
-[ext_resource type="PackedScene" path="res://scenes/ships/ship.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/ships/kestrel.tscn" id="2"]
 [ext_resource type="Script" path="res://scripts/fleet/fleet_controller.gd" id="3"]
 [ext_resource type="Script" path="res://scripts/world/floating_origin.gd" id="4"]
 [ext_resource type="PackedScene" path="res://scenes/camera/orbit_camera.tscn" id="5"]
@@ -10,6 +10,8 @@
 [ext_resource type="Script" path="res://scripts/ships/ship_navigation_debug.gd" id="8"]
 [ext_resource type="PackedScene" path="res://scenes/terrain/voxel_terrain.tscn" id="9"]
 [ext_resource type="Script" path="res://scripts/world/journey_progress.gd" id="10"]
+[ext_resource type="Script" path="res://scripts/combat/projectile_controller.gd" id="12"]
+[ext_resource type="Script" path="res://scripts/combat/combat_spawner.gd" id="13"]
 [ext_resource type="PackedScene" path="res://scenes/water/water.tscn" id="11"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial"]
@@ -31,7 +33,15 @@ fog_enabled = true
 fog_light_color = Color(0.55, 0.69, 0.73, 1)
 fog_density = 0.0004
 
-[node name="Journey" type="Node3D" node_paths=PackedStringArray("initial_ships", "fleet", "origin", "island_spawner", "camera_rig", "terrain", "water", "progression")]
+[sub_resource type="StandardMaterial3D" id="AnchorMaterial"]
+albedo_color = Color(0.65, 0.25, 1, 1)
+roughness = 1.0
+
+[sub_resource type="BoxMesh" id="AnchorMesh"]
+material = SubResource("AnchorMaterial")
+size = Vector3(4, 4, 4)
+
+[node name="Journey" type="Node3D" node_paths=PackedStringArray("initial_ships", "fleet", "origin", "island_spawner", "camera_rig", "terrain", "water", "progression", "projectiles", "combat_spawner")]
 script = ExtResource("1")
 initial_ships = Array[NodePath]([NodePath("Ships/Ship1"), NodePath("Ships/Ship2"), NodePath("Ships/Ship3"), NodePath("Ships/Ship4"), NodePath("Ships/Ship5"), NodePath("Ships/Ship6"), NodePath("Ships/Ship7"), NodePath("Ships/Ship8"), NodePath("Ships/Ship9")])
 fleet = NodePath("FleetController")
@@ -41,6 +51,15 @@ camera_rig = NodePath("OrbitCamera")
 terrain = NodePath("VoxelTerrain")
 water = NodePath("Water")
 progression = NodePath("Progression")
+projectiles = NodePath("Projectiles")
+combat_spawner = NodePath("CombatSpawner")
+
+[node name="Projectiles" type="Node3D" parent="."]
+script = ExtResource("12")
+
+[node name="CombatSpawner" type="Node" parent="."]
+script = ExtResource("13")
+ship_scene = ExtResource("2")
 
 [node name="VoxelTerrain" parent="." node_paths=PackedStringArray("origin", "progression") instance=ExtResource("9")]
 origin = NodePath("../FloatingOrigin")
@@ -62,6 +81,10 @@ shadow_enabled = true
 directional_shadow_max_distance = 250.0
 
 [node name="FleetAnchor" type="Node3D" parent="."]
+
+[node name="AnchorMarker" type="MeshInstance3D" parent="FleetAnchor"]
+cast_shadow = 0
+mesh = SubResource("AnchorMesh")
 
 [node name="NavigationDebug" type="MeshInstance3D" parent="FleetAnchor" node_paths=PackedStringArray("journey")]
 physics_interpolation_mode = 2

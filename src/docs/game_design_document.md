@@ -39,13 +39,17 @@ Every active ship is fighting, moving to engage an opponent, or traveling onward
 
 ### Fleet anchor and airship movement
 
-Endgame play should support fleets of 100+ ships. Navigation space and camera range must accommodate those fleets while preserving nearby individual maneuvers. This is a scale target, not a new starting fleet size or a fixed ship cap.
+Endgame play should support roughly seventy friendly ships and 150 enemy ships together. Navigation space and camera range must accommodate those fleets while preserving nearby individual maneuvers. This is a scale target, not a new starting fleet size or a fixed ship cap.
 
 The anchor advances continuously along Z- while the journey simulation is running and friendly ships remain. Calculate the average position of the active friendly ships separately. The farther the anchor moves from that average, the more its forward speed decreases; as the ships catch up, it recovers speed. The average regulates the anchor's movement without replacing its position. Adding or losing a ship can affect the speed response, but must not teleport the anchor or advance milestones immediately.
 
 Each ship generates its own navigation destination around the anchor. These destinations move with the anchor. Ships occupy a volume with meaningful vertical spread, and nearby destinations may move up or down as well as sideways and forward/back. On reaching its destination, the ship chooses another within a limited nearby area, producing gentle movement within the fleet. Routine destination changes must not send a ship from the front to the back of the entire fleet. Combat pursuit takes priority over this travel behavior when opponents are present.
 
 Ships avoid one another while allowing fairly close pass-bys. Their movement should convey heavy, sluggish airships: gradual acceleration, braking, and turns, with limited pitch and banking. They must not perform loops, flips, or abrupt model rotations.
+
+Each ship has a primary propulsion direction, normally forward. Heading redirects thrust while existing velocity retains momentum; sideways drift gradually decays. Turning builds and brakes gradually, and sharp course changes reduce forward thrust. Altitude uses separate lift control. Combat and travel use the same flight controller, so a broadside ship approaches and turns into firing passes instead of sustaining sideways pursuit while facing its guns at the target. Momentum should create imperfect, weighty maneuvers without random steering noise. RigidBody3D is the accepted movement implementation after hands-on comparison: thrust and yaw torque guide flight while physics resolves motion and contact momentum. Hulls stay upright with visual pitch/bank, living ships have no gravity, and contacts cause no damage. The earlier scripted controller remains a historical performance baseline; see the [comparison and acceptance record](rigid_body_trial.md).
+
+Combat remains near the persistent fleet anchor. Both factions use an authorable soft engagement boundary: near its edge, favor inward firing passes and gradually steer toward the anchor. Beyond the outer radius, break off pursuit and return inside a smaller radius before resuming combat. Do not pursue opponents outside the engagement area. Weapons may still fire at eligible targets while regrouping, and island avoidance and momentum remain active. The initial inner/outer radii are 180/260 units in three dimensions; these are steering thresholds, not an invisible collision wall or position clamp.
 
 Floating islands occupy a broad surrounding landscape at varied heights above, through, and below the fleet, including directly in its path. The journey should feel like crossing an open world, with scenery beside and behind the fleet as well as ahead. Ships steer around solid islands, temporarily departing from their travel destinations as needed, then resume formation travel. Clear routes above or below an island remain usable. The anchor continues to drive progression and slows according to the existing fleet-average feedback while ships maneuver around obstacles.
 
@@ -73,7 +77,7 @@ Savegames preserve versioned gameplay state: the anchor's logical position, acti
 
 ## Camera and fleet controls
 
-The player uses an orbit camera that can snap its focus to a selected ship or the fleet, then follow that target while orbiting it.
+The player uses an orbit camera that can snap its focus to a selected ship or the persistent fleet anchor, then follow that target while orbiting it. Fleet tracking uses the anchor so spawning or losing ships does not shift the camera with the calculated ship average.
 
 - Mouse clicking a ship selects it and snaps the camera focus to that ship. Controller ship selection remains **TBD**.
 - WASD or the controller's left thumbstick releases tracking without a camera jump and enters free flight within the fleet viewing area. Free rotation turns around the camera's own position, as in an FPS camera; forward/back movement follows the view direction and left/right strafes.
@@ -83,13 +87,13 @@ The player uses an orbit camera that can snap its focus to a selected ship or th
 - Holding Shift or LT increases orbit zoom speed and free-flight movement speed. It does not change look sensitivity. Free flight permits looking above and below the horizon without flipping.
 - A fleet-focus action restores fleet tracking. If a followed ship disappears, fall back to fleet tracking.
 
-Ordinary fleet camera movement is constrained to a sphere around the fleet. This includes released camera movement; the viewing area follows the traveling fleet. Ordinary panning, orbiting, or selecting a ship does not pause gameplay. The separate island-view transition described below can leave this viewing area.
+Ordinary fleet camera movement is constrained to a sphere centered on the persistent fleet anchor. This includes released camera movement and ship tracking; the viewing area follows the anchor without shifting when fleet membership changes. Ordinary panning, orbiting, or selecting a ship does not pause gameplay. The separate island-view transition described below can leave this viewing area.
 
-In free movement, the camera retains an offset from the persistent fleet anchor and inherits its translation, so the fleet does not leave the camera behind while the player looks around. Looking rotates at the camera's own position; movement input changes the offset. Use the anchor for this translation because it is stable as ships maneuver or membership changes. The viewing sphere remains centered on the ship average and constrains the camera at its edge. This free-movement behavior is independent of the orbit tracking target choice below.
+In free movement, the camera retains an offset from the persistent fleet anchor and inherits its translation, so the fleet does not leave the camera behind while the player looks around. Looking rotates at the camera's own position; movement input changes the offset. Both translation and viewing bounds use the anchor, keeping the view stable as ships maneuver or membership changes.
 
-**To evaluate:** Fleet tracking may follow the calculated average ship position, keeping the fleet visually centered, or the persistent anchor, providing a steadier focus slightly ahead of the ships. Compare both during the movement prototype before choosing. This camera choice does not change the anchor's ownership of progression.
+The ship average regulates the anchor's travel speed without becoming a camera target or boundary center. This camera choice preserves the anchor's ownership of progression.
 
-**TBD:** The final fleet tracking target, camera distance and angle limits, pan/rotation speeds, viewing-sphere radius, controller ship selection, and keyboard/controller bindings for the fleet-focus action.
+**TBD:** Camera distance and angle limits, pan/rotation speeds, viewing-sphere radius, controller ship selection, and keyboard/controller bindings for the fleet-focus action.
 
 ## Target priorities and pass-by fire
 
@@ -97,23 +101,25 @@ In free movement, the camera retains an offset from the persistent fleet anchor 
 
 Each vessel has a predefined ordered target priority. Its **main target** determines which opposing ship it pursues and engages. The priority model follows Dungeon Directive's party-member targeting:
 
-1. Consider the available opposing vessels.
+1. Consider the available opposing vessels inside the anchor's engagement area.
 2. Select the nearest vessel in the highest-priority category that currently has candidates.
 3. If no configured category has a candidate, select the nearest remaining opponent. Unlisted categories remain valid and rank after the configured categories.
 4. Keep the current target while it remains valid, unless an opponent from a higher-priority category becomes available. A closer opponent of equal priority alone does not cause a switch.
-5. Select again when the target is destroyed or otherwise becomes invalid. With no opponents remaining, resume forward travel.
+5. Select again when the target is destroyed, leaves the engagement area, or otherwise becomes invalid. Finish any active regrouping before resuming pursuit. With no eligible opponents remaining, player ships resume forward travel.
 
-Priority is a preference order, never an exclusion rule. Every opposing vessel remains a possible target, so a vessel continues fighting even when none of its preferred categories are present. Both fleets use this model, with predefined priorities appropriate to their vessels.
+Priority is a preference order, never a category exclusion rule. Every opposing vessel inside the engagement area remains a possible target, so a vessel continues fighting even when none of its preferred categories are present. Both fleets use this model, with predefined priorities appropriate to their vessels. The spatial pursuit boundary does not restrict weapon-slot pass-by fire.
 
 **Reference:** Dungeon Directive's [party-member target controller](../../../dungeon-directive/scripts/party_members/target_controller.gd) implements category ordering, nearest-candidate selection, fallback targeting, and retention of a valid target within its priority category. Its [NPC target controller](../../../dungeon-directive/scripts/actors/actor_target_controller.gd) uses threat scoring; Aerwyth's rule above applies the vessel priority model to both sides.
 
 **TBD:** The actual priority categories, each vessel's predefined order, and whether players can later edit those priorities.
 
-### Preferred combat side
+### Preferred combat positions
 
-Each ship has a **preferred combat side**: **front, back, left, right, top, or bottom**, relative to its own orientation. Combat positioning should try to present that side toward its main target while respecting the ship's sluggish movement and limited pitch and banking. Top and bottom preferences use relative altitude rather than requiring the ship to roll over or perform a loop.
+Each ship has an authored set of enabled **preferred combat positions**: **front, front left, left, left back, back, back right, right, front right, front up, up, back up, back bottom, bottom, and front bottom**. These describe desired bearings to the main target relative to the engaging ship's own orientation during firing opportunities. Ships maneuver through those bearings while respecting weapon range, obstacle avoidance, forward propulsion, momentum, and limited pitch and banking; they need not hold an exact target-relative position throughout a pass. Up and bottom preferences use relative altitude rather than requiring the ship to roll over or perform a loop.
 
-**TBD:** How a ship's preferred side is assigned, whether players can change it, and how positioning balances that preference with available firing lines and obstacle avoidance.
+For the combat slice, author the enabled set within the ship scene. A later visual ship editor will show an arrow for each position so the player can toggle it as an allowed preference. Kestrel's intended role is left/right broadside combat; its exact enabled set is tracked in the [combat runtime notes](combat.md).
+
+**TBD:** Final positioning distances, selection and retention of an enabled position, and how positioning balances that preference with available slot cones and obstacle avoidance.
 
 ### Weapon-slot pass-by fire
 
@@ -121,7 +127,7 @@ Each weapon slot has a configurable **fire at targets in range** option, enabled
 
 The weapon's firing target can differ from the vessel's main target. Pass-by fire does not itself change which ship the vessel pursues. Disabling the option makes that slot focus on the vessel's main target and wait until it can fire at that target within range.
 
-Weapon range, firing arcs, and obstruction by the ship's own hull or balloon still apply. The option permits opportunistic attacks; it does not make every opposing ship simultaneously attackable. Friendly and enemy weapon slots follow the same rules and default.
+Weapon range and the slot's authored firing cone still apply. The cone governs angular firing permission; the weapon governs distance. The ship's own hull and balloon do not impose an additional obstruction test. The option permits opportunistic attacks; it does not make every opposing ship simultaneously attackable. Friendly and enemy weapon slots follow the same rules and default.
 
 **TBD:** Selection among multiple targets in range, preference when the main target is also in range, and detailed targeting rules for specialized weapons such as anti-projectile systems.
 
@@ -171,19 +177,19 @@ The ongoing economic tension is between spending resources ahead of need, spendi
 
 ## Vessels and weapon configurations
 
-Vessel hulls are pre-built. Each has designated mounting spots labeled **S1, S2, S3, ...**. A spot determines which cannons or other weapons it can accept.
+Vessel hulls are pre-built platforms. Each owns designated mounting spots labeled **S1, S2, S3, ...**. Mounted slots have tiers starting at **tier 1** and may be empty or assigned a weapon or utility of the matching tier. Slot labels identify individual mounts; their numbers are separate from tier. The ship owns each slot's position and firing cone, while assigned equipment owns its visuals and behavior. Pre-made ships provide a starting loadout of these reusable equipment pieces.
 
-Weapon slots can be **obstructed by the ship itself**, including its **hull and balloon**. A mounted weapon needs a clear firing line from its slot; it cannot fire through those parts merely because a target is within range. Slot placement and the ship's orientation relative to the target therefore affect which weapons can engage. This applies to both main-target fire and pass-by fire.
+Each mounted slot has an authored **3D firing cone**. This cone alone governs angular shoot/no-shoot permission, replacing runtime obstruction checks against the firing ship's hull and balloon. Author the mount, muzzle, and cone to avoid visually firing through the model. The cone does not set distance; range belongs to the mounted weapon. These rules apply to both main-target fire and pass-by fire. Fired projectiles can still strike other ships or collidable scenery.
 
 Each slot also exposes the default-enabled [pass-by fire option](#weapon-slot-pass-by-fire), independently of the vessel's predefined main-target priority.
 
-Players can mount different compatible weapons on a vessel and save the resulting configuration as a new ship. Customization combines existing vessels and compatible armaments; the core concept does not require players to construct hulls themselves.
+Players can mount different compatible weapons and utilities on a vessel and save the resulting configuration as a new ship. Customization combines existing vessels and compatible equipment; the core concept does not require players to construct hulls themselves. Specific utility effects remain TBD.
 
 Pre-made ships must be sufficient to play the entire game. Custom configurations provide room to discover useful combinations and advance faster without making ship design mandatory.
 
 For example, a player could equip a fast, light vessel with anti-projectile weapons to push through a screen of projectile spam. This illustrates the intended interaction between hull properties, weapon choice, and enemy threats; its exact combat mechanics and balance are TBD.
 
-**TBD:** Hull and weapon catalogs, spot compatibility rules, firing arcs, weapon statistics, refitting costs and timing, the configuration editor, and how saved ships become available for purchase and production.
+**TBD:** Further hull and weapon catalogs, higher-tier compatibility rules, final authored cone angles, additional weapon statistics, refitting costs and timing, the configuration editor, and how saved ships become available for purchase and production.
 
 ## Wipes and incremental progression
 
@@ -230,6 +236,18 @@ The first implementation milestone establishes movement and camera behavior usin
 - Streamed voxel ground scenery below the fleet, with noise-generated heights and authorable, varied color bands.
 
 Combat systems, island management and travel transitions, their gameplay pause, production, on-screen UI, and a complete save/load system are outside this milestone. The coordinate and ownership choices must support the documented later systems. Implemented system contracts and validation are recorded in [movement runtime notes](movement.md) and [terrain notes](terrain.md). The gameplay rules in this document remain design intent unless their implementation is recorded there.
+
+## Combat vertical slice
+
+The combat milestone's implemented ownership, tuning, and validation are recorded in [combat runtime notes](combat.md). Use string-based player/enemy faction identities and a Kestrel derived from the primitive ship scene, retaining its current model and movement baseline. Tint enemy models reddish as a placeholder. Each Kestrel carries one tier-1 slot on either side of its hull, each mounting a **Rusty cannon** with **100-unit range**, **5 damage**, and an original baseline of **20-unit/second projectile launch speed** (current authored trial: 100 units/second). Both sides have **500 health**, ten times the initial value, and use the same targeting, positioning, and firing rules.
+
+Cannonballs follow gravity-driven ballistic arcs, with weapons calculating elevation and lead for moving targets before firing. Scripted flight and hit detection follow the same curve; Godot rigid bodies are not required. The slot cone constrains the initial launch direction, including elevation and lead. Rusty cannon favors the earliest intercept and a low arc, using authorable stylized gravity that permits its 100-unit level shot at the specified launch speed. Range measures muzzle-to-target distance, while an independent lifetime allows the longer curved flight; targets within range can still be ballistically unreachable. Gravity and lifetime tuning are recorded in the combat plan.
+
+The current debug spawner adds two ships every simulation second for each faction, independently capped at one hundred living player ships and one hundred living enemies. Count the starting ships toward their faction's cap. Replenish casualties on later scheduled ticks at the same rate, filling only available capacity; debug spawning continues after a faction is wiped out. There is no encounter difficulty curve or combat progression in this slice. Friendly projectile impacts consume the projectile without damaging the ally. Impacts have no visual explosion effect, and destroyed ships simply despawn. Wrecks, production, player-directed reinforcements, and the visual ship editor remain later work. Existing journey and terrain progression continues independently.
+
+Center both factions' debug spawn region on the persistent anchor, independent of the ship average and camera: initially 100–150 horizontal units away and within 150 units above or below its altitude. Reject overlaps with ships and loaded islands using bounded placement attempts.
+
+Measure the combined combat workload at roughly **70 friendly ships and 150 enemy ships** as an endgame target for low-end hardware. This is separate from the current debug scene's one-hundred-per-faction caps. Begin with ordinary readable optimizations; further low-level work depends on profiling. Ship health values, reload cadence, final cone angles, and engagement distances remain provisional authoring choices.
 
 ## Scope of this draft
 

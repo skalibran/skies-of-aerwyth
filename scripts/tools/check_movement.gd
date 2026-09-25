@@ -16,6 +16,7 @@ func _initialize() -> void:
 func _run() -> void:
 	_check_coordinates()
 	_journey = JOURNEY_SCENE.instantiate() as Journey
+	_journey.combat_enabled = false
 	root.add_child(_journey)
 	await _frames(180)
 	_check(_journey.ships.size() == 9, "The authored fleet has nine ships.")
@@ -27,6 +28,7 @@ func _run() -> void:
 	await _check_camera()
 	_check_free_camera()
 	await _check_free_camera_follow()
+	await _check_camera_membership()
 	_check_zoom()
 	_check_navigation_debug()
 	_check_rebase()
@@ -113,7 +115,7 @@ func _check_camera() -> void:
 	_check(not paused and _journey.anchor_route_position().compare(before_pan) < 0, "Panning never pauses gameplay.")
 	for direction in [Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK, Vector3.UP, Vector3.DOWN]:
 		rig.pan(direction * 1000.0)
-		var center := _journey.fleet.average_focus.get_global_transform_interpolated().origin
+		var center := _journey.fleet.anchor.get_global_transform_interpolated().origin
 		_check(rig.camera.global_position.distance_to(center) <= rig.viewing_radius + 0.01, "The final camera position stays inside its sphere.")
 	rig.focus_fleet()
 	var original_yaw := rig.yaw
@@ -159,12 +161,8 @@ func _check_camera() -> void:
 	await _frames(4)
 	Input.parse_input_event(_stick(JOY_AXIS_RIGHT_X, 0.0))
 	_check(rig.mode == FleetCamera.Mode.FLEET and not is_equal_approx(rig.yaw, original_yaw), "Right-stick orbit preserves tracking (mode %d, yaw %.4f -> %.4f)." % [rig.mode, original_yaw, rig.yaw])
-	for source in [FleetCamera.FleetFocus.AVERAGE, FleetCamera.FleetFocus.ANCHOR]:
-		rig.fleet_focus_source = source
-		rig.focus_fleet()
-		await _frames(3)
-		_check(rig.mode == FleetCamera.Mode.FLEET, "Both fleet camera targets remain available.")
-	rig.fleet_focus_source = FleetCamera.FleetFocus.AVERAGE
+	rig._process(0.0)
+	_check(rig.global_position.is_equal_approx(_journey.fleet.anchor.get_global_transform_interpolated().origin), "Fleet tracking follows the persistent anchor.")
 	rig.yaw = 0.5
 	rig.focus_fleet()
 
@@ -235,21 +233,19 @@ func _check_free_camera() -> void:
 func _check_free_camera_follow() -> void:
 	var rig := _journey.camera_rig
 	var fleet := _journey.fleet
-	for source in [FleetCamera.FleetFocus.AVERAGE, FleetCamera.FleetFocus.ANCHOR]:
-		rig.fleet_focus_source = source
-		rig.focus_fleet()
-		rig.pan(Vector3(12.0, 3.0, 0.0))
-		var anchor_start := fleet.anchor.get_global_transform_interpolated().origin
-		var offset := rig.camera.global_position - anchor_start
-		var orientation := rig.camera.global_basis
-		await _frames(90)
-		rig._process(0.0)
-		var anchor_now := fleet.anchor.get_global_transform_interpolated().origin
-		_check(anchor_now.z < anchor_start.z - 1.0, "The anchor advances during idle free-camera tracking.")
-		_check((rig.camera.global_position - anchor_now).distance_to(offset) < 0.001, "An idle free camera keeps its offset from the anchor for either orbit-focus setting.")
-		_check(rig.camera.global_basis.is_equal_approx(orientation), "Following anchor translation does not change free-look orientation.")
+	rig.focus_fleet()
+	rig.pan(Vector3(12.0, 3.0, 0.0))
+	var anchor_start := fleet.anchor.get_global_transform_interpolated().origin
+	var offset := rig.camera.global_position - anchor_start
+	var orientation := rig.camera.global_basis
+	await _frames(90)
+	rig._process(0.0)
+	var anchor_now := fleet.anchor.get_global_transform_interpolated().origin
+	_check(anchor_now.z < anchor_start.z - 1.0, "The anchor advances during idle free-camera tracking.")
+	_check((rig.camera.global_position - anchor_now).distance_to(offset) < 0.001, "An idle free camera keeps its offset from the anchor.")
+	_check(rig.camera.global_basis.is_equal_approx(orientation), "Following anchor translation does not change free-look orientation.")
 	# Stop translation, let interpolation settle, and change membership independently.
-	_journey.set_physics_process(false)
+	_freeze_fixture(true)
 	await _frames(2)
 	rig._process(0.0)
 	var stopped_eye := rig.camera.global_position
@@ -275,9 +271,50 @@ func _check_free_camera_follow() -> void:
 	var clamped_eye := rig.camera.global_position
 	rig._process(0.0)
 	_check(rig.camera.global_position.distance_to(clamped_eye) < 0.001, "Sphere clamping persists in the anchor-relative free position.")
-	_journey.set_physics_process(true)
-	rig.fleet_focus_source = FleetCamera.FleetFocus.AVERAGE
+	_freeze_fixture(false)
 	rig.focus_fleet()
+
+
+func _check_camera_membership() -> void:
+	var rig := _journey.camera_rig
+	var fleet := _journey.fleet
+	_freeze_fixture(true)
+	await _frames(2)
+	var anchor_position := fleet.anchor.global_position
+	var saved_distance := rig.orbit_distance
+	# Test the boundary too: an average-centered clamp can move an anchor-focused camera.
+	for camera_mode in [FleetCamera.Mode.FLEET, FleetCamera.Mode.SHIP, FleetCamera.Mode.FREE]:
+		rig.orbit_distance = rig.maximum_orbit_distance
+		rig.focus_fleet()
+		if camera_mode == FleetCamera.Mode.SHIP:
+			rig.follow_ship(_journey.ships[4])
+		elif camera_mode == FleetCamera.Mode.FREE:
+			rig.pan(Vector3.RIGHT * rig.viewing_radius * 3.0)
+		rig._process(0.0)
+		var view := rig.camera.global_transform
+		var mean_before := fleet.average_position
+		var member := SHIP_SCENE.instantiate() as Airship
+		member.entity_id = _journey.allocate_ship_id()
+		_journey.add_child(member)
+		member.global_position = anchor_position - (view.origin - anchor_position).normalized() * 600.0
+		_journey.register_ship(member)
+		fleet.advance(0.0)
+		fleet.average_focus.reset_physics_interpolation()
+		rig._process(0.0)
+		_check(fleet.average_position.distance_to(mean_before) > 10.0, "Spawn fixture meaningfully shifts the fleet average.")
+		_check(rig.camera.global_transform.is_equal_approx(view), "Spawning a player preserves the camera view in mode %d at the sphere edge." % camera_mode)
+		member.take_damage(member.maximum_health, Factions.ENEMY)
+		_journey._remove_dead_ships()
+		fleet.advance(0.0)
+		fleet.average_focus.reset_physics_interpolation()
+		await _frames(2)
+		rig._process(0.0)
+		_check(rig.camera.global_transform.is_equal_approx(view), "An unrelated player's death preserves the camera view in mode %d." % camera_mode)
+		_check(fleet.anchor.global_position == anchor_position, "Membership changes never reposition the camera anchor.")
+		_check(view.origin.distance_to(anchor_position) <= rig.viewing_radius + 0.001, "Each camera mode respects the anchor-centered sphere.")
+	rig.orbit_distance = saved_distance
+	rig.focus_fleet()
+	_freeze_fixture(false)
 
 
 func _check_zoom() -> void:
@@ -321,7 +358,7 @@ func _check_zoom() -> void:
 	rig.zoom(-10000.0)
 	_check(is_equal_approx(rig.camera.position.z, rig.minimum_orbit_distance), "Orbit zoom stops before passing through the target.")
 	rig.zoom(10000.0)
-	var center := _journey.fleet.average_focus.get_global_transform_interpolated().origin
+	var center := _journey.fleet.anchor.get_global_transform_interpolated().origin
 	_check(rig.camera.global_position.distance_to(center) <= rig.viewing_radius + 0.001, "Zoom out respects the fleet viewing sphere.")
 	var bounded_distance := rig.camera.position.z
 	_scroll(MOUSE_BUTTON_WHEEL_UP)
@@ -336,13 +373,14 @@ func _check_navigation_debug() -> void:
 	var ship := _journey.ships[0]
 	var random_state := ship.travel.rng.state
 	var goal := ship.travel.goal_offset
+	_check(not debug.enabled and not debug.visible and not debug.is_processing(), "Navigation debug starts disabled.")
+	_send_input(_key(KEY_F3, true))
+	_send_input(_key(KEY_F3, false))
+	_check(debug.enabled and debug.visible and debug.is_processing(), "F3 enables navigation debug.")
 	debug.redraw()
 	_send_input(_key(KEY_F3, true))
 	_send_input(_key(KEY_F3, false))
 	_check(not debug.enabled and not debug.visible and not debug.is_processing(), "F3 hides navigation debug and stops rebuilding geometry.")
-	_send_input(_key(KEY_F3, true))
-	_send_input(_key(KEY_F3, false))
-	_check(debug.enabled and debug.visible, "F3 restores navigation debug.")
 	_check(random_state == ship.travel.rng.state and goal == ship.travel.goal_offset, "Navigation debug does not alter travel goals or randomness.")
 
 
@@ -417,7 +455,7 @@ func _check_rebase() -> void:
 	var before := _journey.anchor_route_position()
 	var first := _journey.ships[0]
 	var position := RoutePosition.from_scene(first.position.z, _journey.origin.segment)
-	var velocity := first.velocity
+	var velocity := first.linear_velocity
 	var goal := first.travel.goal_offset
 	var relative := first.global_position - _journey.ships[1].global_position
 	var rng_state := _journey.island_spawner.rng.state
@@ -433,7 +471,7 @@ func _check_rebase() -> void:
 	var shifted_position := RoutePosition.from_scene(first.position.z, _journey.origin.segment)
 	_check(before.segment == after.segment and absf(before.offset - after.offset) < 0.001, "Rebasing preserves anchor progression.")
 	_check(position.segment == shifted_position.segment and absf(position.offset - shifted_position.offset) < 0.001, "Rebasing preserves ship logical position.")
-	_check(first.velocity == velocity and first.travel.goal_offset == goal, "Rebasing preserves velocity and relative goals.")
+	_check(first.linear_velocity == velocity and first.travel.goal_offset == goal, "Rebasing preserves velocity and relative goals.")
 	_check(relative.distance_to(first.global_position - _journey.ships[1].global_position) < 0.001, "Rebasing preserves ship separation.")
 	_check(rng_state == _journey.island_spawner.rng.state and ship_rng == first.travel.rng.state, "Rebasing does not consume randomness.")
 	_check(camera_mode == _journey.camera_rig.mode, "Rebasing retains camera mode.")
@@ -458,7 +496,7 @@ func _check_long_travel() -> void:
 	for batch in range(12):
 		await _frames(1200)
 		for ship in _journey.ships:
-			_check(ship.global_position.is_finite() and ship.velocity.is_finite(), "Ship positions and velocities stay finite.")
+			_check(ship.global_position.is_finite() and ship.linear_velocity.is_finite(), "Ship positions and velocities stay finite.")
 			_check(absf(ship.visual_root.rotation.x) <= deg_to_rad(ship.pitch_limit_degrees) + 0.001, "Pitch remains bounded.")
 			_check(absf(ship.visual_root.rotation.z) <= deg_to_rad(ship.bank_limit_degrees) + 0.001, "Bank remains bounded.")
 			var relative := (ship.global_position - _journey.fleet.anchor.global_position) / _journey.fleet.formation_extent
@@ -479,14 +517,14 @@ func _check_long_travel() -> void:
 
 
 func _check_slowdown() -> void:
-	_journey.set_physics_process(false)
+	_freeze_fixture(true)
 	var fleet := _journey.fleet
 	fleet.anchor.position.z -= 60.0
 	for tick in range(240):
 		fleet.advance(1.0 / 60.0)
 	_check(fleet.speed < fleet.cruise_speed * 0.5, "The anchor slows when the fleet is held behind.")
 	var gap := fleet.anchor.position.distance_to(fleet.average_position)
-	_journey.set_physics_process(true)
+	_freeze_fixture(false)
 	await _frames(2400)
 	_check(fleet.anchor.position.distance_to(fleet.average_position) < gap * 0.6, "Ships recover after being held behind.")
 	_check(fleet.speed > fleet.cruise_speed * 0.8, "The anchor recovers cruising speed.")
@@ -504,6 +542,8 @@ func _check_membership() -> void:
 	ship.queue_free()
 	await _frames(3)
 	_check(_journey.camera_rig.mode == FleetCamera.Mode.FLEET, "A destroyed camera target falls back to fleet tracking.")
+	_journey.camera_rig._process(0.0)
+	_check(_journey.camera_rig.global_position.is_equal_approx(_journey.fleet.anchor.get_global_transform_interpolated().origin), "A destroyed camera target restores the persistent anchor focus.")
 	while _journey.ships.size() > 1:
 		var remaining: Airship = _journey.ships.back()
 		_journey.unregister_ship(remaining)
@@ -518,6 +558,7 @@ func _check_membership() -> void:
 	anchor_position = _journey.fleet.anchor.position
 	await _frames(30)
 	_check(_journey.fleet.speed == 0.0 and _journey.fleet.anchor.position == anchor_position, "An empty fleet stops the anchor safely.")
+	_check(_journey.camera_rig.global_position.is_equal_approx(anchor_position), "The camera keeps its anchor focus when no ships remain.")
 
 
 func _check_encounters() -> void:
@@ -533,7 +574,7 @@ func _check_encounters() -> void:
 		for index in range(2):
 			var ship := SHIP_SCENE.instantiate() as Airship
 			ship.entity_id = 101 + index
-			ship.faction = Airship.Faction.NEUTRAL
+			ship.faction = Factions.NEUTRAL
 			_journey.add_child(ship)
 			ship.global_position = _journey.fleet.anchor.position + setup[index]
 			ship.set_preferred_velocity(setup[index + 2])
@@ -597,3 +638,9 @@ func _capture(label: String) -> void:
 func _check(condition: bool, message: String) -> void:
 	if not condition:
 		_failures.append(message)
+
+
+func _freeze_fixture(frozen: bool) -> void:
+	_journey.set_physics_process(not frozen)
+	for ship in _journey.ships:
+		ship.freeze = frozen

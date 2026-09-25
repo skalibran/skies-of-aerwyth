@@ -8,9 +8,9 @@ The current visual trial uses **5 × 5 × 5 world-unit source voxels**, with 1/5
 
 Merged surfaces, adaptive detail, and background generation are retained from the ten-unit trial. Two bounded worker jobs generate mesh arrays with owned sampler/noise state. The main thread publishes meshes, retains visible coverage until replacements are ready, and discards obsolete results. Initial coarse coverage remains synchronous; fine detail loads afterward. LOD accounts for camera altitude, and exact integer terrain-grid conversions keep five-unit cells aligned across 1024-unit origin shifts.
 
-The measurements below cover the current configuration and retain the previous ten-unit and one-unit baselines. Terrain collision remains future work.
+The measurements below cover the current configuration and retain the previous ten-unit and one-unit baselines. Terrain collision is not implemented.
 
-The subsequent [generation production review](generation_review.md#measured-performance) adds the transition biome, a close-camera stress pass, and combined rendered 128-ship measurements. It records current fixes and shipping gates; the earlier trial tables below remain historical measurements.
+The subsequent [generation production review](generation_review.md#measured-performance) adds the transition biome, a close-camera stress pass, and combined rendered 128-ship measurements. It records fixes and limitations; active work lives in the [generation task list](todo/blockers-terrain.txt). The earlier trial tables below remain historical measurements.
 
 ## Method and scope
 
@@ -96,27 +96,9 @@ The savings are real. Increasing cell width tenfold reduces this heightfield's s
 
 Rendered comparisons show substantially flatter grassland, enlarged shoreline steps, and most shallow water bands disappearing at ten-unit resolution. The tool saves matching `cells-0-1.png` / `cells-0-10.png` and `cells-6400-1.png` / `cells-6400-10.png` views outside the repository.
 
-## Planned collision for downed ships
+## Collision construction estimate
 
-Downed ships should fall, make contact with the landscape, and remain briefly before cleanup. This does not require one collider per voxel or colliders for all 81 visible root regions.
-
-Recommended first implementation:
-
-1. Generate static collision tiles around a falling wreck's predicted landing corridor, with enough neighboring coverage for its hull and lateral motion. Request them before the wreck can reach the ground.
-2. Use merged source-grid top/cliff triangles for exact stepped contact, independent of render LOD. Exclude visual skirts and material/color subdivisions. Pin the collision tiles and matching visual detail while a wreck occupies them; ordinary camera movement must not replace the supporting surface.
-3. Give each falling wreck a simple convex/capsule body. Use continuous collision detection or swept movement for fast falls, then allow it to sleep or freeze once settled. Release tile references when its short lifetime ends.
-4. Register collision roots for the same coordinated floating-origin shift as the wrecks. Keep resource generation bounded; publish live physics/tree changes on the main thread.
-
-A [HeightMapShape3D](https://docs.godotengine.org/en/stable/classes/class_heightmapshape3d.html) is a cheaper alternative if approximate slope contact is acceptable. It triangulates between height samples, so it does not reproduce vertical voxel steps exactly. A [ConcavePolygonShape3D](https://docs.godotengine.org/en/stable/classes/class_concavepolygonshape3d.html) preserves those steps as static level geometry; use a convex shape on the moving wreck, not a moving concave terrain shape. Fast falls need explicit tunneling checks.
-
-As a limited estimate from the original one-unit experiment, converting already-built 32-unit fine meshes into trimesh shape resources averaged about 0.48 ms per grass tile and 1.96 ms per mountain tile. Across the whole 320-unit square that was 48 / 196 ms, reinforcing the need to budget and localize collision construction. This measures shape-resource creation only, including render color subdivisions that a collision-only mesher should omit. It does **not** measure world insertion, contact solving, many simultaneous wrecks, CCD, or sleeping. Collision remains unimplemented; benchmark those costs when adding it. Water landing/sinking behavior remains a separate design decision.
-
-## Remaining performance work
-
-- Reduce synchronous coarse startup if it becomes intrusive. Background jobs already handle subsequent generation; keep GPU publication bounded.
-- Profile again when changing voxel size or landforms. Preserve the geometry/color/grid contracts in `check_terrain.gd`; smaller cells can make generation and cliff iteration more expensive.
-- Keep nearby water shorelines and future wreck contact areas accurate. Entire-layout replacement can still postpone fine detail during continuous rapid camera travel.
-- Add bounded collision tiles with falling-wreck tests after streaming is stable. Measure 100+ ships plus several simultaneous wrecks; the isolated terrain results are not a frame budget for the complete game.
+In the original one-unit experiment, converting already-built 32-unit fine meshes into trimesh shape resources averaged about 0.48 ms per grass tile and 1.96 ms per mountain tile. Across the whole 320-unit square that was 48 / 196 ms. This measures shape-resource creation only, including render color subdivisions. It does **not** measure world insertion, contact solving, many simultaneous wrecks, CCD, or sleeping. Terrain collision remains unimplemented. The collision proposal, water-contact decision, and follow-up measurements are tracked under GEN-02 in the [generation task list](todo/blockers-terrain.txt).
 
 The original investigation changed only tools and notes. The ten-unit trial introduced background streaming; the current five-unit trial tunes scale and landforms while preserving that implementation. Collision is still unimplemented.
 

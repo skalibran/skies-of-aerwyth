@@ -4,6 +4,8 @@ extends Node
 @export var anchor: Node3D
 @export var average_focus: Node3D
 @export var formation_extent := Vector3(180.0, 120.0, 180.0)
+## X starts inward combat steering and ends regrouping; Y breaks off pursuit.
+@export var combat_radii := Vector2(180.0, 260.0)
 @export_range(3.0, 40.0) var wander_step_radius: float = 16.0
 @export_range(0.1, 30.0) var cruise_speed: float = 9.0
 @export_range(0.1, 10.0) var acceleration: float = 1.5
@@ -20,7 +22,7 @@ var _anchor_initialized: bool = false
 
 
 func register_ship(ship: Airship) -> void:
-	if ship.faction != Airship.Faction.FRIENDLY or ship in members:
+	if ship.faction != Factions.PLAYER or not ship.alive or ship in members:
 		return
 	members.append(ship)
 	ship.tree_exiting.connect(unregister_ship.bind(ship), CONNECT_ONE_SHOT)
@@ -36,6 +38,7 @@ func unregister_ship(ship: Airship) -> void:
 
 
 func initialize_anchor() -> void:
+	assert(combat_radii.x > 0.0 and combat_radii.y > combat_radii.x)
 	_update_average()
 	anchor.global_position = average_position
 	for ship in members:
@@ -55,8 +58,6 @@ func advance(delta: float) -> void:
 	speed = move_toward(speed, target_speed, acceleration * delta)
 	velocity = Vector3.FORWARD * speed
 	anchor.global_position += velocity * delta
-	for ship in members:
-		ship.prepare_travel(delta, anchor.global_position, velocity)
 
 
 func _update_average() -> void:

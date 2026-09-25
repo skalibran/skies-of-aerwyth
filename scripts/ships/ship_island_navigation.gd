@@ -19,6 +19,16 @@ func waypoint_position() -> Vector3:
 	return waypoint_island.global_position + waypoint_offset
 
 
+static func look_ahead_distance(ship: Airship) -> float:
+	var preferred := Vector2(ship.preferred_velocity.x, ship.preferred_velocity.z)
+	var speed := maxf(preferred.length(), ship.linear_velocity.length())
+	return maxf(90.0, speed * 6.0 + speed * speed / (2.0 * ship.braking))
+
+
+static func search_radius(ship: Airship, maximum_island_radius: float) -> float:
+	return look_ahead_distance(ship) + (maximum_island_radius + ship.hull_radius + ship.hull_half_segment + ship.island_clearance) * 3.0
+
+
 func steer(ship: Airship, islands: Array[FloatingIsland], delta: float) -> Vector3:
 	_retry_time = maxf(0.0, _retry_time - delta)
 	var start := Vector2(ship.global_position.x, ship.global_position.z)
@@ -26,8 +36,7 @@ func steer(ship: Airship, islands: Array[FloatingIsland], delta: float) -> Vecto
 	if preferred.length_squared() < 0.01:
 		waypoint_island = null
 		return ship.preferred_velocity
-	var speed := maxf(preferred.length(), ship.velocity.length())
-	var look_ahead := maxf(90.0, speed * 6.0 + speed * speed / (2.0 * ship.braking))
+	var look_ahead := look_ahead_distance(ship)
 	_collect_obstacles(ship, islands, start, look_ahead)
 	var direction := preferred.normalized()
 	var end := start + direction * look_ahead

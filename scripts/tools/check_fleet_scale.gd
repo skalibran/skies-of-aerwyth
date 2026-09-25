@@ -38,6 +38,7 @@ func _run() -> void:
 		RenderingServer.viewport_set_measure_render_time(root.get_viewport_rid(), true)
 		process_frame.connect(_sample_frame)
 	_journey = JOURNEY_SCENE.instantiate() as Journey
+	_journey.combat_enabled = false
 	root.add_child(_journey)
 	_journey.set_physics_process(false)
 	_build_fleet()
@@ -192,7 +193,7 @@ func _check_formation() -> void:
 	query.shape = probe
 	query.collision_mask = 2
 	for ship in _journey.ships:
-		_check(ship.global_position.is_finite() and ship.velocity.is_finite(), "Large-fleet movement stays finite.")
+		_check(ship.global_position.is_finite() and ship.linear_velocity.is_finite(), "Large-fleet movement stays finite.")
 		var relative := ship.global_position - _journey.fleet.anchor.global_position
 		_check((relative / extent).length() < 1.25, "Ships stay within reach of the expanded formation.")
 		_check((ship.travel.goal_offset / extent).length() < 1.25, "Travel goals stay within the formation while detours temporarily increase their distance.")
@@ -201,7 +202,7 @@ func _check_formation() -> void:
 		query.transform = ship.hull_collider.global_transform
 		_check(ship.get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty(), "Large-fleet hulls do not penetrate island solids.")
 	var rig := _journey.camera_rig
-	var center := _journey.fleet.average_focus.get_global_transform_interpolated().origin
+	var center := _journey.fleet.anchor.get_global_transform_interpolated().origin
 	_check(rig.camera.global_position.distance_to(center) <= rig.viewing_radius + 1.0, "The large-fleet camera stays inside its viewing sphere.")
 
 

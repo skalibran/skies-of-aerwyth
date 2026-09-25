@@ -1,0 +1,35 @@
+[gd_scene format=3 uid="uid://dgdooeqaxxrxt"]
+
+[ext_resource type="Script" uid="uid://budr4wdgyrnqt" path="res://scripts/weapons/mounted_weapon.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/weapons/rusty_cannon.tres" id="2"]
+
+[sub_resource type="StandardMaterial3D" id="Iron"]
+albedo_color = Color(0.29, 0.19, 0.1, 1)
+metallic = 0.5
+roughness = 0.8
+
+[sub_resource type="BoxMesh" id="Base"]
+material = SubResource("Iron")
+size = Vector3(0.6, 0.3, 0.7)
+
+[sub_resource type="CylinderMesh" id="Barrel"]
+material = SubResource("Iron")
+top_radius = 0.18
+bottom_radius = 0.26
+height = 0.9
+radial_segments = 8
+
+[node name="RustyCannon" type="Node3D" unique_id=273151472 node_paths=PackedStringArray("aim_pivot")]
+script = ExtResource("1")
+aim_pivot = NodePath("AimPivot")
+definition = ExtResource("2")
+
+[node name="Base" type="MeshInstance3D" parent="." unique_id=1045251843]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.2, 0.65)
+mesh = SubResource("Base")
+
+[node name="AimPivot" type="Node3D" parent="." unique_id=2054055309]
+
+[node name="Barrel" type="MeshInstance3D" parent="AimPivot" unique_id=1473844333]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0.45)
+mesh = SubResource("Barrel")
