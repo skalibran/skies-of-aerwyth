@@ -388,7 +388,7 @@ func _check_initial_surroundings() -> void:
 			sides.z += 1.0
 		if offset.z > _journey.fleet.formation_extent.z:
 			sides.w += 1.0
-		_check(island.global_position.y + island.bottom_offset > _journey.ground.global_position.y, "Floating islands remain above the placeholder ground.")
+		_check(island.global_position.y + island.bottom_offset > _journey.terrain.profile.maximum_height(), "Floating islands remain above the terrain's maximum height.")
 	_check(sides.x > 0.0 and sides.y > 0.0 and sides.z > 0.0 and sides.w > 0.0, "The starting field has scenery well to both sides, ahead, and behind.")
 	var query := PhysicsShapeQueryParameters3D.new()
 	query.collision_mask = 2
@@ -423,8 +423,12 @@ func _check_rebase() -> void:
 	var rng_state := _journey.island_spawner.rng.state
 	var ship_rng := first.travel.rng.state
 	var camera_mode := _journey.camera_rig.mode
-	var ground_relative := _journey.ground.global_position - _journey.fleet.anchor.global_position
+	var progress_before := _journey.progression.distance
+	var terrain_chunk: MeshInstance3D = _journey.terrain.chunks.values()[0]
+	var terrain_relative := terrain_chunk.global_position - _journey.fleet.anchor.global_position
 	_journey.origin.shift_segments(-1)
+	_journey.progression.update(_journey.anchor_route_position())
+	_check(is_equal_approx(progress_before, _journey.progression.distance), "Origin shifts do not advance the numeric journey progression.")
 	var after := _journey.anchor_route_position()
 	var shifted_position := RoutePosition.from_scene(first.position.z, _journey.origin.segment)
 	_check(before.segment == after.segment and absf(before.offset - after.offset) < 0.001, "Rebasing preserves anchor progression.")
@@ -433,7 +437,7 @@ func _check_rebase() -> void:
 	_check(relative.distance_to(first.global_position - _journey.ships[1].global_position) < 0.001, "Rebasing preserves ship separation.")
 	_check(rng_state == _journey.island_spawner.rng.state and ship_rng == first.travel.rng.state, "Rebasing does not consume randomness.")
 	_check(camera_mode == _journey.camera_rig.mode, "Rebasing retains camera mode.")
-	_check(ground_relative.distance_to(_journey.ground.global_position - _journey.fleet.anchor.global_position) < 0.001, "Rebasing preserves the ground relative to the fleet.")
+	_check(terrain_relative.distance_to(terrain_chunk.global_position - _journey.fleet.anchor.global_position) < 0.001, "Rebasing preserves terrain relative to the fleet.")
 
 
 func _check_spawns() -> void:
@@ -457,7 +461,7 @@ func _check_long_travel() -> void:
 			_check(ship.global_position.is_finite() and ship.velocity.is_finite(), "Ship positions and velocities stay finite.")
 			_check(absf(ship.visual_root.rotation.x) <= deg_to_rad(ship.pitch_limit_degrees) + 0.001, "Pitch remains bounded.")
 			_check(absf(ship.visual_root.rotation.z) <= deg_to_rad(ship.bank_limit_degrees) + 0.001, "Bank remains bounded.")
-			var relative := (ship.position - _journey.fleet.anchor.position) / _journey.fleet.formation_extent
+			var relative := (ship.global_position - _journey.fleet.anchor.global_position) / _journey.fleet.formation_extent
 			_check(relative.length() < 1.25, "Ships stay within reach of the formation.")
 	_check(_journey.origin.shift_count >= 2, "Long travel crosses multiple origins.")
 	var spawner := _journey.island_spawner
@@ -568,6 +572,9 @@ func _set_distant_origin() -> void:
 	for record in _journey.island_spawner.records:
 		record.route_position.segment += difference
 	_journey.island_spawner.next_position.segment += difference
+	_journey.progression.update(_journey.anchor_route_position())
+	_journey.terrain.update_region(_journey.fleet.anchor.global_position.x, _journey.anchor_route_position(), _journey.camera_rig.camera.global_position)
+	_journey.terrain.build_pending(10000)
 
 
 func _frames(count: int) -> void:

@@ -49,7 +49,7 @@ func _add_island(id: int, position: Vector3) -> FloatingIsland:
 	record.entity_id = id
 	record.route_position = RoutePosition.from_scene(position.z, _journey.origin.segment)
 	record.lateral_position = position.x
-	record.altitude = position.y
+	record.altitude = _journey.fleet.anchor.global_position.y + position.y
 	record.radius = 22.0
 	record.depth = 25.0
 	_journey.island_spawner.records.append(record)
@@ -62,7 +62,7 @@ func _add_ship(height: float, friendly: bool = false) -> Airship:
 	ship.entity_id = 9001
 	ship.faction = Airship.Faction.FRIENDLY if friendly else Airship.Faction.NEUTRAL
 	_journey.add_child(ship)
-	ship.global_position = Vector3(0.0, height, 90.0)
+	ship.global_position = Vector3(0.0, _journey.fleet.anchor.global_position.y + height, 90.0)
 	_journey.register_ship(ship)
 	ship.set_preferred_velocity(Vector3.FORWARD * 9.0)
 	if friendly:

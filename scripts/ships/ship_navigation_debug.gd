@@ -5,6 +5,7 @@ const GOAL_COLOR := Color(0.1, 0.85, 1.0)
 const DESIRED_COLOR := Color(1.0, 0.55, 0.1)
 const VELOCITY_COLOR := Color(0.3, 1.0, 0.25)
 const DETOUR_COLOR := Color(1.0, 0.3, 0.85)
+const GOAL_RING_SEGMENTS: int = 24
 
 @export var journey: Journey
 @export var enabled: bool = true:
@@ -16,9 +17,15 @@ const DETOUR_COLOR := Color(1.0, 0.3, 0.85)
 
 var _lines := ImmediateMesh.new()
 var _vertex_count: int = 0
+var _goal_ring := PackedVector3Array()
+var _world_to_local := Transform3D.IDENTITY
 
 
 func _ready() -> void:
+	_goal_ring.resize(GOAL_RING_SEGMENTS)
+	for index in range(GOAL_RING_SEGMENTS):
+		var angle := TAU * float(index) / GOAL_RING_SEGMENTS
+		_goal_ring[index] = Vector3(cos(angle), 0.0, sin(angle))
 	mesh = _lines
 	var line_material := StandardMaterial3D.new()
 	line_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -45,6 +52,8 @@ func redraw() -> void:
 	_vertex_count = 0
 	if not enabled or journey.ships.is_empty():
 		return
+	# All lines share this mesh transform; avoid inverting it for every vertex.
+	_world_to_local = global_transform.affine_inverse()
 	var anchor_position := journey.fleet.anchor.get_global_transform_interpolated().origin
 	for ship in journey.ships:
 		var ship_position := ship.get_global_transform_interpolated().origin
@@ -66,11 +75,9 @@ func redraw() -> void:
 func _draw_goal(goal: Vector3, radius: float) -> void:
 	for axis in [Vector3.RIGHT, Vector3.UP, Vector3.BACK]:
 		_line(goal - axis * 0.6, goal + axis * 0.6, GOAL_COLOR)
-	for index in range(24):
-		var angle := TAU * float(index) / 24.0
-		var next_angle := TAU * float(index + 1) / 24.0
-		var ring_start := Vector3(cos(angle), 0.0, sin(angle)) * radius
-		var ring_end := Vector3(cos(next_angle), 0.0, sin(next_angle)) * radius
+	for index in range(GOAL_RING_SEGMENTS):
+		var ring_start := _goal_ring[index] * radius
+		var ring_end := _goal_ring[(index + 1) % GOAL_RING_SEGMENTS] * radius
 		_line(goal + ring_start, goal + ring_end, GOAL_COLOR)
 		_line(goal + Vector3(ring_start.x, ring_start.z, 0.0), goal + Vector3(ring_end.x, ring_end.z, 0.0), GOAL_COLOR)
 
@@ -94,6 +101,6 @@ func _line(start: Vector3, end: Vector3, color: Color) -> void:
 	if _vertex_count == 0:
 		_lines.surface_begin(Mesh.PRIMITIVE_LINES)
 	_lines.surface_set_color(color)
-	_lines.surface_add_vertex(to_local(start))
-	_lines.surface_add_vertex(to_local(end))
+	_lines.surface_add_vertex(_world_to_local * start)
+	_lines.surface_add_vertex(_world_to_local * end)
 	_vertex_count += 2

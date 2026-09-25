@@ -1,0 +1,106 @@
+SKIES OF AERWYTH - TERRAIN AND GENERATION BLOCKERS
+
+Recorded: 2026-09-25
+Status: All five blockers below are open.
+Source: src/docs/generation_review.md (GEN-01 through GEN-05).
+Supporting measurements: src/docs/terrain_performance.md.
+
+The current five-unit scenery prototype passes its measured workload. These
+items block the associated production features or final shipping sign-off;
+they do not imply that the existing terrain needs a wholesale rewrite.
+
+[ ] GEN-01 - Persistent generation identity and old-island reconstruction
+
+Required before: Save/load and distant island management.
+
+Problem:
+- There is no saved generator version/profile identity or world snapshot.
+- Island records accumulate in memory as the fleet advances. Unloading keeps
+  records, but the spawner does not reconstruct unloaded islands for revisits.
+- Current seeds reproduce the current algorithm, not necessarily an older
+  world's layout after generation code or authored resources change.
+
+Completion criteria:
+- Persist the journey start, anchor state, generator/profile identity, island
+  records and changes, next island coordinate/ID, and relevant RNG state.
+- Bound resident record storage while retaining access to passed islands.
+- Restore a passed island and its terrain after restart without duplicate
+  entities or changed layout. Define how generator changes affect old saves.
+
+[ ] GEN-02 - Stable terrain support for wrecks and placed models
+
+Required before: Downed-ship contact, resting wrecks, and ground props.
+
+Problem:
+- Terrain currently has no colliders.
+- Source height queries are stable, but distant display patches approximate
+  the source. Changing camera detail can change their visible surface height.
+- Using the current display mesh for collision or placement would make ground
+  support depend on camera position and streaming state.
+
+Completion criteria:
+- Provide bounded collision and placement coverage from the source voxel grid.
+- Pin matching visible detail while occupied and release it after cleanup.
+- Test fast falls, resting contact, origin shifts, and streaming boundaries
+  with several simultaneous wrecks; measure physics construction and runtime.
+- Resolve water landing/sinking behavior separately with the user.
+
+[ ] GEN-03 - Island visibility does not cover the full camera view
+
+Required before: Visual production sign-off.
+
+Problem:
+- Islands load 1500 units ahead, remain 1300 behind, and occupy a field with
+  1600-unit half-width. The camera can move 900 units from the fleet and see
+  another 3000 units, so islands can appear/disappear within a permitted view.
+- Current fog does not guarantee that streaming edges are hidden.
+- Simply loading more solid islands also increases navigation-query work.
+
+Completion criteria:
+- Define distant island loading/fading separately from nearby collision and
+  navigation coverage.
+- Inspect forward and backward views from the camera sphere boundary for
+  visible spawning/unloading, and profile the result with 128 ships.
+
+[ ] GEN-04 - Blocking startup and generation failure handling
+
+Required before: Shipping and loading-flow sign-off.
+
+Problem:
+- Startup builds 81 coarse terrain patches synchronously, blocking for about
+  0.9-1.1 seconds on the reviewed workstation.
+- Later mesh publication has a soft time budget and whole-layout swaps;
+  neither guarantees a maximum frame cost.
+- Settings validation relies on assertions, and worker completion assumes
+  valid mesh results without a recoverable generation-failure path.
+
+Completion criteria:
+- Define a cancellable startup/loading process and validate settings in
+  release builds.
+- Retain valid coverage or report failure when generation cannot produce a
+  mesh. Handle cleanup of outstanding work safely.
+- Measure startup and worst publication frames in the intended export build.
+- Keep the prototype's existing no-UI scope until a loading UI is authorized.
+
+[ ] GEN-05 - Full endgame CPU budget remains unproven
+
+Required before: Performance sign-off for 100+ ships with combat.
+
+Problem:
+- At 128 ships, the measured script simulation step takes about 8.3 ms median
+  and 10.1 ms p95 before combat, vegetation, or wreck physics.
+- Ship separation scans other ships for each ship; island navigation queries
+  inspect the loaded obstacle registry.
+- Navigation-debug caching improved presentation cost, but occasional frame
+  spikes remain. Terrain-only timings do not establish a whole-game budget.
+
+Completion criteria:
+- Agree on the target workload and frame budget, then profile combat, final
+  assets, vegetation, and simultaneous wrecks together with terrain streaming.
+- Use measurements to determine spatial filtering and navigation scheduling
+  changes; preserve collision and detour behavior with regression checks.
+- Include target export mode, resolutions, hardware, and long-running travel.
+
+Reviewed hardware: Ryzen 7 9800X3D / RTX 4090, Godot 4.7.1, D3D12, 1920x1080.
+Preserve existing mesh merging, adaptive detail, bounded worker generation,
+and floating-origin/source-grid alignment while addressing these blockers.

@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/journey.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/ships/ship.tscn" id="2"]
@@ -8,6 +8,9 @@
 [ext_resource type="Script" path="res://scripts/islands/island_spawner.gd" id="6"]
 [ext_resource type="PackedScene" path="res://scenes/islands/island.tscn" id="7"]
 [ext_resource type="Script" path="res://scripts/ships/ship_navigation_debug.gd" id="8"]
+[ext_resource type="PackedScene" path="res://scenes/terrain/voxel_terrain.tscn" id="9"]
+[ext_resource type="Script" path="res://scripts/world/journey_progress.gd" id="10"]
+[ext_resource type="PackedScene" path="res://scenes/water/water.tscn" id="11"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial"]
 sky_top_color = Color(0.10, 0.24, 0.34, 1)
@@ -28,28 +31,25 @@ fog_enabled = true
 fog_light_color = Color(0.55, 0.69, 0.73, 1)
 fog_density = 0.0004
 
-[sub_resource type="StandardMaterial3D" id="GroundMaterial"]
-albedo_color = Color(0.20, 0.40, 0.09, 1)
-roughness = 1.0
-cull_mode = 2
-
-[sub_resource type="PlaneMesh" id="GroundMesh"]
-material = SubResource("GroundMaterial")
-size = Vector2(8000, 8000)
-
-[node name="Journey" type="Node3D" node_paths=PackedStringArray("initial_ships", "fleet", "origin", "island_spawner", "camera_rig", "ground")]
+[node name="Journey" type="Node3D" node_paths=PackedStringArray("initial_ships", "fleet", "origin", "island_spawner", "camera_rig", "terrain", "water", "progression")]
 script = ExtResource("1")
 initial_ships = Array[NodePath]([NodePath("Ships/Ship1"), NodePath("Ships/Ship2"), NodePath("Ships/Ship3"), NodePath("Ships/Ship4"), NodePath("Ships/Ship5"), NodePath("Ships/Ship6"), NodePath("Ships/Ship7"), NodePath("Ships/Ship8"), NodePath("Ships/Ship9")])
 fleet = NodePath("FleetController")
 origin = NodePath("FloatingOrigin")
 island_spawner = NodePath("IslandSpawner")
 camera_rig = NodePath("OrbitCamera")
-ground = NodePath("Ground")
+terrain = NodePath("VoxelTerrain")
+water = NodePath("Water")
+progression = NodePath("Progression")
 
-[node name="Ground" type="MeshInstance3D" parent="."]
-position = Vector3(0, -320, 0)
-cast_shadow = 0
-mesh = SubResource("GroundMesh")
+[node name="VoxelTerrain" parent="." node_paths=PackedStringArray("origin", "progression") instance=ExtResource("9")]
+origin = NodePath("../FloatingOrigin")
+progression = NodePath("../Progression")
+
+[node name="Water" parent="." instance=ExtResource("11")]
+
+[node name="Progression" type="Node" parent="."]
+script = ExtResource("10")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment")
@@ -80,6 +80,7 @@ average_focus = NodePath("../FleetAverage")
 script = ExtResource("4")
 
 [node name="Ships" type="Node3D" parent="."]
+position = Vector3(0, 380, 0)
 
 [node name="Ship1" parent="Ships" instance=ExtResource("2")]
 position = Vector3(-40, -40, -40)
@@ -121,6 +122,7 @@ entity_id = 9
 
 [node name="IslandSpawner" type="Node" parent="." node_paths=PackedStringArray("container", "origin", "fleet")]
 script = ExtResource("6")
+altitude_range = Vector2(200, 560)
 island_scene = ExtResource("7")
 container = NodePath("../Islands")
 origin = NodePath("../FloatingOrigin")

@@ -1,0 +1,14 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/terrain/voxel_terrain.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/terrain/journey_terrain.tres" id="2"]
+
+[sub_resource type="StandardMaterial3D" id="TerrainMaterial"]
+vertex_color_use_as_albedo = true
+vertex_color_is_srgb = true
+roughness = 1.0
+
+[node name="VoxelTerrain" type="Node3D"]
+script = ExtResource("1")
+profile = ExtResource("2")
+material = SubResource("TerrainMaterial")

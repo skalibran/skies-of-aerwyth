@@ -31,6 +31,8 @@ These activities overlap during the journey. Reinforcement and island management
 
 The fleet's journey proceeds forward along Z- through one continuous 3D space; Z+ leads back toward previously passed locations. A persistent fleet anchor acts as the journey's "main character." Its logical Z position determines progression, content placement, and increasing difficulty. Camera movement and changing fleet membership do not directly change progression.
 
+Journey progression has a numeric value: forward distance traveled by the anchor, in world units, starting at zero. Derive it from the anchor's logical position relative to the journey start; floating-origin shifts and viewing another location do not add distance. Terrain is the first system to use it: start among grasslands and gradually transition into mountain ranges. Transition distances are authorable. Each location uses its own distance along the journey, so revisiting it restores the same landscape rather than applying the fleet's current biome everywhere.
+
 Each vessel pursues and engages its selected opponent while opponents remain. When there are no opponents, it travels with the fleet by navigating around the advancing anchor. Clearing enemies faster than they spawn therefore creates time to make progress; sustained opposition keeps ships occupied with combat and can slow or effectively halt that progress as the fleet falls behind its anchor. Individual ships can move toward combat targets and fire while moving, so battle and movement can overlap.
 
 Every active ship is fighting, moving to engage an opponent, or traveling onward. A ship never waits merely because its preferred target category is absent: target priority orders opponents without excluding any of them.
@@ -103,7 +105,7 @@ Each vessel has a predefined ordered target priority. Its **main target** determ
 
 Priority is a preference order, never an exclusion rule. Every opposing vessel remains a possible target, so a vessel continues fighting even when none of its preferred categories are present. Both fleets use this model, with predefined priorities appropriate to their vessels.
 
-**Reference:** Dungeon Directive's [party-member target controller](../../dungeon-directive/scripts/party_members/target_controller.gd) implements category ordering, nearest-candidate selection, fallback targeting, and retention of a valid target within its priority category. Its [NPC target controller](../../dungeon-directive/scripts/actors/actor_target_controller.gd) uses threat scoring; Aerwyth's rule above applies the vessel priority model to both sides.
+**Reference:** Dungeon Directive's [party-member target controller](../../../dungeon-directive/scripts/party_members/target_controller.gd) implements category ordering, nearest-candidate selection, fallback targeting, and retention of a valid target within its priority category. Its [NPC target controller](../../../dungeon-directive/scripts/actors/actor_target_controller.gd) uses threat scoring; Aerwyth's rule above applies the vessel priority model to both sides.
 
 **TBD:** The actual priority categories, each vessel's predefined order, and whether players can later edit those priorities.
 
@@ -203,9 +205,17 @@ Open decisions include:
 
 The game uses a **voxel style** in a **steampunk fantasy** setting. The world, airships, floating islands, weapons, and production buildings should share that direction within the continuous 3D space.
 
-The fleet travels above a ground landscape, represented initially by a flat green plane. Later this will become a noise-generated 3D voxel landscape. The voxel implementation, terrain interaction, destructibility, and technical asset pipeline remain TBD.
+Terrain currently trials **5 × 5 × 5 world-unit voxels**, with 10-unit or 1-unit terrain available for comparison. Detailed assets remain **0.1 world units per voxel**, with rough asset shapes ten times that size. Nearby terrain should reveal cubic steps; distant rendering may simplify geometry while keeping the source grid and logical landscape fixed.
 
-**TBD:** Final orbit-camera framing, voxel scale, palette, lighting, cloud-transition effects, UI style, animation, and audio direction.
+The fleet travels above a noise-generated 3D voxel landscape with stepped hills and valleys. Terrain is primarily scenery, with basic collision planned for downed ships; destruction and terrain editing are not required. Heights and elevation-based colors are authorable; a secondary noise layer varies the color-band boundaries so the same elevation can show neighboring bands instead of perfectly uniform contour stripes. The initial implementation uses FastNoiseLite and exposed voxel-column surfaces, with no need for caves or overhangs.
+
+Downed ships should fall onto the landscape, settle, and remain for a few seconds before cleanup. Their supporting ground must remain stable while terrain streams and the origin shifts. Exact wreck lifetime and behavior when falling into water remain TBD.
+
+Terrain begins as rolling green grassland with a generous height range (currently -30 to 70 in five-unit steps), then blends into taller mountain terrain with rocky elevation bands. Mountains should have broad bases, rising slopes, and distinct summits rather than thin, wall-like noise ridges. Use warped landforms with restrained local irregularity, and avoid excessive contrast that clips hilltops into large flat plateaus. Blend both landform heights and palettes smoothly across an authorable travel interval. Later scenery may place models using terrain height and noise, such as trees concentrated in valleys. Vegetation models, placement rules, and additional biomes remain TBD. Terrain stays at fixed logical world positions as nearby chunks load, unload, and follow floating-origin shifts.
+
+Water sits at **Y = 0**. Terrain may extend below zero so low basins form ponds, bounded by the stepped voxel shoreline. Use a flat surface with authorable depth-color bands, lighter shallows, and restrained square-pattern animation that matches the voxel art direction. Water is scenery; water physics, destruction, and underwater gameplay are outside the current scope.
+
+**TBD:** Final orbit-camera framing, palette, lighting, cloud-transition effects, UI style, animation, and audio direction.
 
 ## Initial movement prototype
 
@@ -217,9 +227,9 @@ The first implementation milestone establishes movement and camera behavior usin
 - The advancing fleet anchor, average-position feedback, local ship destinations, close-range avoidance, and sluggish airship movement.
 - Toggleable in-world navigation debug showing ship destinations, arrival radii, island detours, desired velocity, and actual velocity.
 - Floating-origin travel along Z- with occasional island spawning and bounded loading of nearby scenery. Additional content, such as clouds, comes later.
-- A green ground plane below the fleet as a visual placeholder for the later noise-generated 3D voxel landscape.
+- Streamed voxel ground scenery below the fleet, with noise-generated heights and authorable, varied color bands.
 
-Combat systems, island management and travel transitions, their gameplay pause, production, on-screen UI, and a complete save/load system are outside this milestone. The coordinate and ownership choices must support the documented later systems. Implementation status and validation criteria are tracked in [todo-movement.txt](../todo-movement.txt), with implemented system contracts in [movement runtime notes](docs/movement.md). The gameplay rules in this document remain design intent unless their implementation is recorded there.
+Combat systems, island management and travel transitions, their gameplay pause, production, on-screen UI, and a complete save/load system are outside this milestone. The coordinate and ownership choices must support the documented later systems. Implemented system contracts and validation are recorded in [movement runtime notes](movement.md) and [terrain notes](terrain.md). The gameplay rules in this document remain design intent unless their implementation is recorded there.
 
 ## Scope of this draft
 

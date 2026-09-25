@@ -2,7 +2,7 @@
 
 ## Project baseline
 
-Skies of Aerwyth has an initial movement prototype. Read the [game design document](src/game_design_document.md) for its gameplay concept and visual direction, and [movement runtime notes](src/docs/movement.md) for implemented ownership and validation contracts. Treat sections marked TBD as unresolved design decisions. Use the user's requirements, the design document, and the code that exists as the authority for implementation; the design document describes intended systems, not implementation status.
+Skies of Aerwyth has an initial movement prototype. Read the [game design document](src/docs/game_design_document.md) for its gameplay concept and visual direction, and [movement runtime notes](src/docs/movement.md) for implemented ownership and validation contracts. Treat sections marked TBD as unresolved design decisions. Use the user's requirements, the design document, and the code that exists as the authority for implementation; the design document describes intended systems, not implementation status.
 
 Current technical baseline:
 
@@ -11,13 +11,17 @@ Current technical baseline:
 - The main scene is `scenes/world/journey.tscn`: nine primitive airships, a moving fleet anchor, local avoidance, a bounded orbit/free camera, floating-origin travel along Z-, and streamed primitive islands. The fleet camera can follow the ship average or anchor through an Inspector setting; the final preference remains open. There is no on-screen UI in this milestone.
 - `scripts/tools/check_movement.gd` provides focused simulation and rendered/input checks. There is no general test framework, autoload, configured linter, localization pipeline, or export preset yet. Combat, production, save files, and island management/transitions are not implemented.
 - The camera supports scroll/D-pad orbit zoom, FPS-style free flight relative to the fleet anchor, and Shift/LT speed boosts. Free mode inherits anchor translation while keeping independent looking and movement within the mean-centered viewing sphere. F3 toggles in-world ship navigation debug; controls and geometry colors are documented in the movement runtime notes.
-- Endgame scale targets 100+ ships. Formation half-extents are 180/120/180 units and the camera sphere radius is 900 units. Starting ships occupy several altitude levels, and local wandering samples all three axes equally. `scripts/tools/check_fleet_scale.gd` exercises 128 ships and reports simulation-step timings; it does not replace endgame combat/render profiling.
+- Endgame scale targets 100+ ships. Formation half-extents are 180/120/180 units and the camera sphere radius is 900 units. Starting ships occupy several altitude levels, and local wandering samples all three axes equally. `scripts/tools/check_fleet_scale.gd` exercises 128 ships; its optional `--profile` mode measures combined rendering/streaming with debug drawing off/on. Combat and production assets remain outside that benchmark.
 - Islands populate a broad field around the fleet from startup, with varied heights and upright capsule collision. Ships use local lateral detours around loaded islands, with height checks against the capsules for clear over/underflight. `scripts/tools/check_island_navigation.gd` covers routing, collision, rebasing, and unloading; navigation debug marks detours in pink.
-- Journey keeps a green ground plane below the fleet, centered along travel and registered for origin shifts. It is a visual placeholder for later noise-generated 3D voxel terrain; ground collision and terrain navigation are not implemented.
+- Terrain currently trials a 5-unit cubic grid, with 1/5/10-unit choices in TerrainProfile. Merged surfaces and camera-dependent detail remain; bounded worker jobs build mesh arrays, with main-thread publication and cleanup. Broad, warped FastNoiseLite grassland spans -30 to 70 units and gradually blends into mountains with broad slopes and gentler fine detail. JourneyProgress exposes the anchor's forward distance as `journey.progression.distance`; camera motion and rebasing do not advance it. See [terrain authoring and checks](src/docs/terrain.md). There is no terrain collision, destruction, or vegetation yet.
+- Water scenery sits at Y = 0; negative terrain forms ponds. Its shader uses depth-color bands and one-unit square highlights that remain stable across origin shifts. The fleet starts at Y = 380, above terrain and water. Water has no collision or simulation.
+- `scripts/tools/profile_landscape.gd` measures isolated landscape rendering/streaming and compares 1/5/10-unit cells. See the [measurements and planned wreck collision](src/docs/terrain_performance.md). Terrain collision is still future work.
 - Use GDScript by default. Add languages, addons, and external dependencies only when the task justifies them.
 - `.godot/` contains generated editor and import state. Do not edit or commit it.
 
-Update this baseline when the corresponding systems are introduced. The comparison in `docs/dungeon-directive-notes.md` is background material, not a specification for this game's mechanics.
+Update this baseline when the corresponding systems are introduced.
+
+See the [generation production review](src/docs/generation_review.md) for ownership, measured performance, and unresolved shipping gates. Its prototype pass does not imply save/revisit support or terrain collision.
 
 ## Working rules
 
@@ -40,10 +44,10 @@ Use role-based top-level folders with consistent feature names beneath them. Cre
 | `resources/<feature>/` | Authored `.tres` definitions and reusable configuration. |
 | `assets/` | Runtime-ready models, textures, sprites, audio, and fonts, grouped by asset type and then feature where useful. |
 | `materials/`, `shaders/`, `animations/` | Shared presentation resources when needed. Keep scene-specific subresources local when that is clearer. |
-| `src/` | The [game design document](src/game_design_document.md), editable art sources, and other authoring inputs. Keep `src/.gdignore` in place, and export runtime assets into `assets/`. Gameplay code belongs in `scripts/`. |
+| `src/` | The [game design document](src/docs/game_design_document.md), editable art sources, and other authoring inputs. Keep `src/.gdignore` in place, and export runtime assets into `assets/`. Gameplay code belongs in `scripts/`. |
 | `localization/` | Editable translation sources if localization is introduced. |
 | `scripts/tools/`, `scenes/tools/` | Purposeful validation and content-generation tools. |
-| `docs/` | Design decisions, technical notes, and reference material. |
+| `src/docs/` | Design decisions, technical notes, and reference material. |
 
 A feature normally connects its composed scene, attached script, and authored resources. Keep their domain names aligned where practical without creating empty counterparts. Runtime flow begins at the configured main scene and any justified autoloads. Feature owners update state, and presentation reflects that state.
 
@@ -67,6 +71,7 @@ A feature normally connects its composed scene, attached script, and authored re
 - Use Input Map actions for gameplay controls. Add actions and their consumers together when controls are introduced.
 - Keep UI layout in authored Control scenes and containers where practical. Give viewport layout a clear owner, use shared theme resources for common styling, and avoid scattered fixed screen coordinates.
 - Preserve resource UIDs and serialized references when moving or editing scenes and resources. Keep engine-generated `.uid` sidecars and source-adjacent `.import` settings under version control. Do not fabricate or casually regenerate identifiers.
+- Terrain currently uses 5 world units per voxel as a visual trial; TerrainProfile also supports 10 and 1 units. Detailed assets remain 0.1 world units per voxel; rough asset shapes use ten times that size (1 unit). Keep source voxel scale separate from distant display simplification, and preserve grid alignment across 1024-unit origin shifts.
 - Review `.tscn`, `.tres`, and project-setting diffs for accidental editor changes. Update all affected references when a rename is necessary.
 - Store AI-generated placeholder art under `assets/_temp_ai_to_be_replaced/`, grouped by asset type as needed. Keep its temporary status clear. Procedural output generated by project tools follows its feature's normal asset organization.
 - Keep editable authoring and localization sources authoritative. Regenerate derived outputs through the relevant tool when one exists.
@@ -105,4 +110,4 @@ Validation should match the change:
 4. If the engine crashes before producing a useful log, investigate the launch environment before retrying. Do not repeatedly spawn failing processes.
 5. Review the final diff and status. Keep temporary logs and captures out of the commit. Report what changed, what was checked, and any remaining limitation.
 
-Documentation-only edits require a consistency and diff review, not an engine launch. Maintain this guide as concise, current working guidance. Put detailed system contracts near their owners or under `docs/`, and link them here when needed.
+Documentation-only edits require a consistency and diff review, not an engine launch. Maintain this guide as concise, current working guidance. Put detailed system contracts near their owners or under `src/docs/`, and link them here when needed.

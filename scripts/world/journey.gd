@@ -6,7 +6,9 @@ extends Node3D
 @export var origin: FloatingOrigin
 @export var island_spawner: IslandSpawner
 @export var camera_rig: FleetCamera
-@export var ground: MeshInstance3D
+@export var terrain: VoxelTerrain
+@export var water: WaterSurface
+@export var progression: JourneyProgress
 
 var ships: Array[Airship] = []
 var _positions := PackedVector3Array()
@@ -20,14 +22,16 @@ func _ready() -> void:
 	for ship in initial_ships:
 		register_ship(ship)
 	fleet.initialize_anchor()
+	progression.initialize(anchor_route_position())
 	origin.register_root(fleet.anchor)
 	origin.register_root(fleet.average_focus)
 	origin.register_root(camera_rig)
-	origin.register_root(ground)
-	_center_ground()
+	origin.register_root(water)
+	water.recenter(fleet.anchor.global_position)
+	camera_rig.focus_fleet()
+	terrain.update_region(fleet.anchor.global_position.x, anchor_route_position(), camera_rig.camera.global_position)
 	island_spawner.initialize(anchor_route_position())
 	island_spawner.update_region(anchor_route_position())
-	camera_rig.focus_fleet()
 
 
 func _physics_process(delta: float) -> void:
@@ -63,23 +67,18 @@ func step_simulation(delta: float) -> void:
 		_corrections[index] = ShipAvoidance.correction(index, ships, _positions, _velocities, _axes)
 	for index in range(ships.size()):
 		ships[index].move_ship(delta, _corrections[index], island_spawner.obstacles)
-	_center_ground()
 	origin.recenter_if_needed(fleet.anchor.global_position.z)
+	water.recenter(fleet.anchor.global_position)
+	progression.update(anchor_route_position())
 	_stream_timer -= delta
 	if _stream_timer <= 0.0:
 		_stream_timer = 0.25
 		island_spawner.update_region(anchor_route_position())
+		terrain.update_region(fleet.anchor.global_position.x, anchor_route_position(), camera_rig.camera.global_position)
 
 
 func anchor_route_position() -> RoutePosition:
 	return RoutePosition.from_scene(fleet.anchor.global_position.z, origin.segment)
-
-
-func _center_ground() -> void:
-	# This uniform visual placeholder can follow travel without visible scrolling.
-	# Keep its altitude fixed; future terrain will own persistent surface geometry.
-	ground.global_position.x = fleet.anchor.global_position.x
-	ground.global_position.z = fleet.anchor.global_position.z
 
 
 func _snapshot_ships() -> void:

@@ -1,0 +1,17 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/water/water_surface.gd" id="1"]
+[ext_resource type="Shader" path="res://shaders/water/voxel_water.gdshader" id="2"]
+
+[sub_resource type="ShaderMaterial" id="WaterMaterial"]
+shader = ExtResource("2")
+
+[sub_resource type="PlaneMesh" id="WaterMesh"]
+size = Vector2(12288, 12288)
+
+[node name="Water" type="MeshInstance3D"]
+physics_interpolation_mode = 2
+cast_shadow = 0
+mesh = SubResource("WaterMesh")
+material_override = SubResource("WaterMaterial")
+script = ExtResource("1")

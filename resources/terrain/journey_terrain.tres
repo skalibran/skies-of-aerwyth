@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="TerrainProfile" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/terrain/terrain_profile.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/terrain/grassland.tres" id="2"]
+[ext_resource type="Resource" path="res://resources/terrain/mountain_range.tres" id="3"]
+
+[sub_resource type="FastNoiseLite" id="BandNoise"]
+seed = 29173
+frequency = 0.003
+fractal_octaves = 2
+
+[resource]
+script = ExtResource("1")
+voxel_size = 5
+grassland = ExtResource("2")
+mountains = ExtResource("3")
+mountain_start_distance = 1500.0
+mountain_full_distance = 5000.0
+band_noise = SubResource("BandNoise")
+band_warp_height = 8.0

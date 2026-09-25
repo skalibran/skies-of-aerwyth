@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="TerrainBiome" format=3 uid="uid://cbkeenrbw5bj5"]
+
+[ext_resource type="Script" uid="uid://bhchmud5qfu6j" path="res://scripts/terrain/terrain_biome.gd" id="1"]
+
+[sub_resource type="FastNoiseLite" id="Noise"]
+seed = 84317
+noise_type = 0
+frequency = 0.00075
+fractal_octaves = 5
+fractal_gain = 0.45
+fractal_lacunarity = 2.15
+domain_warp_enabled = true
+domain_warp_amplitude = 280.0
+domain_warp_frequency = 0.0015
+domain_warp_fractal_octaves = 3
+domain_warp_fractal_lacunarity = 2.3
+
+[sub_resource type="Gradient" id="Palette"]
+interpolation_mode = 1
+offsets = PackedFloat32Array(0, 0.25, 0.4, 0.55, 0.72, 0.9)
+colors = PackedColorArray(0.1, 0.23, 0.14, 1, 0.16, 0.3, 0.1, 1, 0.24, 0.4, 0.12, 1, 0.34, 0.47, 0.17, 1, 0.44, 0.53, 0.23, 1, 0.53, 0.58, 0.31, 1)
+
+[resource]
+script = ExtResource("1")
+height_range = Vector2(-30, 70)
+height_noise = SubResource("Noise")
+height_contrast = 1.6
+palette = SubResource("Palette")

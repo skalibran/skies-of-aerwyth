@@ -8,15 +8,35 @@ const ROUTE_OBSTACLE_ID: int = 200000
 var _journey: Journey
 var _failures: Array[String] = []
 var _visual: bool = false
+var _profile: bool = false
 var _detoured_ships: Dictionary[int, bool] = {}
+var _frame_ms: Array[float] = []
+var _gpu_ms: Array[float] = []
+var _previous_frame: int = 0
+var _profile_phase: String = ""
+var _profile_results: Array[Dictionary] = []
+var _backlog_peak: int = 0
 
 
 func _initialize() -> void:
 	_visual = "--visual" in OS.get_cmdline_user_args()
+	_profile = "--profile" in OS.get_cmdline_user_args()
 	_run.call_deferred()
 
 
 func _run() -> void:
+	if _profile:
+		if DisplayServer.get_name() == "headless" or OS.get_environment("AERWYTH_PROFILE_DIR").is_empty():
+			printerr("Fleet profiling needs rendering and an external AERWYTH_PROFILE_DIR; omit --fixed-fps.")
+			quit(1)
+			return
+		Engine.max_fps = 0
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		root.content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
+		root.content_scale_size = Vector2i(1920, 1080)
+		root.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_IGNORE
+		RenderingServer.viewport_set_measure_render_time(root.get_viewport_rid(), true)
+		process_frame.connect(_sample_frame)
 	_journey = JOURNEY_SCENE.instantiate() as Journey
 	root.add_child(_journey)
 	_journey.set_physics_process(false)
@@ -26,6 +46,9 @@ func _run() -> void:
 	var rig := _journey.camera_rig
 	rig.orbit_distance = 480.0
 	rig.focus_fleet()
+	var navigation_debug := _journey.get_node("FleetAnchor/NavigationDebug") as ShipNavigationDebug
+	if _profile:
+		navigation_debug.enabled = false
 	var timings := PackedFloat64Array()
 	var starting_route := _journey.anchor_route_position()
 	for tick in range(1800):
@@ -34,9 +57,19 @@ func _run() -> void:
 		_journey.step_simulation(1.0 / 60.0)
 		if tick >= 120:
 			timings.append(float(Time.get_ticks_usec() - started) / 1000.0)
+		if _profile:
+			if tick == 120:
+				_profile_phase = "debug_off"
+				_previous_frame = Time.get_ticks_usec()
+			# Pan at fleet altitude to exercise streaming alongside actual ship simulation.
+			rig.pan(Vector3(cos(tick / 180.0), 0.0, sin(tick / 180.0)) * 3.0)
 		if tick % 120 == 0:
 			_check_formation()
 		if tick == 900:
+			if _profile:
+				_finish_profile_phase()
+				_profile_phase = "debug_on"
+				navigation_debug.enabled = true
 			var before := _journey.anchor_route_position()
 			_journey.origin.shift_segments(-1)
 			var after := _journey.anchor_route_position()
@@ -49,7 +82,18 @@ func _run() -> void:
 	_check(total_goals > SHIP_COUNT, "Large-fleet ships keep reaching nearby destinations.")
 	_check(_detoured_ships.size() >= 5, "Multiple ships in the large fleet navigate around an island.")
 	_check_scenery()
+	if _profile:
+		_finish_profile_phase()
+		process_frame.disconnect(_sample_frame)
+		var path := OS.get_environment("AERWYTH_PROFILE_DIR").path_join("fleet-128.json")
+		var file := FileAccess.open(path, FileAccess.WRITE)
+		if file == null:
+			_check(false, "Fleet profiling output is writable.")
+		else:
+			file.store_string(JSON.stringify(_profile_results, "\t"))
+			print("PROFILE_COMPLETE ", path)
 	if _visual:
+		rig.focus_fleet()
 		await _capture("fleet-128")
 		rig.zoom(10000.0)
 		await _capture("fleet-128-wide")
@@ -82,6 +126,38 @@ func _build_fleet() -> void:
 		ship.reset_physics_interpolation()
 
 
+func _sample_frame() -> void:
+	if _profile_phase.is_empty():
+		return
+	var now := Time.get_ticks_usec()
+	_frame_ms.append((now - _previous_frame) / 1000.0)
+	_previous_frame = now
+	_gpu_ms.append(RenderingServer.viewport_get_measured_render_time_gpu(root.get_viewport_rid()))
+	_backlog_peak = maxi(_backlog_peak, _journey.terrain._pending.size() + _journey.terrain._jobs.size())
+
+
+func _finish_profile_phase() -> void:
+	var result := {"phase": _profile_phase, "wall_frame_ms": _timing_summary(_frame_ms), "gpu_ms": _timing_summary(_gpu_ms), "backlog_peak": _backlog_peak, "backlog_end": _journey.terrain._pending.size() + _journey.terrain._jobs.size(), "render_target": [root.get_texture().get_width(), root.get_texture().get_height()]}
+	_profile_results.append(result)
+	print("FLEET_PROFILE ", JSON.stringify(result))
+	_frame_ms.clear()
+	_gpu_ms.clear()
+	_backlog_peak = 0
+	_profile_phase = ""
+	_previous_frame = Time.get_ticks_usec()
+
+
+func _timing_summary(values: Array[float]) -> Dictionary:
+	if values.is_empty():
+		return {}
+	var sorted := values.duplicate()
+	sorted.sort()
+	var over_budget := 0
+	for value in sorted:
+		over_budget += int(value > 16.667)
+	return {"n": sorted.size(), "p50": sorted[sorted.size() / 2], "p95": sorted[int((sorted.size() - 1) * 0.95)], "p99": sorted[int((sorted.size() - 1) * 0.99)], "max": sorted.back(), "over_16_67": over_budget}
+
+
 func _rebuild_starting_scenery() -> void:
 	# Startup clearance must use the replacement fleet's positions, not the nine
 	# ships in the authored scene that were present during Journey._ready().
@@ -100,7 +176,7 @@ func _add_route_obstacle() -> void:
 	record.entity_id = ROUTE_OBSTACLE_ID
 	record.route_position = _journey.anchor_route_position().advanced(-160.0)
 	record.lateral_position = 0.0
-	record.altitude = 15.0
+	record.altitude = _journey.fleet.anchor.global_position.y + 15.0
 	record.radius = 30.0
 	record.depth = 30.0
 	_journey.island_spawner.records.insert(0, record)
