@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/journey.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/ships/kestrel.tscn" id="2"]
@@ -11,7 +11,6 @@
 [ext_resource type="PackedScene" path="res://scenes/terrain/voxel_terrain.tscn" id="9"]
 [ext_resource type="Script" path="res://scripts/world/journey_progress.gd" id="10"]
 [ext_resource type="Script" path="res://scripts/combat/projectile_controller.gd" id="12"]
-[ext_resource type="Script" path="res://scripts/combat/combat_spawner.gd" id="13"]
 [ext_resource type="PackedScene" path="res://scenes/water/water.tscn" id="11"]
 [ext_resource type="Script" path="res://scripts/ships/wreck_controller.gd" id="14"]
 [ext_resource type="PackedScene" path="res://scenes/ui/performance_overlay.tscn" id="15"]
@@ -41,11 +40,11 @@ roughness = 1.0
 
 [sub_resource type="BoxMesh" id="AnchorMesh"]
 material = SubResource("AnchorMaterial")
-size = Vector3(40, 40, 40)
+size = Vector3(4, 4, 4)
 
-[node name="Journey" type="Node3D" node_paths=PackedStringArray("initial_ships", "fleet", "origin", "island_spawner", "camera_rig", "terrain", "water", "progression", "projectiles", "combat_spawner", "wreck_controller")]
+[node name="Journey" type="Node3D" node_paths=PackedStringArray("initial_ships", "fleet", "origin", "island_spawner", "camera_rig", "terrain", "water", "progression", "projectiles", "wreck_controller")]
 script = ExtResource("1")
-initial_ships = Array[NodePath]([NodePath("Ships/Ship1"), NodePath("Ships/Ship2"), NodePath("Ships/Ship3"), NodePath("Ships/Ship4"), NodePath("Ships/Ship5"), NodePath("Ships/Ship6"), NodePath("Ships/Ship7"), NodePath("Ships/Ship8"), NodePath("Ships/Ship9")])
+initial_ships = Array[NodePath]([NodePath("Ships/Ship1"), NodePath("Ships/Ship2"), NodePath("Ships/Ship3")])
 fleet = NodePath("FleetController")
 origin = NodePath("FloatingOrigin")
 island_spawner = NodePath("IslandSpawner")
@@ -54,7 +53,6 @@ terrain = NodePath("VoxelTerrain")
 water = NodePath("Water")
 progression = NodePath("Progression")
 projectiles = NodePath("Projectiles")
-combat_spawner = NodePath("CombatSpawner")
 wreck_controller = NodePath("WreckController")
 
 [node name="Projectiles" type="Node3D" parent="."]
@@ -64,10 +62,6 @@ script = ExtResource("12")
 script = ExtResource("14")
 terrain = NodePath("../VoxelTerrain")
 origin = NodePath("../FloatingOrigin")
-
-[node name="CombatSpawner" type="Node" parent="."]
-script = ExtResource("13")
-ship_scene = ExtResource("2")
 
 [node name="VoxelTerrain" parent="." node_paths=PackedStringArray("origin", "progression") instance=ExtResource("9")]
 origin = NodePath("../FloatingOrigin")
@@ -107,6 +101,11 @@ journey = NodePath("../..")
 script = ExtResource("3")
 anchor = NodePath("../FleetAnchor")
 average_focus = NodePath("../FleetAverage")
+formation_extent = Vector3(120, 60, 120)
+wander_step_radius = 40.0
+wander_speed = 8.0
+cruise_speed = 25.0
+acceleration = 3.0
 
 [node name="FloatingOrigin" type="Node" parent="."]
 script = ExtResource("4")
@@ -115,40 +114,16 @@ script = ExtResource("4")
 position = Vector3(0, 3800, 0)
 
 [node name="Ship1" parent="Ships" instance=ExtResource("2")]
-position = Vector3(-400, -400, -400)
+position = Vector3(-45, -10, 20)
 entity_id = 1
 
 [node name="Ship2" parent="Ships" instance=ExtResource("2")]
-position = Vector3(0, 400, -400)
+position = Vector3(0, 10, -40)
 entity_id = 2
 
 [node name="Ship3" parent="Ships" instance=ExtResource("2")]
-position = Vector3(400, 0, -400)
+position = Vector3(45, 0, 20)
 entity_id = 3
-
-[node name="Ship4" parent="Ships" instance=ExtResource("2")]
-position = Vector3(-400, 200, 0)
-entity_id = 4
-
-[node name="Ship5" parent="Ships" instance=ExtResource("2")]
-position = Vector3(0, 0, 0)
-entity_id = 5
-
-[node name="Ship6" parent="Ships" instance=ExtResource("2")]
-position = Vector3(400, -400, 0)
-entity_id = 6
-
-[node name="Ship7" parent="Ships" instance=ExtResource("2")]
-position = Vector3(-400, 400, 400)
-entity_id = 7
-
-[node name="Ship8" parent="Ships" instance=ExtResource("2")]
-position = Vector3(0, -200, 400)
-entity_id = 8
-
-[node name="Ship9" parent="Ships" instance=ExtResource("2")]
-position = Vector3(400, 0, 400)
-entity_id = 9
 
 [node name="Islands" type="Node3D" parent="."]
 

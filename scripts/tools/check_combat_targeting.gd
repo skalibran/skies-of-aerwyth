@@ -310,7 +310,6 @@ func _check_journey_cleanup() -> void:
 		var journey := JOURNEY.instantiate() as Journey
 		root.add_child(journey)
 		journey.set_physics_process(false)
-		journey.combat_spawner.enabled = false
 		for ship in journey.ships:
 			ship.freeze = true
 		var player := journey.ships[0]
@@ -357,7 +356,7 @@ func _check_journey_cleanup() -> void:
 			else:
 				enemy.queue_free()
 			await process_frame
-			_check(journey.ships.size() == 9 and not player.combat.has_target() and weapon.firing_target == null, "Death, explicit unregistering, and external deletion clear registry, pursuit, and firing references.")
+			_check(journey.ships.size() == 3 and not player.combat.has_target() and weapon.firing_target == null, "Death, explicit unregistering, and external deletion clear registry, pursuit, and firing references.")
 			_check(weapon._shortlist.is_empty() and journey.combat_perception.weapon_candidates(player).is_empty(), "Removed targets cannot survive in shortlist or query caches.")
 			_check(slot.assign_equipment(slot.equipment_scene), "A mounted weapon can be replaced after target cleanup.")
 			await process_frame

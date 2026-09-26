@@ -38,12 +38,18 @@ src/docs/todo/todo-movement.txt.
 Reference: src/docs/game_design_document.md, src/docs/movement.md, and
 src/docs/combat.md for implemented ownership, checks, and measurements.
 
+CURRENT STARTING FLEET
+[x] Remove continuous combat spawning from the playable Journey and start with
+    three friendly Kestrels. Keep the repeating encounter only in opt-in checks,
+    with CombatSpawner under scripts/tools/. No automatic casualty replenishment.
+
 Deliverable
 - Automatic combat between player and enemy Kestrels using the authored voxel
   ship model, two broadside Rusty cannons, health, and visible cannonballs following
   gravity-driven arcs. Weapons calculate elevation and lead before firing.
-- Spawn up to ten ships per faction every simulation second, continuously, with
-  at most 100 living ships per faction. Destroyed ships settle, freeze, and expire 25 seconds after landing.
+- Start normal play with three friendly Kestrels. The opt-in combat fixture adds
+  up to ten ships per faction per second, capped at 100 living ships per faction.
+  Destroyed ships settle, freeze, and expire 25 seconds after landing.
 - Death and cannon muzzle smoke use authored camera-facing square particles; no impact effects,
   audio, water-specific wreck behavior, difficulty curve, rewards, combat progression, ship
   editor, purchased reinforcements, or new UI. Existing journey/terrain progression remains.
@@ -225,10 +231,10 @@ solver fixtures. See src/docs/combat.md for current tuning and measurements.
 [x] Replace the GDD's single preferred side with authorable enabled directions and
     record the later per-direction arrow toggles as future editor work.
 
-8. CONTINUOUS DEBUG SPAWNER
-[x] Add a journey-owned spawner using simulation time: first batch at one second,
-    then every second. Independently spawn min(2, 100 - living_faction_count) for
-    each faction, counting the nine starting players toward their cap. At the
+8. CONTINUOUS DEBUG SPAWNER (now confined to opt-in validation)
+[x] Add a validation-owned spawner using simulation time: first batch at one second,
+    then every second. Independently spawn min(10, 100 - living_faction_count) for
+    each faction, counting the starting players toward their cap. At the
     cap, skip that batch; never accumulate a later catch-up burst.
 [x] Release capacity on death and refill on the next scheduled tick. Example:
     99 living enemies permits one spawn; deaths do not trigger immediate spawns.
@@ -338,7 +344,7 @@ https://docs.godotengine.org/en/stable/classes/class_physicsrayqueryparameters3d
 [x] Implement item 10's projectile controller and impact routing under
     scripts/combat/, with simple visuals under scenes/combat/ as needed. Implement
     shared ballistic aiming/flight math so both use identical speed and gravity.
-[x] Define simulation order in Journey: scheduled spawns, snapshots/anchor update,
+[x] Define simulation order in Journey: snapshots/anchor update,
     target and movement decisions, avoidance/movement, existing projectile sweeps
     and damage, surviving slots firing new shots, then deferred removals and the
     established origin/streaming update. New shots start at the current muzzle
@@ -378,7 +384,7 @@ https://docs.godotengine.org/en/stable/classes/class_physicsrayqueryparameters3d
 [x] Provide a separate scale scenario overriding the demo cap for 70 friendlies
     versus 150 enemies. Sustain firing long enough to reach projectile steady
     state and exercise deaths/replacements, misses, streaming, and origin shifts.
-    Keep these benchmark settings independent of the ordinary 100-per-faction caps.
+    Keep these benchmark settings independent of the opt-in fixture's 100-per-faction caps.
 [x] Record hardware, resolution, renderer, physics rate, ship/projectile counts,
     median/p95 frame and simulation times, GPU time where available, and memory/
     node counts across repeated waves. Measure debug off, then debug on separately.
@@ -390,7 +396,7 @@ https://docs.godotengine.org/en/stable/classes/class_physicsrayqueryparameters3d
     .godot state untouched. No push without explicit authorization.
 
 Done when
-- The ordinary journey visibly runs the specified repeating capped encounter,
+- The opt-in combat check runs the specified repeating capped encounter;
   both sides maneuver and calculate arcing shots through their mounts, allies
   intercept along those arcs without damage, destroyed ships fall as passive wrecks, and surviving
   player ships resume travel when no enemies remain. The Rusty cannon can reach a

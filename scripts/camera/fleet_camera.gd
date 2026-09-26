@@ -5,11 +5,11 @@ enum Mode { FLEET, SHIP, FREE }
 
 @export var camera: Camera3D
 @export var fleet: FleetController
-@export_range(100.0, 12000.0) var orbit_distance: float = 1800.0
+@export_range(100.0, 12000.0) var orbit_distance: float = 600.0
 @export_range(50.0, 500.0) var minimum_orbit_distance: float = 100.0
 @export_range(500.0, 20000.0) var maximum_orbit_distance: float = 12000.0
-@export_range(10.0, 1000.0) var zoom_step: float = 200.0
-@export_range(10.0, 5000.0) var zoom_speed: float = 1200.0
+@export_range(10.0, 1000.0) var zoom_step: float = 25.0
+@export_range(10.0, 5000.0) var zoom_speed: float = 300.0
 @export_range(1.0, 10.0) var sprint_multiplier: float = 3.0
 @export_range(800.0, 20000.0) var viewing_radius: float = 9000.0
 @export_range(10.0, 5000.0) var pan_speed: float = 1000.0

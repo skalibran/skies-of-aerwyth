@@ -48,7 +48,6 @@ func _run() -> void:
 	root.add_child(_journey)
 	_journey.set_physics_process(false)
 	_journey.profile_steps = true
-	_journey.combat_spawner.enabled = false
 	_build_fleets()
 	var debug := _journey.get_node("FleetAnchor/NavigationDebug") as ShipNavigationDebug
 	debug.enabled = false
@@ -126,6 +125,9 @@ func _run() -> void:
 
 
 func _build_fleets() -> void:
+	# Preserve the benchmark's large-fleet volume independently of starter tuning.
+	_journey.fleet.formation_extent = Vector3(1800, 1200, 1800)
+	_journey.fleet.wander_step_radius = 160.0
 	for ship in _journey.ships.duplicate():
 		_journey.unregister_ship(ship)
 		ship.queue_free()

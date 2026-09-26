@@ -161,7 +161,7 @@ func _check_mounts_and_health() -> void:
 	_check(player.maximum_health == 500 and player.current_health == 500 and enemy.current_health == 500, "Both factions start with 500 health.")
 	await physics_frame
 	_check(Factions.are_hostile(player.faction, enemy.faction) and not Factions.are_hostile(player.faction, &"visitors"), "String factions share one hostility rule.")
-	_check(player.mounted_slots.size() == 2 and player.maximum_speed == 180 and is_equal_approx(player.hull_radius, 10.5), "Kestrel retains flight tuning and two mounts with its fitted model collider.")
+	_check(player.mounted_slots.size() == 2 and player.maximum_speed == 50 and is_equal_approx(player.hull_radius, 10.5), "Kestrel uses its authored flight tuning and two mounts with its fitted model collider.")
 	_check(player.preferred_combat_positions == PackedStringArray(["front_left", "left_back", "back", "back_right", "right", "front_right"]), "Kestrel preserves the specified enabled bearings.")
 	var left := player.mounted_slots[0]
 	var right := player.mounted_slots[1]
@@ -392,6 +392,10 @@ func _advance_projectiles(seconds: float) -> void:
 func _check_journey() -> void:
 	var journey := JOURNEY.instantiate() as Journey
 	root.add_child(journey)
+	var spawner := CombatSpawner.new()
+	spawner.ship_scene = KESTREL
+	journey.add_child(spawner)
+	var starting_players := journey.ships.size()
 	journey.set_physics_process(false)
 	var stationary := journey.ships[0]
 	stationary.linear_velocity = Vector3.FORWARD * 100.0
@@ -411,6 +415,7 @@ func _check_journey() -> void:
 	for tick in range(180 * _rate):
 		await physics_frame
 		var start := Time.get_ticks_usec()
+		spawner.step(_delta, journey)
 		journey.step_simulation(_delta)
 		timings.append(float(Time.get_ticks_usec() - start) / 1000.0)
 		var enemies: int = 0
@@ -436,9 +441,9 @@ func _check_journey() -> void:
 					if Vector2(offset.x, offset.z).length_squared() <= radius * radius:
 						_check(island in candidates, "Spatial island filtering retains every potentially relevant obstacle through travel and rebasing.")
 		if tick == _rate - 2:
-			_check(enemies == 0 and players == 9, "First batch waits one second and retains the nine starting player ships.")
+			_check(enemies == 0 and players == starting_players, "The opt-in fixture waits one second before adding ships to the starting fleet.")
 		if tick == _rate:
-			_check(enemies == 10 and players == 19, "Each scheduled batch adds ten ships to each faction.")
+			_check(enemies == 10 and players == starting_players + 10, "Each scheduled fixture batch adds ten ships to each faction.")
 		if tick == 20 * _rate:
 			_check(journey.projectiles.fired_count > 0, "Both fleets close and begin firing.")
 		if tick == 30 * _rate:
@@ -452,8 +457,8 @@ func _check_journey() -> void:
 			journey.camera_rig.focus_fleet()
 			journey.camera_rig.zoom(2200.0 - journey.camera_rig.camera.position.z)
 	_check(journey.projectiles.damaging_hits > 0 and journey.destroyed_count > 0, "Combat causes damage and retires destroyed ships into falling wrecks.")
-	_check(journey.combat_spawner.batches == 180, "Spawner continues on one-second cadence.")
-	_check(maximum_players > 9 and maximum_enemies > 0, "Both combat populations receive reinforcements despite ongoing casualties; controlled batches below verify the caps.")
+	_check(spawner.batches == 180, "Spawner continues on one-second cadence.")
+	_check(maximum_players > starting_players and maximum_enemies > 0, "Both combat populations receive reinforcements despite ongoing casualties; controlled batches below verify the caps.")
 	_check(maximum_anchor_distance < 4500.0 and maximum_mean_distance < 1800.0, "Three minutes of full-fleet combat stay near the anchor with room for turns and island detours.")
 	if _visual:
 		journey.camera_rig.focus_fleet()
@@ -465,28 +470,28 @@ func _check_journey() -> void:
 	var demo_result := {"seconds": 180, "shots": journey.projectiles.fired_count, "damage_hits": journey.projectiles.damaging_hits, "ally_hits": journey.projectiles.friendly_hits, "destroyed": journey.destroyed_count, "max_players": maximum_players, "max_enemies": maximum_enemies, "max_anchor_distance": maximum_anchor_distance, "max_mean_distance": maximum_mean_distance, "step_p50_ms": timings[timings.size() / 2], "step_p95_ms": timings[int(timings.size() * 0.95)]}
 	demo_result["max_observed_speed"] = maximum_speed
 	# Cap, partial refill, retargeting, and empty-fleet behavior use controlled state.
-	journey.combat_spawner.enabled = false
+	spawner.enabled = false
 	for ship in journey.ships.duplicate():
 		journey.unregister_ship(ship)
 		ship.queue_free()
 	journey.projectiles.clear()
 	await process_frame
-	journey.combat_spawner.enabled = true
-	journey.combat_spawner.spawn_radius = Vector2(1500, 2800)
+	spawner.enabled = true
+	spawner.spawn_radius = Vector2(1500, 2800)
 	journey.fleet.average_focus.global_position = journey.fleet.anchor.global_position + Vector3(10000, 1000, 10000)
 	for batch in range(10):
 		await physics_frame
 		if batch == 5:
 			journey.origin.shift_segments(-1)
-		journey.combat_spawner.step(1, journey)
+		spawner.step(1, journey)
 	_check(_faction_count(journey, Factions.PLAYER) == 100 and _faction_count(journey, Factions.ENEMY) == 100, "Ten unobstructed batches fill both faction caps.")
 	for ship in journey.ships:
 		var offset := ship.global_position - journey.fleet.anchor.global_position
 		var radius := Vector2(offset.x, offset.z).length()
-		_check(radius >= 1499.9 and radius <= 2800.1 and absf(offset.y) <= journey.combat_spawner.altitude_spread + 0.1, "Both factions respect the authored anchor-relative spawn region despite a displaced fleet average and rebasing.")
-	var spawned := journey.combat_spawner.spawned_count
-	journey.combat_spawner.step(10, journey)
-	_check(journey.combat_spawner.spawned_count == spawned, "Capped batches do not accumulate spawns.")
+		_check(radius >= 1499.9 and radius <= 2800.1 and absf(offset.y) <= spawner.altitude_spread + 0.1, "Both factions respect the authored anchor-relative spawn region despite a displaced fleet average and rebasing.")
+	var spawned := spawner.spawned_count
+	spawner.step(10, journey)
+	_check(spawner.spawned_count == spawned, "Capped batches do not accumulate spawns.")
 	var removed_players: int = 0
 	var removed_enemies: int = 0
 	for ship in journey.ships:
@@ -501,11 +506,11 @@ func _check_journey() -> void:
 	await process_frame
 	_check(journey.ships.size() == 188 and journey.camera_rig.mode == FleetCamera.Mode.FLEET, "Death removes membership and restores camera focus without immediate replenishment.")
 	await physics_frame
-	journey.combat_spawner.step(1, journey)
-	_check(_faction_count(journey, Factions.PLAYER) == 100 and _faction_count(journey, Factions.ENEMY) == 99 and journey.combat_spawner.spawned_count == spawned + 11, "Each faction refills at most ten ships without exceeding its own capacity.")
+	spawner.step(1, journey)
+	_check(_faction_count(journey, Factions.PLAYER) == 100 and _faction_count(journey, Factions.ENEMY) == 99 and spawner.spawned_count == spawned + 11, "Each faction refills at most ten ships without exceeding its own capacity.")
 	await physics_frame
-	journey.combat_spawner.step(1, journey)
-	_check(journey.ships.size() == 200 and journey.combat_spawner.spawned_count == spawned + 12, "The following second restores the remaining enemy vacancy.")
+	spawner.step(1, journey)
+	_check(journey.ships.size() == 200 and spawner.spawned_count == spawned + 12, "The following second restores the remaining enemy vacancy.")
 	var ids: Dictionary[int, bool] = {}
 	for ship in journey.ships:
 		_check(not ids.has(ship.entity_id), "Spawned ships have unique IDs.")
@@ -523,14 +528,14 @@ func _check_journey() -> void:
 	blocked_ship.take_damage(blocked_ship.maximum_health, Factions.ENEMY if blocked_ship.faction == Factions.PLAYER else Factions.PLAYER)
 	journey.step_simulation(0)
 	await physics_frame
-	journey.combat_spawner.step(1, journey)
+	spawner.step(1, journey)
 	_check(journey.ships.size() == 199, "Blocked placement exhausts bounded attempts without overlapping a collider.")
 	blocker.queue_free()
 	await process_frame
 	await physics_frame
-	journey.combat_spawner.step(1, journey)
+	spawner.step(1, journey)
 	_check(journey.ships.size() == 200, "Placement retries on a later scheduled batch.")
-	journey.combat_spawner.enabled = false
+	spawner.enabled = false
 	for ship in journey.ships:
 		if ship.faction == Factions.PLAYER:
 			ship.take_damage(ship.maximum_health, Factions.ENEMY)

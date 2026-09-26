@@ -18,10 +18,11 @@ func _initialize() -> void:
 func _run() -> void:
 	_check_coordinates()
 	_journey = JOURNEY_SCENE.instantiate() as Journey
-	_journey.combat_enabled = false
 	root.add_child(_journey)
 	await _frames(3 * _rate)
-	_check(_journey.ships.size() == 9, "The authored fleet has nine ships.")
+	_check(_journey.ships.size() == 3 and _journey.fleet.members.size() == 3, "Normal play retains exactly three friendly Kestrels without automatic reinforcements.")
+	_check(_journey.projectiles.fired_count == 0, "The starting fleet has no hostile encounter or automatic enemy spawns.")
+	_journey.combat_enabled = false
 	_check(_journey.fleet.anchor.position.z < -10.0, "The fleet makes forward progress.")
 	_check_initial_surroundings()
 	await _capture("fleet")
@@ -44,7 +45,7 @@ func _run() -> void:
 	else:
 		var rig := _journey.camera_rig
 		var saved_distance := rig.orbit_distance
-		rig.follow_ship(_journey.ships[4])
+		rig.follow_ship(_journey.ships[1])
 		rig.zoom(200.0 - rig.camera.position.z)
 		await _frames(2)
 		await _capture("zoomed")
@@ -90,7 +91,7 @@ func _check_coordinates() -> void:
 
 func _check_camera() -> void:
 	var rig := _journey.camera_rig
-	var ship := _journey.ships[4]
+	var ship := _journey.ships[1]
 	# Exercise the same click path as real input after physics has synchronized.
 	var pixel := rig.camera.unproject_position(ship.global_position)
 	Input.warp_mouse(pixel)
@@ -176,7 +177,7 @@ func _check_free_camera() -> void:
 	rig.set_process(false)
 	for track_ship in [false, true]:
 		if track_ship:
-			rig.follow_ship(_journey.ships[4])
+			rig.follow_ship(_journey.ships[1])
 		else:
 			rig.focus_fleet()
 		var before := rig.camera.global_transform
@@ -290,7 +291,7 @@ func _check_camera_membership() -> void:
 		rig.orbit_distance = rig.maximum_orbit_distance
 		rig.focus_fleet()
 		if camera_mode == FleetCamera.Mode.SHIP:
-			rig.follow_ship(_journey.ships[4])
+			rig.follow_ship(_journey.ships[1])
 		elif camera_mode == FleetCamera.Mode.FREE:
 			rig.pan(Vector3.RIGHT * rig.viewing_radius * 3.0)
 		rig._process(0.0)
@@ -326,7 +327,7 @@ func _check_zoom() -> void:
 	var initial_distance := rig.orbit_distance
 	for track_ship in [false, true]:
 		if track_ship:
-			rig.follow_ship(_journey.ships[4])
+			rig.follow_ship(_journey.ships[1])
 		else:
 			rig.focus_fleet()
 		var original_mode := rig.mode
@@ -496,8 +497,10 @@ func _check_spawns() -> void:
 
 func _check_long_travel() -> void:
 	var first_goal := _journey.ships[0].travel.goals_reached
+	# Cover two origin segments at the authored cruise speed, including slowdown margin.
+	var batch_seconds := ceili(2.0 * 10240.0 * 1.2 / _journey.fleet.cruise_speed / 12.0)
 	for batch in range(12):
-		await _frames(20 * _rate)
+		await _frames(batch_seconds * _rate)
 		for ship in _journey.ships:
 			_check(ship.global_position.is_finite() and ship.linear_velocity.is_finite(), "Ship positions and velocities stay finite.")
 			_check(absf(ship.visual_root.rotation.x) <= deg_to_rad(ship.pitch_limit_degrees) + 0.001, "Pitch remains bounded.")
@@ -523,12 +526,12 @@ func _check_slowdown() -> void:
 	_freeze_fixture(true)
 	var fleet := _journey.fleet
 	fleet.anchor.position.z -= 600.0
-	for tick in range(4 * _rate):
+	for tick in range(ceili(fleet.cruise_speed / fleet.acceleration + 1.0) * _rate):
 		fleet.advance(_delta)
 	_check(fleet.speed < fleet.cruise_speed * 0.5, "The anchor slows when the fleet is held behind.")
 	var gap := fleet.anchor.position.distance_to(fleet.average_position)
 	_freeze_fixture(false)
-	await _frames(40 * _rate)
+	await _frames(ceili(gap / fleet.wander_speed + 10.0) * _rate)
 	_check(fleet.anchor.position.distance_to(fleet.average_position) < gap * 0.6, "Ships recover after being held behind.")
 	_check(fleet.speed > fleet.cruise_speed * 0.8, "The anchor recovers cruising speed.")
 

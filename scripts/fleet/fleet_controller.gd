@@ -7,6 +7,8 @@ extends Node
 ## X starts inward combat steering and ends regrouping; Y breaks off pursuit.
 @export var combat_radii := Vector2(1800.0, 2600.0)
 @export_range(30.0, 400.0) var wander_step_radius: float = 160.0
+## Maximum travel correction relative to the moving anchor, in meters per second.
+@export_range(1.0, 100.0) var wander_speed: float = 30.0
 @export_range(1.0, 300.0) var cruise_speed: float = 90.0
 @export_range(1.0, 100.0) var acceleration: float = 15.0
 @export_range(0.0, 1000.0) var comfortable_gap: float = 80.0
@@ -71,4 +73,5 @@ func _update_average() -> void:
 
 func _initialize_travel(ship: Airship) -> void:
 	assert(formation_extent.x > 0.0 and formation_extent.y > 0.0 and formation_extent.z > 0.0)
+	ship.travel.correction_speed = wander_speed
 	ship.travel.initialize(ship.global_position - anchor.global_position, ship.entity_id * 104729, formation_extent, wander_step_radius)

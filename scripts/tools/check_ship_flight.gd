@@ -130,13 +130,15 @@ func _check_cohesion() -> void:
 		for displacement in [Vector3(3400, 0, 0), Vector3(0, 3000, 0)]:
 			ship = _ship(KESTREL, faction)
 			ship.position = displacement
-			ship.linear_velocity = displacement.normalized() * 120.0
+			var recovery_speed := ship.climb_speed if displacement.y > 0.0 else ship.maximum_speed
+			ship.linear_velocity = displacement.normalized() * recovery_speed * (2.0 / 3.0)
 			ship.rotation.y = -PI * 0.5
-			_fleet.velocity = Vector3.FORWARD * 40.0
+			_fleet.velocity = Vector3.FORWARD * ship.maximum_speed * 0.5
 			var resumed := false
 			var peak_distance: float = displacement.length()
 			var anchor_distance: float = 0.0
-			for tick in range(80 * _rate):
+			var recovery_seconds := ceili((displacement.length() - _fleet.combat_radii.x) / recovery_speed + 60.0)
+			for tick in range(recovery_seconds * _rate):
 				await physics_frame
 				_fleet.anchor.position += _fleet.velocity * _delta
 				ship.combat.prepare(_delta, ship, [ship], _fleet)
@@ -179,14 +181,15 @@ func _check_pass() -> void:
 	var aligned_ticks: int = 0
 	var moving_ticks: int = 0
 	var nearest: float = INF
-	for tick in range(40 * _rate):
+	var encounter_seconds := ceili(1500.0 / ship.maximum_speed + 30.0)
+	for tick in range(encounter_seconds * _rate):
 		await physics_frame
 		ship.combat_engaged = ship.combat.prepare(_delta, ship, vessels, _fleet)
 		ship.apply_movement_forces(_delta, Vector3.ZERO, [])
 		had_approach = had_approach or not ship.combat.passing
 		had_pass = had_pass or ship.combat.passing
 		nearest = minf(nearest, ship.global_position.distance_to(target.global_position))
-		if ship.linear_velocity.length() > 30.0:
+		if ship.linear_velocity.length() > ship.maximum_speed / 6.0:
 			moving_ticks += 1
 			if (ship.global_basis * ShipFlight.primary_axis(ship)).dot(ship.linear_velocity.normalized()) > cos(deg_to_rad(25.0)):
 				aligned_ticks += 1

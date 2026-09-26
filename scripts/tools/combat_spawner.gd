@@ -1,6 +1,7 @@
 class_name CombatSpawner
 extends Node
 
+## Opt-in encounter fixture. The playable Journey never creates or steps this node.
 const FACTIONS: Array[StringName] = [Factions.PLAYER, Factions.ENEMY]
 
 @export var ship_scene: PackedScene

@@ -13,6 +13,13 @@ radius = 10.5
 height = 31.0
 
 [node name="Kestrel" unique_id=354340340 node_paths=PackedStringArray("mounted_slots", "death_smoke_points") instance=ExtResource("1")]
+maximum_speed = 50.0
+acceleration = 4.0
+braking = 6.0
+climb_speed = 5.0
+yaw_speed_degrees = 12.0
+yaw_acceleration_degrees = 10.0
+lateral_drag = 0.7
 mounted_slots = [NodePath("VisualRoot/LeftSlot"), NodePath("VisualRoot/RightSlot")]
 death_smoke_scene = ExtResource("7")
 death_smoke_points = NodePath("VisualRoot/DeathSmokePoints")

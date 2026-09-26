@@ -12,7 +12,6 @@ enum StepPhase { DECISIONS, AVOIDANCE, ISLAND_NAVIGATION, FORCE_SUBMISSION, PROJ
 @export var water: WaterSurface
 @export var progression: JourneyProgress
 @export var projectiles: ProjectileController
-@export var combat_spawner: CombatSpawner
 @export var wreck_controller: WreckController
 @export var combat_enabled: bool = true
 
@@ -94,8 +93,6 @@ func step_simulation(delta: float) -> void:
 		# Refresh registries without submitting forces or firing ready weapons.
 		fleet.advance(0.0)
 		return
-	if combat_enabled:
-		combat_spawner.step(delta, self)
 	_snapshot_ships()
 	fleet.advance(delta)
 	if combat_enabled:

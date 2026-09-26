@@ -115,6 +115,12 @@ func _run() -> void:
 
 
 func _build_fleet() -> void:
+	# Preserve the generic-hull benchmark's volume and pace independently of starter tuning.
+	_journey.fleet.formation_extent = Vector3(1800, 1200, 1800)
+	_journey.fleet.wander_step_radius = 160.0
+	_journey.fleet.wander_speed = 30.0
+	_journey.fleet.cruise_speed = 90.0
+	_journey.fleet.acceleration = 15.0
 	for ship in _journey.ships.duplicate():
 		_journey.unregister_ship(ship)
 		ship.queue_free()
@@ -162,7 +168,7 @@ func _timing_summary(values: Array[float]) -> Dictionary:
 
 
 func _rebuild_starting_scenery() -> void:
-	# Startup clearance must use the replacement fleet's positions, not the nine
+	# Startup clearance must use the replacement fleet's positions, not the three
 	# ships in the authored scene that were present during Journey._ready().
 	var spawner := _journey.island_spawner
 	for island in spawner.obstacles:
