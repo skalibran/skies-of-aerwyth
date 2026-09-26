@@ -24,7 +24,7 @@ Collision shapes are sized directly. ShipFlight still computes mass-scaled linea
 
 Camera near/far planes, shadow distances, island generation/loading, navigation and targeting grids, formation dimensions, spawn regions, and debug geometry follow the same conversion. Terrain keeps the same patch counts, sample resolution, noise seeds, and worker limits. Noise wavelengths, warp amplitudes, progression distances, water depth bands, and square highlights scale together. The 2560-meter water pattern period divides each origin shift exactly.
 
-The unused Kestrel OBJ meshes import at tenfold scale while the OBJ/VOX source geometry remains intact. Missing OBJ material companions were restored using the existing palette so reimport succeeds. Runtime ships still use their primitive scenes.
+At conversion time, the unused Kestrel OBJ meshes imported at tenfold scale while the OBJ/VOX source geometry remained intact. Missing OBJ material companions were restored using the existing palette so reimport succeeded. The measurements and capsule dimensions here record that primitive-ship baseline; the subsequent [Kestrel model integration](combat.md#authored-ships-and-weapons) uses the authored 23-meter balloon and a fitted collider.
 
 ## Validation and appearance
 

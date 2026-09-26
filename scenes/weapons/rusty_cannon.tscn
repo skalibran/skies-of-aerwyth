@@ -10,13 +10,13 @@ roughness = 0.8
 
 [sub_resource type="BoxMesh" id="Base"]
 material = SubResource("Iron")
-size = Vector3(6.0, 3.0, 7.0)
+size = Vector3(1.5, 0.75, 1.75)
 
 [sub_resource type="CylinderMesh" id="Barrel"]
 material = SubResource("Iron")
-top_radius = 1.8
-bottom_radius = 2.6
-height = 9.0
+top_radius = 0.45
+bottom_radius = 0.65
+height = 2.25
 radial_segments = 8
 
 [node name="RustyCannon" type="Node3D" unique_id=273151472 node_paths=PackedStringArray("aim_pivot")]
@@ -25,11 +25,11 @@ aim_pivot = NodePath("AimPivot")
 definition = ExtResource("2")
 
 [node name="Base" type="MeshInstance3D" parent="." unique_id=1045251843]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -2.0, 6.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 1.625)
 mesh = SubResource("Base")
 
 [node name="AimPivot" type="Node3D" parent="." unique_id=2054055309]
 
 [node name="Barrel" type="MeshInstance3D" parent="AimPivot" unique_id=1473844333]
-transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 4.5)
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 1.125)
 mesh = SubResource("Barrel")

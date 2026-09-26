@@ -52,7 +52,7 @@ Deliverable
 
 Original slice tuning choices (authorable, not final balance)
 Current authored trials use 500 health, launch speed 1000 m/s, 65-degree cone half-angles, and
-muzzles at X = +/-14 meters. The converted 200 m/s ballistic references below remain
+muzzles at X = +/-3 meters on the authored voxel model. The converted 200 m/s ballistic references below remain
 solver fixtures. See src/docs/combat.md for current tuning and measurements.
 - Kestrel maximum health: 50; Rusty cannon reload: 2 seconds per mounted weapon.
 - Rusty cannon launch speed: 200 meters/second. Apply constant downward

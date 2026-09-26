@@ -3,6 +3,13 @@
 [ext_resource type="PackedScene" path="res://scenes/ships/ship.tscn" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/ships/mounted_slot.tscn" id="2"]
 [ext_resource type="PackedScene" uid="uid://dgdooeqaxxrxt" path="res://scenes/weapons/rusty_cannon.tscn" id="3"]
+[ext_resource type="ArrayMesh" uid="uid://bbrhc5devnwfv" path="res://resources/models/airships/kestrel/balloon.obj" id="4"]
+[ext_resource type="ArrayMesh" uid="uid://p2u4e8vamq5f" path="res://resources/models/airships/kestrel/hull.obj" id="5"]
+[ext_resource type="Material" path="res://materials/ships/kestrel_palette.tres" id="6"]
+
+[sub_resource type="CapsuleShape3D" id="KestrelHull"]
+radius = 10.5
+height = 31.0
 
 [node name="Kestrel" unique_id=354340340 node_paths=PackedStringArray("mounted_slots") instance=ExtResource("1")]
 mounted_slots = [NodePath("VisualRoot/LeftSlot"), NodePath("VisualRoot/RightSlot")]
@@ -10,19 +17,24 @@ preferred_combat_positions = PackedStringArray("front_left", "left_back", "back"
 
 [node name="HullCollider" parent="." index="0"]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
+shape = SubResource("KestrelHull")
 
 [node name="Envelope" parent="VisualRoot" index="0"]
-transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 0, 3, 0.25)
+mesh = ExtResource("4")
+material_override = ExtResource("6")
 
 [node name="Gondola" parent="VisualRoot" index="1"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -15.0, 3.0)
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 0, -6, -1.75)
+mesh = ExtResource("5")
+material_override = ExtResource("6")
 
 [node name="LeftSlot" parent="VisualRoot" index="2" unique_id=854497040 instance=ExtResource("2")]
-transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -14.0, -13.0, 3.0)
+transform = Transform3D(-4.371139e-08, 0, 1, 0, 1, 0, -1, 0, -4.371139e-08, -3, -5, 0.75)
 cone_half_angle = 65.0
 equipment_scene = ExtResource("3")
 
 [node name="RightSlot" parent="VisualRoot" index="3" unique_id=952055517 instance=ExtResource("2")]
-transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 14.0, -13.0, 3.0)
+transform = Transform3D(-4.371139e-08, 0, -1, 0, 1, 0, 1, 0, -4.371139e-08, 3, -5, 0.75)
 cone_half_angle = 65.0
 equipment_scene = ExtResource("3")

@@ -161,7 +161,7 @@ func _check_mounts_and_health() -> void:
 	_check(player.maximum_health == 500 and player.current_health == 500 and enemy.current_health == 500, "Both factions start with tenfold ship health.")
 	await physics_frame
 	_check(Factions.are_hostile(player.faction, enemy.faction) and not Factions.are_hostile(player.faction, &"visitors"), "String factions share one hostility rule.")
-	_check(player.mounted_slots.size() == 2 and player.maximum_speed == 180 and is_equal_approx(player.hull_radius, 22.0), "Inherited Kestrel preserves the primitive ship and adds two mounts.")
+	_check(player.mounted_slots.size() == 2 and player.maximum_speed == 180 and is_equal_approx(player.hull_radius, 10.5), "Kestrel retains flight tuning and two mounts with its fitted model collider.")
 	_check(player.preferred_combat_positions == PackedStringArray(["front_left", "left_back", "back", "back_right", "right", "front_right"]), "Kestrel preserves the specified enabled bearings.")
 	var left := player.mounted_slots[0]
 	var right := player.mounted_slots[1]
