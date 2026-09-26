@@ -6,6 +6,8 @@ const SHIP_COUNT: int = 128
 const ROUTE_OBSTACLE_ID: int = 200000
 
 var _journey: Journey
+var _rate: int = Engine.physics_ticks_per_second
+var _delta: float = 1.0 / _rate
 var _failures: Array[String] = []
 var _visual: bool = false
 var _profile: bool = false
@@ -19,8 +21,6 @@ var _backlog_peak: int = 0
 
 
 func _initialize() -> void:
-	# These fixtures use a fixed 60 Hz reference timeline.
-	Engine.physics_ticks_per_second = 60
 	_visual = "--visual" in OS.get_cmdline_user_args()
 	_profile = "--profile" in OS.get_cmdline_user_args()
 	_run.call_deferred()
@@ -54,21 +54,21 @@ func _run() -> void:
 		navigation_debug.enabled = false
 	var timings := PackedFloat64Array()
 	var starting_route := _journey.anchor_route_position()
-	for tick in range(1800):
+	for tick in range(30 * _rate):
 		await physics_frame
 		var started := Time.get_ticks_usec()
-		_journey.step_simulation(1.0 / 60.0)
-		if tick >= 120:
+		_journey.step_simulation(_delta)
+		if tick >= 2 * _rate:
 			timings.append(float(Time.get_ticks_usec() - started) / 1000.0)
 		if _profile:
-			if tick == 120:
+			if tick == 2 * _rate:
 				_profile_phase = "debug_off"
 				_previous_frame = Time.get_ticks_usec()
 			# Pan at fleet altitude to exercise streaming alongside actual ship simulation.
-			rig.pan(Vector3(cos(tick / 180.0), 0.0, sin(tick / 180.0)) * 3.0)
-		if tick % 120 == 0:
+			rig.pan(Vector3(cos(tick * _delta / 3.0), 0.0, sin(tick * _delta / 3.0)) * (180.0 * _delta))
+		if tick % (2 * _rate) == 0:
 			_check_formation()
-		if tick == 900:
+		if tick == 15 * _rate:
 			if _profile:
 				_finish_profile_phase()
 				_profile_phase = "debug_on"

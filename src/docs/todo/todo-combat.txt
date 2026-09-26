@@ -430,14 +430,15 @@ src/docs/combat_review.md. Measurements: src/docs/combat_performance.md.
 
 [ ] COMBAT-03 — Release reliability and acceptance coverage (blocks shipping).
     Weapon reload emits at most one shot per tick and discards overshoot. Ten-shot/s
-    firing matches at 30/60/120 Hz; arbitrary faster rates remain quantized. Cover
-    supported future rates before introducing faster weapons.
+    firing is checked at the accepted 30 Hz baseline; arbitrary faster weapon
+    cadences remain quantized. Cover new reload intervals at 30 Hz before
+    introducing faster weapons.
     Finite death/unregister/external-delete, equipment replacement, and repeated
     Journey teardown checks now pass without stale targets or orphan Nodes.
     Current checks cover finite runs, not session-length stability. Run extended
     spawn/death/replacement/rebase and scene teardown cycles; verify stable live
     node/memory counts after warm-up and cleanup. Add focused adversarial fixtures
-    for current-speed crossing shots at 30/60/120 Hz, several lethal projectiles
+    for current-speed crossing shots at 30 Hz, several lethal projectiles
     in one tick, full-hull tunneling sweeps, and an obstacle just past the final
     lifetime-clipped segment. Existing impact checks chiefly use the original
     20-unit/s reference; direct duplicate damage tests do not cover every projectile
@@ -447,8 +448,8 @@ src/docs/combat_review.md. Measurements: src/docs/combat_performance.md.
     in src/docs/todo/blockers-terrain.txt.
 
 [ ] COMBAT-04 — Confirm combat feel/tuning (design acceptance, not a wiring failure).
-    Evaluate the 30 Hz playtest default with interpolation and retained weapon
-    targets. Automated checks do not establish hands-on acceptance.
+    Evaluate combat feel at the accepted 30 Hz baseline with interpolation and
+    retained weapon targets. Automated checks do not establish hands-on acceptance.
     Decide whether to replace the literal asymmetric Kestrel directions with
     symmetric broadsides. The current list omits left and retains unusable back.
     Confirm the authored 100-unit/s trial against the desired visible cannon arc:

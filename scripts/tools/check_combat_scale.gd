@@ -28,14 +28,6 @@ func _initialize() -> void:
 	_component_totals.resize(Journey.StepPhase.size())
 	_profile = "--profile" in OS.get_cmdline_user_args()
 	_visual = "--visual" in OS.get_cmdline_user_args()
-	for argument in OS.get_cmdline_user_args():
-		if argument.begins_with("--physics-hz="):
-			var value := argument.trim_prefix("--physics-hz=")
-			if not value.is_valid_int() or int(value) < 1 or int(value) > 240:
-				printerr("--physics-hz must be an integer from 1 to 240.")
-				quit(1)
-				return
-			Engine.physics_ticks_per_second = int(value)
 	_run.call_deferred()
 
 
@@ -62,7 +54,7 @@ func _run() -> void:
 	debug.enabled = false
 	_journey.camera_rig.orbit_distance = 360
 	_journey.camera_rig.focus_fleet()
-	# Keep native and scripted time aligned, with the same durations at each rate.
+	# Keep native and scripted time aligned with the project physics rate.
 	var rate := Engine.physics_ticks_per_second
 	var delta := 1.0 / rate
 	for tick in range(60 * rate):

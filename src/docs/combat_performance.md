@@ -13,7 +13,7 @@ Journey remains the registry/orchestration owner, ShipCombat owns pursuit and mo
 
 ## Method
 
-Godot 4.7.1 stable, Jolt, Forward Plus through D3D12, Windows, Ryzen 7 9800X3D, RTX 4090, 1920 x 1080. Render rate was uncapped; profiling launches used neither `--fixed-fps` nor screenshot capture. The current project setting is 30 physics Hz with interpolation; process-local overrides supplied the 60 Hz comparison.
+Godot 4.7.1 stable, Jolt, Forward Plus through D3D12, Windows, Ryzen 7 9800X3D, RTX 4090, 1920 x 1080. Render rate was uncapped; profiling launches used neither `--fixed-fps` nor screenshot capture. The project baseline is 30 physics Hz with interpolation; the now-removed process-local overrides supplied the historical 60 Hz comparison.
 
 `check_combat_scale.gd` uses 70 player ships and 150 enemies, 5,000 health, two cannons per ship, two-second reload, launch speed 100, gravity 3, range 100, and eight-second projectile lifetime. All serialized benchmark configuration values match across the three final comparison runs. The encounter lasts 60 simulated seconds: two warm-up seconds, 28 debug-off seconds, then 30 debug-on seconds. Ten scheduled casualties are replaced, two origin shifts occur, and the camera/landscape keep moving. A separate twelve-second phase fires synchronized miss volleys above the scenery, reaching 1,760 simultaneous shots before cleanup.
 
@@ -49,7 +49,7 @@ Early decision/query work rose slightly, from 0.731 to 0.815 ms per tick, includ
 
 Main exceeded the 16.67 ms scripted-step budget and accumulated physics catch-up frames. The final integration's script p95 is inside that budget; native physics/render work still applies, and later wall-frame p95 remains slightly above 16.67 ms. This is not a claim of locked 60 FPS.
 
-The first integration run exposed a scheduling regression: early script median was 10.167 ms but p95 reached 33.948 ms. Resetting each weapon's acquisition timer when pursuit changed synchronized searches across the fleet. Preserving its existing deadline reduced final early p95 to 14.405 ms. A focused regression now makes twelve ships acquire pursuit together and verifies their searches remain spread at 30 and 60 Hz.
+The first integration run exposed a scheduling regression: early script median was 10.167 ms but p95 reached 33.948 ms. Resetting each weapon's acquisition timer when pursuit changed synchronized searches across the fleet. Preserving its existing deadline reduced final early p95 to 14.405 ms. A focused regression made twelve ships acquire pursuit together and verified their searches remained spread at 30 and 60 Hz. The maintained fixture now runs once at the 30 Hz project baseline.
 
 ## 30 Hz result
 
@@ -87,12 +87,12 @@ Audit logs and the new JSON are under `C:/Users/lukas/AppData/Local/Temp/aerwyth
 
 ## Reproduction and local evidence
 
-Follow AGENTS.md for serial launches, isolated process-local APPDATA, and unique external logs. Set `AERWYTH_PROFILE_DIR` to a different external directory for each run, then run the console executable with these arguments:
+The measurements above preserve the historical rate comparison. Current checks use the accepted 30 Hz baseline and no longer expose a rate override. Follow AGENTS.md to select profiling only when relevant, with serial launches, isolated process-local APPDATA, and unique external logs. Set `AERWYTH_PROFILE_DIR` to a different external directory for each run, then run the console executable with these arguments:
 
 ```text
---path <absolute-project-path> --script res://scripts/tools/check_combat_scale.gd --log-file <external-log-file> -- --profile --physics-hz=60
+--path <absolute-project-path> --script res://scripts/tools/check_combat_scale.gd --log-file <external-log-file> -- --profile
 ```
 
-Use `--physics-hz=30` for the second rate. `combat-220.json` records the effective configuration, phase timings, counters, and resource samples. Do not use fixed render FPS for performance runs. The legacy functional checks deliberately select their 60 Hz reference physics rate; the targeting check's frozen fixtures exercise several script deltas directly.
+`combat-220.json` records the effective configuration, phase timings, counters, and resource samples at the project physics rate. Do not use fixed render FPS for performance runs. Functional fixtures also use the project rate; alternate-rate comparisons are no longer part of validation.
 
 Local evidence for this pass is under `C:/Users/lukas/AppData/Local/Temp/aerwyth-clean-combat-13b851f876214525a2cead4cd18e302c/`: `baseline60/`, `final60/`, and `optimized30/` contain the reported JSON/logs. `optimized60/` retains the intermediate scheduling regression. Temporary captures/logs are not repository artifacts; the measurements above preserve the findings if those files are removed.

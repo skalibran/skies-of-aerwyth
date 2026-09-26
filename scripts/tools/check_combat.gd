@@ -6,6 +6,8 @@ const CANNON := preload("res://resources/weapons/rusty_cannon.tres")
 const CANNON_SCENE := preload("res://scenes/weapons/rusty_cannon.tscn")
 const SLOT_SCENE := preload("res://scenes/ships/mounted_slot.tscn")
 
+var _rate: int = Engine.physics_ticks_per_second
+var _delta: float = 1.0 / _rate
 var _failures: Array[String] = []
 var _fixture: Node3D
 var _fleet: FleetController
@@ -13,13 +15,13 @@ var _projectiles: ProjectileController
 var _origin: FloatingOrigin
 var _next_id: int = 5000
 var _visual: bool = false
+var _extended: bool = false
 var _perception := CombatPerception.new()
 
 
 func _initialize() -> void:
-	# These fixtures use a fixed 60 Hz reference timeline.
-	Engine.physics_ticks_per_second = 60
 	_visual = "--visual" in OS.get_cmdline_user_args()
+	_extended = _visual or "--extended" in OS.get_cmdline_user_args()
 	_run.call_deferred()
 
 
@@ -43,12 +45,12 @@ func _run() -> void:
 	await _check_impacts()
 	_fixture.queue_free()
 	await process_frame
-	if "--fixtures-only" not in OS.get_cmdline_user_args():
+	if _extended:
 		await _check_journey()
 	for failure in _failures:
 		printerr("FAIL: ", failure)
 	if _failures.is_empty():
-		print("PASS: combat fixtures%s." % ("" if "--fixtures-only" in OS.get_cmdline_user_args() else " and journey lifecycle"))
+		print("PASS: combat fixtures%s." % (" and journey lifecycle" if _extended else ""))
 	quit(0 if _failures.is_empty() else 1)
 
 
@@ -296,21 +298,20 @@ func _check_equipment_assignment() -> void:
 func _check_impacts() -> void:
 	var player := _add_ship(Factions.PLAYER, Vector3.ZERO)
 	var enemy := _add_ship(Factions.ENEMY, Vector3(60, 0, 0))
-	for rate in [30, 60, 120]:
-		await physics_frame
-		enemy.current_health = enemy.maximum_health
-		_fire_at(player, Vector3.ZERO, enemy.global_position)
-		await _advance_projectiles(rate, 8.1)
-		_check(enemy.current_health == enemy.maximum_health - 5, "Swept ballistic hit deals exactly five damage at %s Hz." % rate)
+	await physics_frame
+	enemy.current_health = enemy.maximum_health
+	_fire_at(player, Vector3.ZERO, enemy.global_position)
+	await _advance_projectiles(8.1)
+	_check(enemy.current_health == enemy.maximum_health - 5, "Swept ballistic hit deals exactly five damage at the project physics rate.")
 	# The collision target moves independently after launch; prediction must lead it.
 	enemy.linear_velocity = Vector3(0, 0, 5)
 	var moving_time := Ballistics.intercept_time(enemy.global_position, enemy.linear_velocity, 20, 3, 8)
 	_projectiles.fire(player, Vector3.ZERO, Ballistics.launch_velocity(enemy.global_position, enemy.linear_velocity, 3, moving_time), CANNON)
 	var moving_health := enemy.current_health
-	for tick in range(480):
+	for tick in range(8 * _rate):
 		await physics_frame
-		enemy.global_position += enemy.linear_velocity / 60.0
-		_projectiles.step(1.0 / 60.0)
+		enemy.global_position += enemy.linear_velocity * _delta
+		_projectiles.step(_delta)
 		if _projectiles.shots.is_empty():
 			break
 	_check(enemy.current_health == moving_health - 5, "Lead fire hits a moving crossing target.")
@@ -325,7 +326,7 @@ func _check_impacts() -> void:
 	var health_before := enemy.current_health
 	var friendly_before := _projectiles.friendly_hits
 	_fire_at(player, Vector3.ZERO, enemy.global_position)
-	await _advance_projectiles(60, 8.1)
+	await _advance_projectiles(8.1)
 	_check(ally.current_health == ally.maximum_health and enemy.current_health == health_before and _projectiles.friendly_hits == friendly_before + 1, "An ally on the curved path consumes the shot without damage.")
 	ally.queue_free()
 	await process_frame
@@ -340,16 +341,16 @@ func _check_impacts() -> void:
 	island.global_position = blocker_position
 	await physics_frame
 	_fire_at(player, Vector3.ZERO, enemy.global_position)
-	await _advance_projectiles(60, 8.1)
+	await _advance_projectiles(8.1)
 	_check(enemy.current_health == health_before, "Collidable scenery intercepts the curve.")
 	island.queue_free()
 	await process_frame
 	enemy.global_position = Vector3(100, 0, 0)
 	await physics_frame
 	_fire_at(player, Vector3.ZERO, enemy.global_position)
-	for tick in range(300):
+	for tick in range(5 * _rate):
 		await physics_frame
-		_projectiles.step(1.0 / 60.0)
+		_projectiles.step(_delta)
 	_check(_projectiles.shots.size() == 1, "A 100-unit arc remains in flight beyond five seconds.")
 	if not _projectiles.shots.is_empty():
 		var shot := _projectiles.shots[0]
@@ -361,13 +362,13 @@ func _check_impacts() -> void:
 		_check((_projectiles.to_global(shot.position) - enemy.global_position).distance_to(relative_before) < 0.001, "Rebasing preserves the shot's relative position.")
 	player.queue_free()
 	await process_frame
-	await _advance_projectiles(60, 3.1)
+	await _advance_projectiles(3.1)
 	_check(enemy.current_health == health_before - 5, "A rebased shot survives shooter removal and still hits.")
 	var expiry_before := _projectiles.expired_count
 	var short_weapon := CANNON.duplicate() as WeaponDefinition
 	short_weapon.lifetime = 0.15
 	_projectiles.fire(enemy, enemy.global_position, Vector3.UP * 20, short_weapon)
-	await _advance_projectiles(30, 0.3)
+	await _advance_projectiles(0.3)
 	_check(_projectiles.shots.is_empty() and _projectiles.expired_count == expiry_before + 1, "Misses expire with a clipped final step.")
 	enemy.queue_free()
 	await process_frame
@@ -380,10 +381,10 @@ func _fire_at(shooter: Airship, muzzle: Vector3, target: Vector3) -> void:
 		_projectiles.fire(shooter, muzzle, Ballistics.launch_velocity(target - muzzle, Vector3.ZERO, 3, time), CANNON)
 
 
-func _advance_projectiles(rate: int, seconds: float) -> void:
-	for tick in range(ceili(seconds * rate)):
+func _advance_projectiles(seconds: float) -> void:
+	for tick in range(ceili(seconds * _rate)):
 		await physics_frame
-		_projectiles.step(1.0 / rate)
+		_projectiles.step(_delta)
 		if _projectiles.shots.is_empty():
 			break
 
@@ -407,10 +408,10 @@ func _check_journey() -> void:
 	var maximum_mean_distance: float = 0.0
 	var maximum_speed: float = 0.0
 	var timings := PackedFloat64Array()
-	for tick in range(10800):
+	for tick in range(180 * _rate):
 		await physics_frame
 		var start := Time.get_ticks_usec()
-		journey.step_simulation(1.0 / 60.0)
+		journey.step_simulation(_delta)
 		timings.append(float(Time.get_ticks_usec() - start) / 1000.0)
 		var enemies: int = 0
 		var players: int = 0
@@ -426,7 +427,7 @@ func _check_journey() -> void:
 		maximum_enemies = maxi(maximum_enemies, enemies)
 		maximum_players = maxi(maximum_players, players)
 		_check(enemies <= 100 and players <= 100, "Scheduled spawns independently cap each faction at one hundred living ships.")
-		if tick % 600 == 0:
+		if tick % (10 * _rate) == 0:
 			for ship in journey.ships:
 				var candidates := journey.island_spawner.navigation_candidates(ship)
 				for island in journey.island_spawner.obstacles:
@@ -434,17 +435,17 @@ func _check_journey() -> void:
 					var radius := ShipIslandNavigation.search_radius(ship, island.navigation_radius)
 					if Vector2(offset.x, offset.z).length_squared() <= radius * radius:
 						_check(island in candidates, "Spatial island filtering retains every potentially relevant obstacle through travel and rebasing.")
-		if tick == 58:
+		if tick == _rate - 2:
 			_check(enemies == 0 and players == 9, "First batch waits one second and retains the nine starting player ships.")
-		if tick == 60:
+		if tick == _rate:
 			_check(enemies == 2 and players == 11, "Each scheduled batch adds two ships to each faction.")
-		if tick == 1200:
+		if tick == 20 * _rate:
 			_check(journey.projectiles.fired_count > 0, "Both fleets close and begin firing.")
-		if tick == 1800:
+		if tick == 30 * _rate:
 			if _visual:
 				await _capture("combat-fleet")
 			journey.origin.shift_segments(-1)
-		if tick == 2100 and _visual and not journey.ships.is_empty():
+		if tick == 35 * _rate and _visual and not journey.ships.is_empty():
 			journey.camera_rig.follow_ship(journey.ships[0])
 			journey.camera_rig.zoom(27.0 - journey.camera_rig.camera.position.z)
 			await _capture("combat-kestrel")
@@ -540,17 +541,17 @@ func _check_journey() -> void:
 	journey.add_child(survivor)
 	survivor.global_position = journey.fleet.anchor.global_position
 	journey.register_ship(survivor)
-	journey.step_simulation(1.0 / 60.0)
+	journey.step_simulation(_delta)
 	_check(survivor.combat.has_target(), "New player ships acquire a main target.")
 	if survivor.combat.has_target():
 		var former := survivor.combat.target
 		former.take_damage(former.maximum_health, Factions.PLAYER)
-		journey.step_simulation(1.0 / 60.0)
+		journey.step_simulation(_delta)
 		_check(survivor.combat.has_target() and survivor.combat.target != former, "Target death selects another living opponent.")
 	for ship in journey.ships:
 		if ship.faction == Factions.ENEMY:
 			ship.take_damage(ship.maximum_health, Factions.PLAYER)
-	journey.step_simulation(1.0 / 60.0)
+	journey.step_simulation(_delta)
 	_check(not survivor.combat.has_target() and not survivor.combat_engaged and survivor.preferred_velocity != Vector3.ZERO, "The surviving player resumes travel when opponents disappear.")
 	print("COMBAT_DEMO ", JSON.stringify(demo_result))
 	journey.queue_free()

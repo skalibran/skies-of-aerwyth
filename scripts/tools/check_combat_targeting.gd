@@ -12,6 +12,8 @@ class ProbeWeapon extends MountedWeapon:
 		attempts.append(target.entity_id)
 		return Vector3.RIGHT if target.entity_id == reachable_id else Vector3.ZERO
 
+var _rate: int = Engine.physics_ticks_per_second
+var _delta: float = 1.0 / _rate
 var _failures: Array[String] = []
 var _fixture: Node3D
 var _projectiles: ProjectileController
@@ -209,17 +211,16 @@ func _check_firing() -> void:
 	var weapon := slot.equipment as MountedWeapon
 	weapon.definition = CANNON.duplicate()
 	weapon.weapon.reload_seconds = 0.1
-	for rate in [30, 60, 120]:
-		weapon.cooldown = 0
-		weapon._search_time = 0
-		weapon.firing_target = null
-		var shots := weapon.shots_fired
-		var searches := weapon.search_count
-		for tick in range(rate):
-			_perception.rebuild(_ships)
-			weapon.step(1.0 / rate, player, _perception, _projectiles)
-		_check(weapon.shots_fired - shots == 10 and weapon.search_count - searches == 5, "Ten-shot/s firing is independent of five acquisitions/s at 30/60/120 Hz.")
-		_projectiles.clear()
+	weapon.cooldown = 0
+	weapon._search_time = 0
+	weapon.firing_target = null
+	var shots := weapon.shots_fired
+	var searches := weapon.search_count
+	for tick in range(_rate):
+		_perception.rebuild(_ships)
+		weapon.step(_delta, player, _perception, _projectiles)
+	_check(weapon.shots_fired - shots == 10 and weapon.search_count - searches == 5, "Ten-shot/s firing is independent of five acquisitions/s at the project physics rate.")
+	_projectiles.clear()
 	var closer := _ship(Vector3(40, 0, 0))
 	_perception.rebuild(_ships)
 	weapon.step(1.0, player, _perception, _projectiles)
@@ -227,7 +228,7 @@ func _check_firing() -> void:
 	player.combat.target = closer
 	weapon.step(1.0, player, _perception, _projectiles)
 	_check(weapon.firing_target == closer and player.combat.target == closer, "A shootable main target takes preference without weapon-side pursuit changes.")
-	var shots := weapon.shots_fired
+	shots = weapon.shots_fired
 	closer.linear_velocity = Vector3.RIGHT * 300
 	weapon.cooldown = 0
 	weapon._search_time = 1.0
@@ -245,35 +246,34 @@ func _check_staggering() -> void:
 	for index in range(12):
 		players.append(_ship(Vector3.ZERO, Factions.PLAYER))
 	var target := _ship(Vector3.RIGHT * 60)
-	for rate in [30, 60]:
-		var peak_searches: int = 0
-		var total_searches: int = 0
+	var peak_searches: int = 0
+	var total_searches: int = 0
+	for player in players:
+		var weapon := player.mounted_slots[1].equipment as MountedWeapon
+		weapon.cooldown = 0
+		weapon._previous_main = null
+		weapon.firing_target = null
+		weapon.initialize_phase(player.entity_id, 1)
+		player.combat.target = target
+	for tick in range(int(0.2 * _rate)):
+		_perception.rebuild(_ships)
+		var searches: int = 0
 		for player in players:
 			var weapon := player.mounted_slots[1].equipment as MountedWeapon
-			weapon.cooldown = 0
-			weapon._previous_main = null
-			weapon.firing_target = null
-			weapon.initialize_phase(player.entity_id, 1)
-			player.combat.target = target
-		for tick in range(int(0.2 * rate)):
-			_perception.rebuild(_ships)
-			var searches: int = 0
-			for player in players:
-				var weapon := player.mounted_slots[1].equipment as MountedWeapon
-				var before := weapon.search_count
-				weapon.step(1.0 / rate, player, _perception, _projectiles)
-				searches += weapon.search_count - before
-			peak_searches = maxi(peak_searches, searches)
-			total_searches += searches
-		_check(total_searches == 12 and peak_searches <= 3, "Simultaneous pursuit acquisition preserves staggered weapon searches at 30/60 Hz.")
-		_projectiles.clear()
-		# Removing a shared firing target must preserve the same phase guarantees.
-		for player in players:
-			var weapon := player.mounted_slots[1].equipment as MountedWeapon
-			weapon.initialize_phase(player.entity_id, 1)
-			var deadline := weapon._search_time
-			weapon.forget(target)
-			_check(weapon.firing_target == null and weapon._search_time == deadline, "Target removal preserves staggered acquisition instead of synchronizing ready weapons.")
+			var before := weapon.search_count
+			weapon.step(_delta, player, _perception, _projectiles)
+			searches += weapon.search_count - before
+		peak_searches = maxi(peak_searches, searches)
+		total_searches += searches
+	_check(total_searches == 12 and peak_searches <= 3, "Simultaneous pursuit acquisition preserves staggered weapon searches at the project physics rate.")
+	_projectiles.clear()
+	# Removing a shared firing target must preserve the same phase guarantees.
+	for player in players:
+		var weapon := player.mounted_slots[1].equipment as MountedWeapon
+		weapon.initialize_phase(player.entity_id, 1)
+		var deadline := weapon._search_time
+		weapon.forget(target)
+		_check(weapon.firing_target == null and weapon._search_time == deadline, "Target removal preserves staggered acquisition instead of synchronizing ready weapons.")
 
 
 func _check_conservative_cone() -> void:

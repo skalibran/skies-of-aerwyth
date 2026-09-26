@@ -3,14 +3,14 @@ extends SceneTree
 const JOURNEY_SCENE := preload("res://scenes/world/journey.tscn")
 const SHIP_SCENE := preload("res://scenes/ships/ship.tscn")
 
+var _rate: int = Engine.physics_ticks_per_second
+var _delta: float = 1.0 / _rate
 var _failures: Array[String] = []
 var _journey: Journey
 var _visual: bool = false
 
 
 func _initialize() -> void:
-	# These fixtures use a fixed 60 Hz reference timeline.
-	Engine.physics_ticks_per_second = 60
 	_visual = "--visual" in OS.get_cmdline_user_args()
 	_run.call_deferred()
 
@@ -20,7 +20,7 @@ func _run() -> void:
 	_journey = JOURNEY_SCENE.instantiate() as Journey
 	_journey.combat_enabled = false
 	root.add_child(_journey)
-	await _frames(180)
+	await _frames(3 * _rate)
 	_check(_journey.ships.size() == 9, "The authored fleet has nine ships.")
 	_check(_journey.fleet.anchor.position.z < -1.0, "The fleet makes forward progress.")
 	_check_initial_surroundings()
@@ -36,7 +36,8 @@ func _run() -> void:
 	_check_rebase()
 	_check_spawns()
 	if not _visual:
-		await _check_long_travel()
+		if "--extended" in OS.get_cmdline_user_args():
+			await _check_long_travel()
 		await _check_slowdown()
 		await _check_membership()
 		await _check_encounters()
@@ -240,7 +241,7 @@ func _check_free_camera_follow() -> void:
 	var anchor_start := fleet.anchor.get_global_transform_interpolated().origin
 	var offset := rig.camera.global_position - anchor_start
 	var orientation := rig.camera.global_basis
-	await _frames(90)
+	await _frames(roundi(1.5 * _rate))
 	rig._process(0.0)
 	var anchor_now := fleet.anchor.get_global_transform_interpolated().origin
 	_check(anchor_now.z < anchor_start.z - 1.0, "The anchor advances during idle free-camera tracking.")
@@ -496,7 +497,7 @@ func _check_spawns() -> void:
 func _check_long_travel() -> void:
 	var first_goal := _journey.ships[0].travel.goals_reached
 	for batch in range(12):
-		await _frames(1200)
+		await _frames(20 * _rate)
 		for ship in _journey.ships:
 			_check(ship.global_position.is_finite() and ship.linear_velocity.is_finite(), "Ship positions and velocities stay finite.")
 			_check(absf(ship.visual_root.rotation.x) <= deg_to_rad(ship.pitch_limit_degrees) + 0.001, "Pitch remains bounded.")
@@ -513,7 +514,7 @@ func _check_long_travel() -> void:
 	print("Long travel: ", _journey.origin.shift_count, " shifts; ", _journey.island_spawner.records.size(), " records; ", _journey.island_spawner.active.size(), " live islands.")
 	# A fresh origin near an enormous route position keeps scene transforms small.
 	_set_distant_origin()
-	await _frames(180)
+	await _frames(3 * _rate)
 	_check_rebase()
 	_check_spawns()
 
@@ -522,12 +523,12 @@ func _check_slowdown() -> void:
 	_freeze_fixture(true)
 	var fleet := _journey.fleet
 	fleet.anchor.position.z -= 60.0
-	for tick in range(240):
-		fleet.advance(1.0 / 60.0)
+	for tick in range(4 * _rate):
+		fleet.advance(_delta)
 	_check(fleet.speed < fleet.cruise_speed * 0.5, "The anchor slows when the fleet is held behind.")
 	var gap := fleet.anchor.position.distance_to(fleet.average_position)
 	_freeze_fixture(false)
-	await _frames(2400)
+	await _frames(40 * _rate)
 	_check(fleet.anchor.position.distance_to(fleet.average_position) < gap * 0.6, "Ships recover after being held behind.")
 	_check(fleet.speed > fleet.cruise_speed * 0.8, "The anchor recovers cruising speed.")
 
@@ -551,14 +552,14 @@ func _check_membership() -> void:
 		_journey.unregister_ship(remaining)
 		remaining.queue_free()
 	var single_start := _journey.anchor_route_position()
-	await _frames(90)
+	await _frames(roundi(1.5 * _rate))
 	_check(_journey.fleet.members.size() == 1 and _journey.anchor_route_position().compare(single_start) < 0, "A single remaining ship keeps the fleet moving.")
 	var last_ship := _journey.ships[0]
 	_journey.unregister_ship(last_ship)
 	last_ship.queue_free()
 	await _frames(3)
 	anchor_position = _journey.fleet.anchor.position
-	await _frames(30)
+	await _frames(roundi(0.5 * _rate))
 	_check(_journey.fleet.speed == 0.0 and _journey.fleet.anchor.position == anchor_position, "An empty fleet stops the anchor safely.")
 	_check(_journey.camera_rig.global_position.is_equal_approx(anchor_position), "The camera keeps its anchor focus when no ships remain.")
 
@@ -586,7 +587,7 @@ func _check_encounters() -> void:
 			pair.append(ship)
 		var starts: Array[Vector3] = [pair[0].position, pair[1].position]
 		var minimum_clearance: float = INF
-		for tick in range(600):
+		for tick in range(10 * _rate):
 			await physics_frame
 			var first_axis := pair[0].basis.z * pair[0].hull_half_segment
 			var second_axis := pair[1].basis.z * pair[1].hull_half_segment

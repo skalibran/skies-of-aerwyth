@@ -4,13 +4,12 @@ const JOURNEY_SCENE := preload("res://scenes/world/journey.tscn")
 const SHIP_SCENE := preload("res://scenes/ships/ship.tscn")
 
 var _journey: Journey
+var _rate: int = Engine.physics_ticks_per_second
 var _failures: Array[String] = []
 var _visual: bool = false
 
 
 func _initialize() -> void:
-	# These fixtures use a fixed 60 Hz reference timeline.
-	Engine.physics_ticks_per_second = 60
 	_visual = "--visual" in OS.get_cmdline_user_args()
 	_run.call_deferred()
 
@@ -101,7 +100,7 @@ func _encounter(label: String, height: float, cluster: bool, friendly: bool, blo
 	var rebased := false
 	var passed := false
 	var lateral_motion: float = 0.0
-	for tick in range(3600):
+	for tick in range(60 * _rate):
 		await physics_frame
 		lateral_motion = maxf(lateral_motion, absf(ship.global_position.x))
 		if ship.island_navigation.has_waypoint():
@@ -112,10 +111,10 @@ func _encounter(label: String, height: float, cluster: bool, friendly: bool, blo
 				var after := ship.island_navigation.waypoint_position() - ship.global_position
 				_check(before.distance_to(after) < 0.001, label + ": detour waypoint survives rebasing.")
 				rebased = true
-		if tick % 10 == 0:
+		if tick % maxi(1, roundi(_rate / 6.0)) == 0:
 			query.transform = ship.hull_collider.global_transform
 			_check(ship.get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty(), label + ": the ship hull does not penetrate an island.")
-		if _visual and tick == 600:
+		if _visual and tick == 10 * _rate:
 			await _capture(label)
 		if ship.global_position.z < island.global_position.z - 70.0:
 			passed = true
@@ -134,14 +133,14 @@ func _unload_during_detour() -> void:
 	_create_journey()
 	var island := _add_island(5001, Vector3(0.0, 10.0, 0.0))
 	var ship := _add_ship(0.0)
-	for tick in range(30):
+	for tick in range(roundi(0.5 * _rate)):
 		await physics_frame
 	_check(ship.island_navigation.has_waypoint(), "Unloading fixture starts with an active detour.")
 	_journey.island_spawner.obstacles.erase(island)
 	_journey.island_spawner.active.erase(5001)
 	_journey.origin.unregister_root(island)
 	island.queue_free()
-	for tick in range(10):
+	for tick in range(roundi(_rate / 6.0)):
 		await physics_frame
 	_check(not ship.island_navigation.has_waypoint(), "Unloading an obstacle clears its detour reference.")
 	_journey.queue_free()
