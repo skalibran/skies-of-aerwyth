@@ -125,6 +125,7 @@ debug_navigation={
 
 [physics]
 
+common/physics_ticks_per_second=30
 3d/physics_engine="Jolt Physics"
 common/physics_interpolation=true
 
