@@ -1,7 +1,7 @@
 class_name JourneyProgress
 extends Node
 
-## Forward distance in world units, derived from the anchor's logical position.
+## Forward distance in meters (one world unit per meter), derived from the anchor's logical position.
 ## Logical segment/offset coordinates remain authoritative for world placement.
 var distance: float = 0.0
 var start_position := RoutePosition.new()

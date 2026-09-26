@@ -6,7 +6,7 @@
 
 [sub_resource type="FastNoiseLite" id="BandNoise"]
 seed = 29173
-frequency = 0.003
+frequency = 0.0003
 fractal_octaves = 2
 
 [resource]
@@ -14,4 +14,4 @@ script = ExtResource("1")
 grassland = ExtResource("2")
 mountains = ExtResource("3")
 band_noise = SubResource("BandNoise")
-band_warp_height = 8.0
+band_warp_height = 80.0

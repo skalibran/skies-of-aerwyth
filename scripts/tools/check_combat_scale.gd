@@ -3,7 +3,7 @@ extends SceneTree
 const JOURNEY := preload("res://scenes/world/journey.tscn")
 const KESTREL := preload("res://scenes/ships/kestrel.tscn")
 const CANNON := preload("res://resources/weapons/rusty_cannon.tres")
-const MISS_HEIGHT: float = 1000.0
+const MISS_HEIGHT: float = 10000.0
 
 var _journey: Journey
 var _failures: Array[String] = []
@@ -28,14 +28,6 @@ func _initialize() -> void:
 	_component_totals.resize(Journey.StepPhase.size())
 	_profile = "--profile" in OS.get_cmdline_user_args()
 	_visual = "--visual" in OS.get_cmdline_user_args()
-	for argument in OS.get_cmdline_user_args():
-		if argument.begins_with("--physics-hz="):
-			var value := argument.trim_prefix("--physics-hz=")
-			if not value.is_valid_int() or int(value) < 1 or int(value) > 240:
-				printerr("--physics-hz must be an integer from 1 to 240.")
-				quit(1)
-				return
-			Engine.physics_ticks_per_second = int(value)
 	_run.call_deferred()
 
 
@@ -60,9 +52,9 @@ func _run() -> void:
 	_build_fleets()
 	var debug := _journey.get_node("FleetAnchor/NavigationDebug") as ShipNavigationDebug
 	debug.enabled = false
-	_journey.camera_rig.orbit_distance = 360
+	_journey.camera_rig.orbit_distance = 3600
 	_journey.camera_rig.focus_fleet()
-	# Keep native and scripted time aligned, with the same durations at each rate.
+	# Keep native and scripted time aligned with the project physics rate.
 	var rate := Engine.physics_ticks_per_second
 	var delta := 1.0 / rate
 	for tick in range(60 * rate):
@@ -86,7 +78,7 @@ func _run() -> void:
 			_replace_casualty(Factions.ENEMY)
 		if tick == 15 * rate or tick == 45 * rate:
 			_journey.origin.shift_segments(-1)
-		_journey.camera_rig.pan(Vector3(cos(tick * delta / 3.0), 0, sin(tick * delta / 3.0)) * (21.0 * delta))
+		_journey.camera_rig.pan(Vector3(cos(tick * delta / 3.0), 0, sin(tick * delta / 3.0)) * (210.0 * delta))
 		if _visual and tick == 25 * rate:
 			await _capture("combat-220")
 		_check(_journey.ships.size() == 220, "Both fleets remain at the benchmark population after replacements.")
@@ -139,9 +131,9 @@ func _build_fleets() -> void:
 		ship.queue_free()
 	var center := _journey.fleet.anchor.global_position
 	for index in range(70):
-		_spawn(Factions.PLAYER, center + Vector3(-90 + (index % 7) * 12, (index % 3 - 1) * 14, (index / 7 - 4.5) * 15))
+		_spawn(Factions.PLAYER, center + Vector3(-900 + (index % 7) * 120, (index % 3 - 1) * 140, (index / 7 - 4.5) * 150))
 	for index in range(150):
-		_spawn(Factions.ENEMY, center + Vector3(35 + (index % 10) * 12, (index % 3 - 1) * 14, (index / 10 - 7) * 15))
+		_spawn(Factions.ENEMY, center + Vector3(350 + (index % 10) * 120, (index % 3 - 1) * 140, (index / 10 - 7) * 150))
 	var spawner := _journey.island_spawner
 	for island in spawner.obstacles:
 		_journey.origin.unregister_root(island)

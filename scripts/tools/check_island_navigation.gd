@@ -4,13 +4,12 @@ const JOURNEY_SCENE := preload("res://scenes/world/journey.tscn")
 const SHIP_SCENE := preload("res://scenes/ships/ship.tscn")
 
 var _journey: Journey
+var _rate: int = Engine.physics_ticks_per_second
 var _failures: Array[String] = []
 var _visual: bool = false
 
 
 func _initialize() -> void:
-	# These fixtures use a fixed 60 Hz reference timeline.
-	Engine.physics_ticks_per_second = 60
 	_visual = "--visual" in OS.get_cmdline_user_args()
 	_run.call_deferred()
 
@@ -18,9 +17,9 @@ func _initialize() -> void:
 func _run() -> void:
 	await _encounter("head_on", 0.0, false, false)
 	await _encounter("cluster", 0.0, true, false)
-	await _encounter("upper_cap", 16.0, false, false)
-	await _encounter("above", 35.0, false, false, false)
-	await _encounter("below", -45.0, false, false, false)
+	await _encounter("upper_cap", 160.0, false, false)
+	await _encounter("above", 350.0, false, false, false)
+	await _encounter("below", -450.0, false, false, false)
 	await _encounter("moving_goal", 0.0, false, true)
 	await _unload_during_detour()
 	for failure in _failures:
@@ -53,8 +52,8 @@ func _add_island(id: int, position: Vector3) -> FloatingIsland:
 	record.route_position = RoutePosition.from_scene(position.z, _journey.origin.segment)
 	record.lateral_position = position.x
 	record.altitude = _journey.fleet.anchor.global_position.y + position.y
-	record.radius = 22.0
-	record.depth = 25.0
+	record.radius = 220.0
+	record.depth = 250.0
 	_journey.island_spawner.records.append(record)
 	_journey.island_spawner._load_record(record)
 	return _journey.island_spawner.active[id]
@@ -65,43 +64,44 @@ func _add_ship(height: float, friendly: bool = false) -> Airship:
 	ship.entity_id = 9001
 	ship.faction = Factions.PLAYER if friendly else Factions.NEUTRAL
 	_journey.add_child(ship)
-	ship.global_position = Vector3(0.0, _journey.fleet.anchor.global_position.y + height, 90.0)
+	ship.global_position = Vector3(0.0, _journey.fleet.anchor.global_position.y + height, 900.0)
 	_journey.register_ship(ship)
-	ship.set_preferred_velocity(Vector3.FORWARD * 9.0)
+	ship.set_preferred_velocity(Vector3.FORWARD * 90.0)
 	if friendly:
 		ship.travel.goal_offset = Vector3.ZERO
 	ship.reset_physics_interpolation()
 	_journey.camera_rig.follow_ship(ship)
-	_journey.camera_rig.orbit_distance = 130.0
+	_journey.camera_rig.orbit_distance = 1300.0
 	return ship
 
 
 func _encounter(label: String, height: float, cluster: bool, friendly: bool, blocked: bool = true) -> void:
 	_create_journey()
-	var island := _add_island(5001, Vector3(-15.0 if cluster else 0.0, 10.0, 0.0))
+	var island := _add_island(5001, Vector3(-150.0 if cluster else 0.0, 100.0, 0.0))
 	if cluster:
-		_add_island(5002, Vector3(18.0, 10.0, -12.0))
+		_add_island(5002, Vector3(180.0, 100.0, -120.0))
 	var ship := _add_ship(height, friendly)
 	await physics_frame
 	await physics_frame
 	_check(island.collider.shape is CapsuleShape3D, label + ": islands use capsule colliders.")
 	if blocked:
 		var motion := PhysicsTestMotionParameters3D.new()
+		motion.margin = 0.01
 		motion.from = ship.global_transform
-		motion.motion = Vector3(0.0, 0.0, -180.0)
+		motion.motion = Vector3(0.0, 0.0, -1800.0)
 		var contact := PhysicsTestMotionResult3D.new()
 		_check(PhysicsServer3D.body_test_motion(ship.get_rid(), motion, contact) and contact.get_collider() is StaticBody3D, label + ": the capsule island collider blocks direct physical travel.")
 	var query := PhysicsShapeQueryParameters3D.new()
 	var probe := CapsuleShape3D.new()
-	probe.radius = ship.hull_radius - 0.15
-	probe.height = ship.hull_half_segment * 2.0 + ship.hull_radius * 2.0 - 0.3
+	probe.radius = ship.hull_radius - 1.5
+	probe.height = ship.hull_half_segment * 2.0 + ship.hull_radius * 2.0 - 3.0
 	query.shape = probe
 	query.collision_mask = 2
 	var detoured := false
 	var rebased := false
 	var passed := false
 	var lateral_motion: float = 0.0
-	for tick in range(3600):
+	for tick in range(60 * _rate):
 		await physics_frame
 		lateral_motion = maxf(lateral_motion, absf(ship.global_position.x))
 		if ship.island_navigation.has_waypoint():
@@ -110,21 +110,21 @@ func _encounter(label: String, height: float, cluster: bool, friendly: bool, blo
 				var before := ship.island_navigation.waypoint_position() - ship.global_position
 				_journey.origin.shift_segments(-1)
 				var after := ship.island_navigation.waypoint_position() - ship.global_position
-				_check(before.distance_to(after) < 0.001, label + ": detour waypoint survives rebasing.")
+				_check(before.distance_to(after) < 0.01, label + ": detour waypoint survives rebasing.")
 				rebased = true
-		if tick % 10 == 0:
+		if tick % maxi(1, roundi(_rate / 6.0)) == 0:
 			query.transform = ship.hull_collider.global_transform
 			_check(ship.get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty(), label + ": the ship hull does not penetrate an island.")
-		if _visual and tick == 600:
+		if _visual and tick == 10 * _rate:
 			await _capture(label)
-		if ship.global_position.z < island.global_position.z - 70.0:
+		if ship.global_position.z < island.global_position.z - 700.0:
 			passed = true
 			break
 	_check(passed, label + ": the ship passes the obstacle instead of stalling.")
 	if blocked:
-		_check(detoured and lateral_motion > 25.0, label + ": the blocked path produces a lateral detour.")
+		_check(detoured and lateral_motion > 250.0, label + ": the blocked path produces a lateral detour.")
 	else:
-		_check(not detoured and lateral_motion < 0.1, label + ": clear altitude does not require a lateral detour.")
+		_check(not detoured and lateral_motion < 1.0, label + ": clear altitude does not require a lateral detour.")
 	print(label, ": passed=", passed, ", detoured=", detoured, ", maximum lateral motion=", lateral_motion, ", final position=", ship.global_position)
 	_journey.queue_free()
 	await process_frame
@@ -132,16 +132,16 @@ func _encounter(label: String, height: float, cluster: bool, friendly: bool, blo
 
 func _unload_during_detour() -> void:
 	_create_journey()
-	var island := _add_island(5001, Vector3(0.0, 10.0, 0.0))
+	var island := _add_island(5001, Vector3(0.0, 100.0, 0.0))
 	var ship := _add_ship(0.0)
-	for tick in range(30):
+	for tick in range(roundi(0.5 * _rate)):
 		await physics_frame
 	_check(ship.island_navigation.has_waypoint(), "Unloading fixture starts with an active detour.")
 	_journey.island_spawner.obstacles.erase(island)
 	_journey.island_spawner.active.erase(5001)
 	_journey.origin.unregister_root(island)
 	island.queue_free()
-	for tick in range(10):
+	for tick in range(roundi(_rate / 6.0)):
 		await physics_frame
 	_check(not ship.island_navigation.has_waypoint(), "Unloading an obstacle clears its detour reference.")
 	_journey.queue_free()

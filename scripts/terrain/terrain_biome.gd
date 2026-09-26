@@ -1,7 +1,7 @@
 class_name TerrainBiome
 extends Resource
 
-@export var height_range := Vector2(-30.0, 70.0)
+@export var height_range := Vector2(-300.0, 700.0)
 @export var height_noise: FastNoiseLite
 @export_range(0.0, 4.0, 0.1) var height_contrast: float = 2.0
 @export var palette: Gradient

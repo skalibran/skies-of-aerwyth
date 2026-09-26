@@ -1,5 +1,7 @@
 # Rigid-body integration and comparison
 
+The measurements and spatial values below retain the units used when recorded. The subsequent [meter conversion](world_units.md) scales lengths, linear speeds, and linear accelerations by ten; its before/after measurements are recorded separately.
+
 Implemented on `combat-rigid-body-3d`, compared with CharacterBody3D commit `644e50a`. The [scripted-flight review](combat_review.md) retains its original measurements. This trial changes motion/contact ownership while preserving the authored flight response, combat rules, ships, equipment, spawn layout, terrain, and camera/anchor behavior. Active acceptance work lives in [movement tasks](todo/todo-movement.txt) and [combat gates](todo/todo-combat.txt).
 
 **Accepted on 2026-09-25:** the user chose rigid-body movement after playtesting because it feels much better. RigidBody3D is the maintained controller. The historical comparison below does not imply a runtime controller toggle or a retained CharacterBody implementation. Performance acceptance remains separate.
@@ -72,6 +74,6 @@ The rendered three-minute ordinary battle also passed ballistic, equipment, fact
 
 The configured main scene also completed a rendered startup run without errors. Inspected captures show the curved forward-flight pass, mounted primitive cannons, distinct faction tint, the persistent anchor marker, and a vertically spread battle with debug hidden.
 
-Use the serial launch, isolated APPDATA, and external log requirements in [AGENTS.md](../../AGENTS.md). The existing [combat profile command](combat.md#validation) reproduces the dense workload; omit `--fixed-fps` for performance measurements. Flight/contact checks use `--script res://scripts/tools/check_ship_flight.gd --fixed-fps 60`, with `-- --visual` and external `AERWYTH_CAPTURE_DIR` for the trajectory capture.
+Use the serial launch, isolated APPDATA, and external log requirements in [AGENTS.md](../../AGENTS.md). The existing [combat profile command](combat.md#validation) reproduces the dense workload; omit `--fixed-fps` for performance measurements. The rate comparisons above are historical; current flight/contact checks use the 30 Hz project baseline with `--script res://scripts/tools/check_ship_flight.gd --fixed-fps 30`, with `-- --visual` and external `AERWYTH_CAPTURE_DIR` for the trajectory capture.
 
 Trial logs, captures, and `combat-220.json` are outside the repository under `%TEMP%/aerwyth-rigid-trial-f876138993d647298061478415676881`. The baseline remains under `%TEMP%/aerwyth-combat-review-fce53ca8070742aaaaee805db87decad`. [Godot's RigidBody3D documentation](https://docs.godotengine.org/en/stable/classes/class_rigidbody3d.html) describes force-driven integration; [Performance documentation](https://docs.godotengine.org/en/stable/classes/class_performance.html) describes the engine monitor and its sampling limitations.

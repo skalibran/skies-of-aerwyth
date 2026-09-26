@@ -8,7 +8,7 @@ static func primary_axis(ship: Airship) -> Vector3:
 
 
 static func apply_forces(ship: Airship, desired: Vector3, delta: float) -> void:
-	if delta <= 0.0 or ship.freeze:
+	if not ship.alive or delta <= 0.0 or ship.freeze:
 		return
 	ship.apply_central_force(_acceleration(ship, desired, delta) * ship.mass)
 	# Upright hulls rotate only about world Y. Use the body's actual inertia so
@@ -42,7 +42,7 @@ static func _yaw_acceleration(ship: Airship, desired: Vector3, delta: float) -> 
 	var angular_acceleration := deg_to_rad(ship.yaw_acceleration_degrees)
 	var maximum_rate := deg_to_rad(ship.yaw_speed_degrees)
 	var error: float = 0.0
-	if Vector2(desired.x, desired.z).length_squared() > 0.01:
+	if Vector2(desired.x, desired.z).length_squared() > 1.0:
 		var primary := primary_axis(ship)
 		var heading := atan2(-desired.x, -desired.z) - atan2(-primary.x, -primary.z)
 		error = wrapf(heading - ship.global_rotation.y, -PI, PI)

@@ -1,7 +1,7 @@
 class_name CombatPerception
 extends RefCounted
 
-const CELL_SIZE: float = 100.0
+const CELL_SIZE: float = 1000.0
 
 # Derived from Journey's registry each combat tick. This helper supplies nearby
 # candidates and membership checks; pursuit and firing policy stay with callers.

@@ -4,14 +4,14 @@ extends Resource
 ## The source grid is cubic and independent of display level of detail.
 const CELLS_PER_PATCH: int = 32
 
-@export_enum("1 unit:1", "5 units:5", "10 units:10") var voxel_size: int = 5
+@export_enum("10 meters:10", "50 meters:50", "100 meters:100") var voxel_size: int = 50
 @export var grassland: TerrainBiome
 @export var mountains: TerrainBiome
-@export_range(0.0, 100000.0, 100.0) var mountain_start_distance: float = 1500.0
-@export_range(100.0, 100000.0, 100.0) var mountain_full_distance: float = 5000.0
+@export_range(0.0, 1000000.0, 1000.0) var mountain_start_distance: float = 15000.0
+@export_range(1000.0, 1000000.0, 1000.0) var mountain_full_distance: float = 50000.0
 @export var band_noise: FastNoiseLite
 ## Noise shifts palette thresholds without changing the surface.
-@export_range(0.0, 100.0, 1.0) var band_warp_height: float = 12.0
+@export_range(0.0, 1000.0, 10.0) var band_warp_height: float = 120.0
 @export_range(0.0, 0.8, 0.01) var cliff_darkening: float = 0.18
 
 
@@ -24,7 +24,7 @@ func maximum_height() -> float:
 
 
 func validate() -> void:
-	assert(voxel_size in [1, 5, 10])
+	assert(voxel_size in [10, 50, 100])
 	assert(grassland != null and mountains != null and band_noise != null)
 	assert(mountain_full_distance > mountain_start_distance)
 	grassland.validate()

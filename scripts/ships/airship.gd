@@ -11,25 +11,34 @@ const ENEMY_TINT := preload("res://materials/ships/enemy_tint.tres")
 @export var visual_root: Node3D
 @export var hull_collider: CollisionShape3D
 @export var mounted_slots: Array[MountedSlot] = []
+@export var death_smoke_scene: PackedScene
+## Direct Marker3D children supply positions for the ship-owned smoke effect.
+@export var death_smoke_points: Node3D
 @export var preferred_combat_positions := PackedStringArray()
 @export_range(1.0, 10000.0) var maximum_health: float = 500.0
-@export_range(10.0, 90.0) var engagement_distance: float = 60.0
+## Time retained after the first ground contact, including settling.
+@export_range(0.1, 60.0) var wreck_lifetime: float = 25.0
+@export_range(0.1, 120.0) var wreck_airborne_lifetime: float = 45.0
+@export_range(0.1, 10.0) var wreck_settle_seconds: float = 3.0
+## Fraction of project gravity used by passive wrecks; momentum/damping stay native.
+@export_range(0.01, 1.0, 0.01) var wreck_gravity_scale: float = 0.2
+@export_range(100.0, 900.0) var engagement_distance: float = 600.0
 @export_range(0.1, 1.0) var combat_speed_ratio: float = 0.5
 @export_range(2.0, 15.0) var combat_pass_seconds: float = 6.0
 ## Primary horizontal propulsion axis in ship-local space. Altitude uses lift control.
 @export var primary_movement_direction := Vector3.FORWARD
 ## Propulsion target limit. Contact impulses and retained lateral momentum can exceed it.
-@export_range(1.0, 40.0) var maximum_speed: float = 18.0
-@export_range(0.1, 15.0) var acceleration: float = 3.0
-@export_range(0.1, 15.0) var braking: float = 4.0
-@export_range(0.1, 10.0) var climb_speed: float = 2.0
+@export_range(10.0, 400.0) var maximum_speed: float = 180.0
+@export_range(1.0, 150.0) var acceleration: float = 30.0
+@export_range(1.0, 150.0) var braking: float = 40.0
+@export_range(1.0, 100.0) var climb_speed: float = 20.0
 @export_range(1.0, 90.0) var yaw_speed_degrees: float = 24.0
 @export_range(1.0, 180.0) var yaw_acceleration_degrees: float = 45.0
 ## Sideways momentum decay per second, independent of forward acceleration/braking.
 @export_range(0.1, 5.0) var lateral_drag: float = 1.4
 @export_range(0.0, 20.0) var pitch_limit_degrees: float = 8.0
 @export_range(0.0, 20.0) var bank_limit_degrees: float = 7.0
-@export_range(2.0, 20.0) var island_clearance: float = 8.0
+@export_range(20.0, 200.0) var island_clearance: float = 80.0
 
 var travel := ShipTravel.new()
 var island_navigation := ShipIslandNavigation.new()
@@ -40,11 +49,16 @@ var combat_engaged: bool = false
 var navigation_time_usec: int = 0
 var preferred_velocity := Vector3.ZERO
 var navigation_velocity := Vector3.ZERO
-var hull_radius: float = 2.2
-var hull_half_segment: float = 2.8
+var hull_radius: float = 22.0
+var hull_half_segment: float = 28.0
+var wreck_landed: bool = false
+var death_smoke: ShipDeathSmoke
+var _wreck_age: float = 0.0
+var _wreck_ground_age: float = 0.0
 
 
 func _ready() -> void:
+	set_physics_process(false)
 	var capsule := hull_collider.shape as CapsuleShape3D
 	assert(capsule != null, "The movement prototype expects a capsule hull.")
 	hull_radius = capsule.radius
@@ -76,9 +90,78 @@ func take_damage(amount: float, source_faction: StringName) -> void:
 	# A health listener can apply more damage synchronously. Only the call that
 	# crosses zero owns the death notification.
 	var died_now := not alive
+	if died_now:
+		_become_wreck()
 	health_changed.emit(current_health, maximum_health)
 	if died_now:
 		died.emit(self)
+
+
+func _become_wreck() -> void:
+	combat.clear_target()
+	combat_engaged = false
+	preferred_velocity = Vector3.ZERO
+	navigation_velocity = Vector3.ZERO
+	# Leave momentum with the engine and restore passive rigid-body behavior.
+	gravity_scale = wreck_gravity_scale
+	linear_damp_mode = RigidBody3D.DAMP_MODE_COMBINE
+	angular_damp_mode = RigidBody3D.DAMP_MODE_COMBINE
+	axis_lock_angular_x = false
+	axis_lock_angular_z = false
+	can_sleep = true
+	sleeping = false
+	continuous_cd = true
+	max_contacts_reported = 8
+	contact_monitor = true
+	_start_death_smoke()
+	set_physics_process(true)
+
+
+func _start_death_smoke() -> void:
+	if death_smoke_scene == null or not is_instance_valid(death_smoke_points):
+		return
+	var points: Array[Marker3D] = []
+	for child in death_smoke_points.get_children():
+		if child is Marker3D and not child.is_queued_for_deletion():
+			points.append(child)
+	if points.is_empty():
+		return
+	var instance := death_smoke_scene.instantiate()
+	death_smoke = instance as ShipDeathSmoke
+	if death_smoke == null:
+		instance.free()
+		push_error("Death smoke scenes must have a ShipDeathSmoke root.")
+		return
+	# Keep ownership with the ship and inherit wreck LOD visibility.
+	visual_root.add_child(death_smoke)
+	death_smoke.start(points)
+
+
+func _physics_process(delta: float) -> void:
+	_wreck_age += delta
+	var supported := false
+	if not freeze:
+		var state := PhysicsServer3D.body_get_direct_state(get_rid())
+		for index in range(state.get_contact_count()):
+			if state.get_contact_collider_object(index) is StaticBody3D and state.get_contact_local_normal(index).y > 0.5:
+				supported = true
+				break
+		if supported and not wreck_landed:
+			wreck_landed = true
+			if is_instance_valid(death_smoke):
+				death_smoke.stop()
+	if wreck_landed:
+		_wreck_ground_age += delta
+		if supported and _wreck_ground_age >= wreck_settle_seconds and linear_velocity.y < 1.0:
+			# A supported wreck becomes scenery after its brief physical settling.
+			freeze = true
+			collision_layer = 0
+			collision_mask = 0
+			hull_collider.set_deferred("disabled", true)
+		if _wreck_ground_age >= wreck_lifetime:
+			queue_free()
+	elif _wreck_age >= wreck_airborne_lifetime:
+		queue_free()
 
 
 func prepare_travel(delta: float, anchor_position: Vector3, anchor_velocity: Vector3) -> void:
@@ -90,6 +173,7 @@ func set_preferred_velocity(value: Vector3) -> void:
 
 
 func apply_movement_forces(delta: float, avoidance: Vector3, islands: Array[FloatingIsland], measure: bool = false) -> void:
+	navigation_time_usec = 0
 	if not alive or freeze or delta <= 0.0:
 		return
 	var started: int = Time.get_ticks_usec() if measure else 0
@@ -103,7 +187,7 @@ func apply_movement_forces(delta: float, avoidance: Vector3, islands: Array[Floa
 func _update_attitude(delta: float) -> void:
 	var horizontal_speed := Vector2(linear_velocity.x, linear_velocity.z).length()
 	var pitch_limit := deg_to_rad(pitch_limit_degrees)
-	var desired_pitch := clampf(atan2(linear_velocity.y, maxf(horizontal_speed, 0.1)), -pitch_limit, pitch_limit)
+	var desired_pitch := clampf(atan2(linear_velocity.y, maxf(horizontal_speed, 1.0)), -pitch_limit, pitch_limit)
 	var turn_fraction := clampf(angular_velocity.y / deg_to_rad(yaw_speed_degrees), -1.0, 1.0)
 	var desired_bank := turn_fraction * deg_to_rad(bank_limit_degrees)
 	visual_root.rotation.x = move_toward(visual_root.rotation.x, desired_pitch, deg_to_rad(12.0) * delta)

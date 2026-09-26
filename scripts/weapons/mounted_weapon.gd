@@ -6,6 +6,8 @@ const SEARCH_INTERVAL: float = 0.2
 const SOLVE_BUDGET: int = 4
 
 @export var aim_pivot: Node3D
+## Optional reusable shot smoke. Weapons sharing a scene share one world batch.
+@export var shot_smoke_scene: PackedScene
 
 var cooldown: float = 0.0
 var shots_fired: int = 0
@@ -172,7 +174,7 @@ func _try_fire(ship: Airship, target: Airship, projectiles: ProjectileController
 		return false
 	var up := Vector3.FORWARD if absf(launch.normalized().dot(Vector3.UP)) > 0.99 else Vector3.UP
 	aim_pivot.look_at(global_position + launch, up)
-	projectiles.fire(ship, global_position, launch, weapon)
+	projectiles.fire(ship, global_position, launch, weapon, shot_smoke_scene)
 	firing_target = target
 	cooldown = weapon.reload_seconds
 	shots_fired += 1

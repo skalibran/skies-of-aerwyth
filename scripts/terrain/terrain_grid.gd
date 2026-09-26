@@ -33,6 +33,6 @@ static func tile_start(tile: int, width: int) -> RoutePosition:
 
 static func cell_center(route: RoutePosition, width: int) -> RoutePosition:
 	assert(width > 0)
-	# Segment origins need not lie on the source grid (1024 is not divisible by 5/10).
+	# Segment origins need not lie on the source grid (10240 is not divisible by 50/100).
 	var phase := posmod(route.segment, width) * (int(RoutePosition.SEGMENT_LENGTH) % width) % width
 	return RoutePosition.new(route.segment, floorf((route.offset + phase) / width) * width + width * 0.5 - phase)

@@ -3,8 +3,8 @@ extends RefCounted
 
 var formation_extent: Vector3
 var step_radius: float
-var arrival_radius: float = 1.0
-var correction_speed: float = 3.0
+var arrival_radius: float = 10.0
+var correction_speed: float = 30.0
 var goal_offset := Vector3.ZERO
 var goals_reached: int = 0
 var rng := RandomNumberGenerator.new()
@@ -34,7 +34,7 @@ func choose_nearby_goal(relative_position: Vector3) -> void:
 		var offset := Vector3(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0))
 		if offset.length_squared() < 0.1:
 			continue
-		var candidate := relative_position + offset.normalized() * rng.randf_range(2.5, step_radius)
+		var candidate := relative_position + offset.normalized() * rng.randf_range(25.0, step_radius)
 		if _inside_formation(candidate):
 			goal_offset = candidate
 			return

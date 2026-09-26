@@ -66,7 +66,7 @@ func _run() -> void:
 		_save_results("cells.json")
 		quit()
 		return
-	for distance: float in [0.0, 3250.0, 6000.0]:
+	for distance: float in [0.0, 32500.0, 60000.0]:
 		var started := Time.get_ticks_usec()
 		_create_landscape(distance)
 		while _terrain.has_pending_work():
@@ -81,12 +81,12 @@ func _run() -> void:
 		await _measure("sky_only", 2.0)
 		_terrain.show()
 		_water.show()
-		await _measure("travel_9", 8.0, 9.0)
-		await _measure("camera_100", 5.0, 100.0)
-		await _measure("camera_300", 5.0, 300.0)
+		await _measure("travel_90", 8.0, 90.0)
+		await _measure("camera_1000", 5.0, 1000.0)
+		await _measure("camera_3000", 5.0, 3000.0)
 		# The fleet-altitude view does not exercise the most detailed terrain layout.
-		_camera.position.y = _terrain.profile.maximum_height() + 30.0
-		await _measure("close_camera_300", 5.0, 300.0)
+		_camera.position.y = _terrain.profile.maximum_height() + 300.0
+		await _measure("close_camera_3000", 5.0, 3000.0)
 		var settle_started := Time.get_ticks_usec()
 		while _terrain.has_pending_work() and Time.get_ticks_usec() - settle_started < 15000000:
 			await process_frame
@@ -139,12 +139,13 @@ func _create_landscape(distance: float, build_full: bool = true) -> void:
 	_water = WATER_SCENE.instantiate() as WaterSurface
 	_world.add_child(_water)
 	_origin.register_root(_water)
-	_water.recenter(Vector3(0.0, 380.0, _route.offset))
+	_water.recenter(Vector3(0.0, 3800.0, _route.offset))
 	_camera = Camera3D.new()
 	_camera.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
-	_camera.far = 3000.0
+	_camera.near = 0.5
+	_camera.far = 30000.0
 	_camera.rotation = Vector3(-0.52, 0.5, 0.0)
-	_camera.position = Vector3(0.0, 380.0, _route.offset) + _camera.basis.z * 180.0
+	_camera.position = Vector3(0.0, 3800.0, _route.offset) + _camera.basis.z * 1800.0
 	_world.add_child(_camera)
 	_origin.register_root(_camera)
 	_camera.make_current()
@@ -158,10 +159,10 @@ func _create_landscape(distance: float, build_full: bool = true) -> void:
 
 
 func _compare_cells() -> void:
-	# Equal physical coverage with exact 1-, 5-, or 10-unit cubic steps.
+	# Equal physical coverage with exact 10-, 50-, or 100-meter cubic steps.
 	# This is a local mesh experiment, not an alternate implementation of world LOD.
-	for distance: float in [0.0, 6400.0]:
-		for cell_size: int in [1, 5, 10]:
+	for distance: float in [0.0, 64000.0]:
+		for cell_size: int in [10, 50, 100]:
 			_create_landscape(distance, false)
 			var settings := _terrain.profile.duplicate() as TerrainProfile
 			settings.voxel_size = cell_size
@@ -173,8 +174,8 @@ func _compare_cells() -> void:
 			var height_count: Dictionary[float, bool] = {}
 			var vertices := 0
 			var triangles := 0
-			for z in range(0, 320, size):
-				for x in range(-160, 160, size):
+			for z in range(0, 3200, size):
+				for x in range(-1600, 1600, size):
 					var route := _route.advanced(z)
 					var started := Time.get_ticks_usec()
 					var mesh := builder.build(sampler, x, route.segment, int(route.offset), size, false)
@@ -195,16 +196,16 @@ func _compare_cells() -> void:
 					instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 					_terrain.add_child(instance)
 					instance.position = Vector3(x, 0.0, route.to_scene(_origin.segment))
-			var target := Vector3(-72.0, 0.0, _route.offset + 112.0)
+			var target := Vector3(-720.0, 0.0, _route.offset + 1120.0)
 			if distance > 0.0:
-				target = Vector3(0.0, 40.0, _route.offset + 160.0)
-			_camera.position = target + Vector3(65.0, 100.0, 85.0)
+				target = Vector3(0.0, 400.0, _route.offset + 1600.0)
+			_camera.position = target + Vector3(650.0, 1000.0, 850.0)
 			_camera.look_at(target)
 			for frame in range(90):
 				await process_frame
 			await RenderingServer.frame_post_draw
 			root.get_texture().get_image().save_png(_output.path_join("cells-%d-%d.png" % [int(distance), cell_size]))
-			var result := {"phase": "cell_comparison", "distance": distance, "cell_size": cell_size, "coverage": "320x320", "patches": build_ms.size(), "build_ms": _summary(build_ms), "total_build_ms": _sum(build_ms), "shape_resource_ms": _summary(shape_ms), "total_shape_resource_ms": _sum(shape_ms), "vertices": vertices, "triangles": triangles, "distinct_y": height_count.size()}
+			var result := {"phase": "cell_comparison", "distance": distance, "cell_size": cell_size, "coverage": "3200x3200", "patches": build_ms.size(), "build_ms": _summary(build_ms), "total_build_ms": _sum(build_ms), "shape_resource_ms": _summary(shape_ms), "total_shape_resource_ms": _sum(shape_ms), "vertices": vertices, "triangles": triangles, "distinct_y": height_count.size()}
 			_results.append(result)
 			print("PROFILE ", JSON.stringify(result))
 			_world.queue_free()
@@ -227,6 +228,7 @@ func _measure(label: String, seconds: float, speed: float = 0.0) -> void:
 	_terrain.process_ms.clear()
 	_terrain.updates_ms.clear()
 	_terrain.commits = 0
+	_terrain.maximum_collider_build_usec = 0
 	var frames_ms: Array[float] = []
 	var gpu_ms: Array[float] = []
 	var render_cpu_ms: Array[float] = []
@@ -250,16 +252,16 @@ func _measure(label: String, seconds: float, speed: float = 0.0) -> void:
 		primitives.append(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 		if speed > 0.0:
 			_camera.position.z += speed * delta * camera_direction
-			if label == "travel_9":
+			if label == "travel_90":
 				_route = _route.advanced(-speed * delta)
 				_origin.recenter_if_needed(_route.to_scene(_origin.segment))
 				_progression.update(_route)
-				_water.recenter(Vector3(0.0, 380.0, _route.to_scene(_origin.segment)))
+				_water.recenter(Vector3(0.0, 3800.0, _route.to_scene(_origin.segment)))
 			else:
 				# Reverse inside the actual viewing sphere rather than profiling unreachable views.
 				var relative_z := _camera.position.z - _route.to_scene(_origin.segment)
-				if absf(relative_z) > 700.0:
-					_camera.position.z = _route.to_scene(_origin.segment) + clampf(relative_z, -700.0, 700.0)
+				if absf(relative_z) > 7000.0:
+					_camera.position.z = _route.to_scene(_origin.segment) + clampf(relative_z, -7000.0, 7000.0)
 					camera_direction *= -1.0
 			stream_timer -= delta
 			if stream_timer <= 0.0:
@@ -272,6 +274,7 @@ func _measure(label: String, seconds: float, speed: float = 0.0) -> void:
 		"wall_frame_ms": _summary(frames_ms), "gpu_ms": _summary(gpu_ms), "render_cpu_ms": _summary(render_cpu_ms),
 		"terrain_process_ms": _summary(_terrain.process_ms), "region_update_ms": _summary(_terrain.updates_ms),
 		"mesh_upload_ms": _summary(_terrain.uploads_ms),
+		"collider_build_max_ms": _terrain.maximum_collider_build_usec / 1000.0,
 		"patch_build_ms": _build_summary(), "built_patches": _terrain.builds.size(),
 		"backlog_peak": backlog_peak, "backlog_end": _terrain._pending.size() + _terrain._jobs.size(), "committed_layouts": _terrain.commits,
 		"draw_calls": _summary(draws), "rendered_primitives": _summary(primitives), "geometry": _geometry(),
@@ -304,7 +307,7 @@ func _geometry() -> Dictionary:
 		vertices += chunk.mesh.surface_get_array_len(0)
 		triangles += chunk.mesh.surface_get_array_index_len(0) / 3
 		visible += int(chunk.visible)
-	return {"patches": _terrain.chunks.size(), "visible_patches": visible, "vertices": vertices, "triangles": triangles}
+	return {"patches": _terrain.chunks.size(), "visible_patches": visible, "source_colliders": _terrain.colliders.size(), "vertices": vertices, "triangles": triangles}
 
 
 func _summary(values: Array[float]) -> Dictionary:

@@ -62,7 +62,7 @@ func redraw() -> void:
 		elif ship.combat_engaged and ship.combat.has_target():
 			var goal := ship.combat.target.get_global_transform_interpolated().origin + ship.combat.goal_offset
 			_line(ship_position, goal, Color(1.0, 0.25, 0.12))
-			_draw_goal(goal, 1.5)
+			_draw_goal(goal, 15.0)
 		elif ship in journey.fleet.members:
 			var goal := anchor_position + ship.travel.goal_offset
 			_line(ship_position, goal, GOAL_COLOR)
@@ -71,7 +71,7 @@ func redraw() -> void:
 			var detour := ship.island_navigation.waypoint_position()
 			_line(ship_position, detour, DETOUR_COLOR)
 			for axis in [Vector3.RIGHT, Vector3.UP, Vector3.BACK]:
-				_line(detour - axis, detour + axis, DETOUR_COLOR)
+				_line(detour - axis * 10.0, detour + axis * 10.0, DETOUR_COLOR)
 		_draw_arrow(ship_position, ship.navigation_velocity * velocity_seconds, DESIRED_COLOR)
 		_draw_arrow(ship_position, ship.linear_velocity * velocity_seconds, VELOCITY_COLOR)
 	if _vertex_count > 0:
@@ -80,7 +80,7 @@ func redraw() -> void:
 
 func _draw_goal(goal: Vector3, radius: float) -> void:
 	for axis in [Vector3.RIGHT, Vector3.UP, Vector3.BACK]:
-		_line(goal - axis * 0.6, goal + axis * 0.6, GOAL_COLOR)
+		_line(goal - axis * 6.0, goal + axis * 6.0, GOAL_COLOR)
 	for index in range(GOAL_RING_SEGMENTS):
 		var ring_start := _goal_ring[index] * radius
 		var ring_end := _goal_ring[(index + 1) % GOAL_RING_SEGMENTS] * radius
@@ -89,7 +89,7 @@ func _draw_goal(goal: Vector3, radius: float) -> void:
 
 
 func _draw_arrow(start: Vector3, displacement: Vector3, color: Color) -> void:
-	if displacement.length_squared() < 0.001:
+	if displacement.length_squared() < 0.1:
 		return
 	var direction := displacement.normalized()
 	var side := direction.cross(Vector3.UP)
@@ -97,7 +97,7 @@ func _draw_arrow(start: Vector3, displacement: Vector3, color: Color) -> void:
 		side = direction.cross(Vector3.RIGHT)
 	side = side.normalized()
 	var tip := start + displacement
-	var head_size := minf(0.9, displacement.length() * 0.3)
+	var head_size := minf(9.0, displacement.length() * 0.3)
 	_line(start, tip, color)
 	_line(tip, tip - direction * head_size + side * head_size * 0.5, color)
 	_line(tip, tip - direction * head_size - side * head_size * 0.5, color)

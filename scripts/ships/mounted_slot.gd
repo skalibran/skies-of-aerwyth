@@ -31,9 +31,9 @@ signal equipment_changed
 		show_cone_preview = value
 		_update_cone_preview()
 ## Length along the cone's side. This only scales the preview, never weapon range.
-@export_range(1.0, 30.0) var cone_preview_size: float = 8.0:
+@export_range(10.0, 300.0) var cone_preview_size: float = 80.0:
 	set(value):
-		cone_preview_size = maxf(1.0, value)
+		cone_preview_size = maxf(10.0, value)
 		_update_cone_preview()
 
 var equipment: MountedEquipment

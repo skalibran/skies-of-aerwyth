@@ -1,19 +1,19 @@
 class_name IslandSpawner
 extends Node
 
-const NAVIGATION_CELL_SIZE: float = 256.0
+const NAVIGATION_CELL_SIZE: float = 2560.0
 
 @export var island_scene: PackedScene
 @export var container: Node3D
 @export var origin: FloatingOrigin
 @export var fleet: FleetController
 @export var world_seed: int = 84317
-@export_range(1.0, 300.0) var minimum_spacing: float = 8.0
-@export_range(1.0, 300.0) var maximum_spacing: float = 20.0
-@export_range(100.0, 4000.0) var look_ahead: float = 1500.0
-@export_range(100.0, 4000.0) var keep_behind: float = 1300.0
-@export_range(300.0, 3000.0) var field_half_width: float = 1600.0
-@export var altitude_range := Vector2(-180.0, 180.0)
+@export_range(10.0, 3000.0) var minimum_spacing: float = 80.0
+@export_range(10.0, 3000.0) var maximum_spacing: float = 200.0
+@export_range(1000.0, 40000.0) var look_ahead: float = 15000.0
+@export_range(1000.0, 40000.0) var keep_behind: float = 13000.0
+@export_range(3000.0, 30000.0) var field_half_width: float = 16000.0
+@export var altitude_range := Vector2(-1800.0, 1800.0)
 
 var records: Array[IslandRecord] = []
 var active: Dictionary[int, FloatingIsland] = {}
@@ -107,7 +107,7 @@ func _generate_through(anchor_position: RoutePosition, budget: int, clear_starti
 func _overlaps_starting_fleet(record: IslandRecord) -> bool:
 	var position := record.scene_position(origin.segment)
 	for ship in fleet.members:
-		var clearance := record.radius + record.depth + ship.hull_radius + ship.hull_half_segment + ship.island_clearance + 30.0
+		var clearance := record.radius + record.depth + ship.hull_radius + ship.hull_half_segment + ship.island_clearance + 300.0
 		if position.distance_squared_to(ship.global_position) < clearance * clearance:
 			return true
 	return false
@@ -119,8 +119,8 @@ func _generate_record() -> IslandRecord:
 	_next_id += 1
 	record.route_position = next_position
 	record.altitude = rng.randf_range(altitude_range.x, altitude_range.y)
-	record.radius = rng.randf_range(13.0, 22.0)
-	record.depth = rng.randf_range(16.0, 30.0)
+	record.radius = rng.randf_range(130.0, 220.0)
+	record.depth = rng.randf_range(160.0, 300.0)
 	record.lateral_position = rng.randf_range(-field_half_width, field_half_width)
 	return record
 

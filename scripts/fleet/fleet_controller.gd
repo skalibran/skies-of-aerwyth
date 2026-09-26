@@ -3,14 +3,14 @@ extends Node
 
 @export var anchor: Node3D
 @export var average_focus: Node3D
-@export var formation_extent := Vector3(180.0, 120.0, 180.0)
+@export var formation_extent := Vector3(1800.0, 1200.0, 1800.0)
 ## X starts inward combat steering and ends regrouping; Y breaks off pursuit.
-@export var combat_radii := Vector2(180.0, 260.0)
-@export_range(3.0, 40.0) var wander_step_radius: float = 16.0
-@export_range(0.1, 30.0) var cruise_speed: float = 9.0
-@export_range(0.1, 10.0) var acceleration: float = 1.5
-@export_range(0.0, 100.0) var comfortable_gap: float = 8.0
-@export_range(0.1, 100.0) var slowdown_distance: float = 16.0
+@export var combat_radii := Vector2(1800.0, 2600.0)
+@export_range(30.0, 400.0) var wander_step_radius: float = 160.0
+@export_range(1.0, 300.0) var cruise_speed: float = 90.0
+@export_range(1.0, 100.0) var acceleration: float = 15.0
+@export_range(0.0, 1000.0) var comfortable_gap: float = 80.0
+@export_range(1.0, 1000.0) var slowdown_distance: float = 160.0
 
 var members: Array[Airship] = []
 var average_position: Vector3:
@@ -53,7 +53,7 @@ func advance(delta: float) -> void:
 		velocity = Vector3.ZERO
 		return
 	var excess := maxf(0.0, anchor.global_position.distance_to(average_position) - comfortable_gap)
-	var ratio := excess / maxf(slowdown_distance, 0.1)
+	var ratio := excess / maxf(slowdown_distance, 1.0)
 	var target_speed := cruise_speed / (1.0 + ratio * ratio)
 	speed = move_toward(speed, target_speed, acceleration * delta)
 	velocity = Vector3.FORWARD * speed

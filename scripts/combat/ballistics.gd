@@ -10,7 +10,7 @@ static func intercept_time(relative: Vector3, target_velocity: Vector3, speed: f
 		return -1.0
 	if not is_finite(speed) or not is_finite(gravity) or not is_finite(lifetime):
 		return -1.0
-	if speed <= 0.0 or gravity < 0.0 or lifetime <= MIN_TIME or relative.length_squared() < 0.000001:
+	if speed <= 0.0 or gravity < 0.0 or lifetime <= MIN_TIME or relative.length_squared() < 0.0001:
 		return -1.0
 	var acceleration := Vector3.DOWN * gravity
 	var coefficients := PackedFloat64Array([
@@ -21,7 +21,7 @@ static func intercept_time(relative: Vector3, target_velocity: Vector3, speed: f
 	var roots := _roots_between(coefficients, MIN_TIME, lifetime)
 	for time in roots:
 		var launch := launch_velocity(relative, target_velocity, gravity, time)
-		if launch.is_finite() and absf(launch.length() - speed) < 0.001:
+		if launch.is_finite() and absf(launch.length() - speed) < 0.01:
 			return time
 	return -1.0
 

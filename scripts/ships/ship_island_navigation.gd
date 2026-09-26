@@ -22,7 +22,7 @@ func waypoint_position() -> Vector3:
 static func look_ahead_distance(ship: Airship) -> float:
 	var preferred := Vector2(ship.preferred_velocity.x, ship.preferred_velocity.z)
 	var speed := maxf(preferred.length(), ship.linear_velocity.length())
-	return maxf(90.0, speed * 6.0 + speed * speed / (2.0 * ship.braking))
+	return maxf(900.0, speed * 6.0 + speed * speed / (2.0 * ship.braking))
 
 
 static func search_radius(ship: Airship, maximum_island_radius: float) -> float:
@@ -33,7 +33,7 @@ func steer(ship: Airship, islands: Array[FloatingIsland], delta: float) -> Vecto
 	_retry_time = maxf(0.0, _retry_time - delta)
 	var start := Vector2(ship.global_position.x, ship.global_position.z)
 	var preferred := Vector2(ship.preferred_velocity.x, ship.preferred_velocity.z)
-	if preferred.length_squared() < 0.01:
+	if preferred.length_squared() < 1.0:
 		waypoint_island = null
 		return ship.preferred_velocity
 	var look_ahead := look_ahead_distance(ship)
@@ -46,7 +46,7 @@ func steer(ship: Airship, islands: Array[FloatingIsland], delta: float) -> Vecto
 		var blocked_end := false
 		for index in range(_near.size()):
 			if end.distance_squared_to(_centers[index]) < _radii[index] * _radii[index]:
-				end += direction * (_radii[index] * 2.0 + 1.0)
+				end += direction * (_radii[index] * 2.0 + 10.0)
 				blocked_end = true
 		if not blocked_end:
 			break
@@ -56,14 +56,14 @@ func steer(ship: Airship, islands: Array[FloatingIsland], delta: float) -> Vecto
 	if has_waypoint():
 		var point := waypoint_position()
 		var waypoint := Vector2(point.x, point.z)
-		if start.distance_to(waypoint) < 3.0 or not _segment_clear(start, waypoint):
+		if start.distance_to(waypoint) < 30.0 or not _segment_clear(start, waypoint):
 			waypoint_island = null
 	if not has_waypoint():
 		if _retry_time > 0.0 or not _plan(start, end, ship):
 			_retry_time = 0.25 if _retry_time <= 0.0 else _retry_time
 			return Vector3.ZERO
 	var displacement := waypoint_position() - ship.global_position
-	var detour_speed := minf(ship.maximum_speed * 0.75, maxf(preferred.length(), 6.0))
+	var detour_speed := minf(ship.maximum_speed * 0.75, maxf(preferred.length(), 60.0))
 	# Slow into corners so heavy ships do not cut through the clearance envelope.
 	return displacement.normalized() * minf(detour_speed, displacement.length() * 0.65)
 
@@ -79,7 +79,7 @@ func _collect_obstacles(ship: Airship, islands: Array[FloatingIsland], start: Ve
 		var center := Vector2(position.x, position.z)
 		if start.distance_squared_to(center) > pow(look_ahead + radius * 3.0, 2.0):
 			continue
-		if not island.overlaps_height(minf(ship.global_position.y, end_y), maxf(ship.global_position.y, end_y), ship.hull_radius + 2.0):
+		if not island.overlaps_height(minf(ship.global_position.y, end_y), maxf(ship.global_position.y, end_y), ship.hull_radius + 20.0):
 			continue
 		_near.append(island)
 		_centers.append(center)
@@ -92,13 +92,13 @@ func _segment_clear(start: Vector2, end: Vector2) -> bool:
 	for index in range(_near.size()):
 		var relative := start - _centers[index]
 		var radius_squared := _radii[index] * _radii[index]
-		if relative.length_squared() < radius_squared - 0.01:
+		if relative.length_squared() < radius_squared - 1.0:
 			# A ship pushed into soft clearance may leave it, but must not cut deeper.
-			if relative.dot(segment) < -0.01 or end.distance_squared_to(_centers[index]) < radius_squared:
+			if relative.dot(segment) < -1.0 or end.distance_squared_to(_centers[index]) < radius_squared:
 				return false
 			continue
-		var fraction := clampf(-relative.dot(segment) / maxf(length_squared, 0.001), 0.0, 1.0)
-		if (relative + segment * fraction).length_squared() < radius_squared - 0.01:
+		var fraction := clampf(-relative.dot(segment) / maxf(length_squared, 0.1), 0.0, 1.0)
+		if (relative + segment * fraction).length_squared() < radius_squared - 1.0:
 			return false
 	return true
 
@@ -108,7 +108,7 @@ func _plan(start: Vector2, end: Vector2, ship: Airship) -> bool:
 	var owners := PackedInt32Array([-1, -1])
 	for index in range(_near.size()):
 		# A circumscribed octagon keeps even the edges outside the padded circle.
-		var radius := _radii[index] / cos(PI / RING_POINTS) + 1.0
+		var radius := _radii[index] / cos(PI / RING_POINTS) + 10.0
 		for ring_index in range(RING_POINTS):
 			var angle := TAU * float(ring_index) / RING_POINTS
 			if ship.entity_id % 2 == 0:

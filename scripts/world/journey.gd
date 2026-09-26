@@ -13,6 +13,7 @@ enum StepPhase { DECISIONS, AVOIDANCE, ISLAND_NAVIGATION, FORCE_SUBMISSION, PROJ
 @export var progression: JourneyProgress
 @export var projectiles: ProjectileController
 @export var combat_spawner: CombatSpawner
+@export var wreck_controller: WreckController
 @export var combat_enabled: bool = true
 
 var ships: Array[Airship] = []
@@ -114,6 +115,12 @@ func step_simulation(delta: float) -> void:
 		step_timings_usec[StepPhase.AVOIDANCE] = Time.get_ticks_usec() - measured_at
 		measured_at = Time.get_ticks_usec()
 		step_timings_usec[StepPhase.ISLAND_NAVIGATION] = 0
+	# Resolve lethal hits before submitting this tick's control forces.
+	if combat_enabled:
+		projectiles.step(delta)
+	if profile_steps:
+		step_timings_usec[StepPhase.PROJECTILES] = Time.get_ticks_usec() - measured_at
+		measured_at = Time.get_ticks_usec()
 	# Submit control once per engine tick. Hull motion/contact solving happens in
 	# native physics; queries below still use the latest completed body state.
 	for index in range(ships.size()):
@@ -122,11 +129,6 @@ func step_simulation(delta: float) -> void:
 			step_timings_usec[StepPhase.ISLAND_NAVIGATION] += ships[index].navigation_time_usec
 	if profile_steps:
 		step_timings_usec[StepPhase.FORCE_SUBMISSION] = Time.get_ticks_usec() - measured_at - step_timings_usec[StepPhase.ISLAND_NAVIGATION]
-		measured_at = Time.get_ticks_usec()
-	if combat_enabled:
-		projectiles.step(delta)
-	if profile_steps:
-		step_timings_usec[StepPhase.PROJECTILES] = Time.get_ticks_usec() - measured_at
 		measured_at = Time.get_ticks_usec()
 	if combat_enabled:
 		for ship in ships:
@@ -163,9 +165,9 @@ func _remove_dead_ships() -> void:
 	while not _dead_ships.is_empty():
 		var ship: Airship = _dead_ships.back()
 		unregister_ship(ship)
-		ship.collision_layer = 0
-		ship.collision_mask = 0
-		ship.queue_free()
+		# Wrecks leave gameplay registries but still collide and rebase until expiry.
+		origin.register_root(ship)
+		wreck_controller.register_wreck(ship)
 		destroyed_count += 1
 
 

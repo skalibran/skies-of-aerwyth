@@ -1,7 +1,7 @@
 class_name ProjectileController
 extends Node3D
 
-const MAX_CHORD_ERROR: float = 0.01
+const MAX_CHORD_ERROR: float = 0.1
 
 class Shot extends RefCounted:
 	var position: Vector3
@@ -18,13 +18,14 @@ var fired_count: int = 0
 var damaging_hits: int = 0
 var friendly_hits: int = 0
 var expired_count: int = 0
+var smoke_batches: Dictionary[PackedScene, CannonShotSmoke] = {}
 var _mesh := SphereMesh.new()
 var _query := PhysicsRayQueryParameters3D.new()
 
 
 func _ready() -> void:
-	_mesh.radius = 0.3
-	_mesh.height = 0.6
+	_mesh.radius = 3.0
+	_mesh.height = 6.0
 	_mesh.radial_segments = 8
 	_mesh.rings = 4
 	var material := StandardMaterial3D.new()
@@ -35,7 +36,7 @@ func _ready() -> void:
 	_query.hit_from_inside = true
 
 
-func fire(shooter: Airship, muzzle: Vector3, velocity: Vector3, weapon: WeaponDefinition) -> void:
+func fire(shooter: Airship, muzzle: Vector3, velocity: Vector3, weapon: WeaponDefinition, smoke_scene: PackedScene = null) -> void:
 	var shot := Shot.new()
 	shot.position = to_local(muzzle)
 	shot.velocity = velocity
@@ -52,6 +53,22 @@ func fire(shooter: Airship, muzzle: Vector3, velocity: Vector3, weapon: WeaponDe
 	shot.visual.reset_physics_interpolation()
 	shots.append(shot)
 	fired_count += 1
+	if smoke_scene != null:
+		_emit_smoke(smoke_scene, muzzle, velocity.normalized())
+
+
+func _emit_smoke(scene: PackedScene, muzzle: Vector3, direction: Vector3) -> void:
+	if not smoke_batches.has(scene):
+		var instance := scene.instantiate()
+		var batch := instance as CannonShotSmoke
+		if batch == null:
+			instance.free()
+			push_error("Shot smoke scenes must have a CannonShotSmoke root.")
+			return
+		# Local particles inherit this root's origin shifts and outlive the gun.
+		add_child(batch)
+		smoke_batches[scene] = batch
+	smoke_batches[scene].burst(muzzle, direction)
 
 
 func step(delta: float) -> void:
@@ -61,7 +78,7 @@ func step(delta: float) -> void:
 		var source := shot.source.get_ref() as Airship
 		_query.exclude = [source.get_rid()] if is_instance_valid(source) else []
 		var remaining_step := minf(delta, shot.remaining)
-		var maximum_step := sqrt(8.0 * MAX_CHORD_ERROR / maxf(shot.gravity, 0.001))
+		var maximum_step := sqrt(8.0 * MAX_CHORD_ERROR / maxf(shot.gravity, 0.01))
 		var impacted := false
 		while remaining_step > 0.0000001:
 			var duration := minf(remaining_step, maximum_step)
@@ -90,6 +107,8 @@ func clear() -> void:
 	for shot in shots:
 		shot.visual.queue_free()
 	shots.clear()
+	for batch in smoke_batches.values():
+		batch.clear()
 
 
 func _resolve_hit(shot: Shot, collider: Object) -> void:

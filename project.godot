@@ -128,6 +128,14 @@ debug_navigation={
 common/physics_ticks_per_second=30
 3d/physics_engine="Jolt Physics"
 common/physics_interpolation=true
+3d/default_gravity=98.0
+jolt_physics_3d/simulation/continuous_cd_movement_threshold=0.05
+jolt_physics_3d/simulation/continuous_cd_max_penetration=0.01
+jolt_physics_3d/simulation/body_pair_contact_cache_distance_threshold=0.01
+jolt_physics_3d/simulation/bounce_velocity_threshold=10.0
+jolt_physics_3d/simulation/penetration_slop=0.2
+jolt_physics_3d/simulation/sleep_velocity_threshold=0.3
+jolt_physics_3d/simulation/speculative_contact_distance=0.2
 
 [rendering]
 

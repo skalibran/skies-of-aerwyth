@@ -1,6 +1,10 @@
 class_name VoxelTerrain
 extends Node3D
 
+signal layout_changed
+
+const COLLISION_LAYER: int = 8
+
 class Patch:
 	var x: int
 	var segment: int
@@ -31,7 +35,7 @@ class BuildJob:
 @export var material: Material
 @export var origin: FloatingOrigin
 @export var progression: JourneyProgress
-## Root coverage includes the 900-unit camera sphere and 3000-unit far plane.
+## Root coverage includes the 9000-meter camera sphere and 30000-meter far plane.
 @export_range(1, 8, 1) var chunk_radius: int = 4
 ## Larger values retain source voxels farther from the camera.
 @export_range(1.0, 4.0, 0.25) var detail_distance: float = 2.0
@@ -40,6 +44,8 @@ class BuildJob:
 
 var sampler: TerrainSampler
 var chunks: Dictionary[String, MeshInstance3D] = {}
+var colliders: Dictionary[String, StaticBody3D] = {}
+var maximum_collider_build_usec: int = 0
 var desired: Dictionary[String, Patch] = {}
 var _pending: Array[Patch] = []
 var _jobs: Dictionary[String, BuildJob] = {}
@@ -75,12 +81,14 @@ func _discard_generation() -> void:
 	for chunk in chunks.values():
 		chunk.queue_free()
 	chunks.clear()
+	colliders.clear()
 	desired.clear()
 	_pending.clear()
 	sampler = null
 	_region_key = ""
 	_initialized = false
 	_layout_dirty = false
+	layout_changed.emit()
 
 
 func has_pending_work() -> bool:
@@ -92,13 +100,29 @@ func has_pending_work() -> bool:
 	return false
 
 
+## Every patch under the footprint must actually display the source grid.
+func has_source_detail(position_in_world: Vector3, radius: float) -> bool:
+	if not is_visible_in_tree():
+		return false
+	var size := TerrainProfile.CELLS_PER_PATCH * profile.voxel_size
+	var first_z := TerrainGrid.tile_at(RoutePosition.from_scene(position_in_world.z - radius, origin.segment), size)
+	var last_z := TerrainGrid.tile_at(RoutePosition.from_scene(position_in_world.z + radius, origin.segment), size)
+	for z in range(first_z, last_z + 1):
+		var start := TerrainGrid.tile_start(z, size)
+		for x in range(floori((position_in_world.x - radius) / size), floori((position_in_world.x + radius) / size) + 1):
+			var key := "%d:%d:%d:%d" % [x * size, start.segment, int(start.offset), size]
+			if not chunks.has(key) or not chunks[key].visible:
+				return false
+	return true
+
+
 func update_region(world_x: float, route: RoutePosition, camera_position: Vector3) -> void:
 	var root_size := profile.root_size()
 	var root_x := floori(world_x / root_size)
 	var root_z := TerrainGrid.tile_at(route, root_size)
 	var view_route := RoutePosition.from_scene(camera_position.z, origin.segment)
 	# Quantizing the LOD focus avoids new layouts for every tiny camera move.
-	var focus_step := maxi(32, profile.voxel_size * 8)
+	var focus_step := maxi(320, profile.voxel_size * 8)
 	var view_x := floori(camera_position.x / focus_step) * focus_step
 	view_route = TerrainGrid.cell_center(view_route, focus_step).advanced(-focus_step * 0.5)
 	var view_y := floori(maxf(0.0, camera_position.y - profile.maximum_height()) / focus_step) * focus_step
@@ -196,6 +220,18 @@ func _publish_patch(patch: Patch, arrays: Array, _build_ms: float) -> void:
 	origin.register_root(chunk)
 	chunk.reset_physics_interpolation()
 	chunks[patch.key()] = chunk
+	if patch.size == TerrainProfile.CELLS_PER_PATCH * profile.voxel_size:
+		var started := Time.get_ticks_usec()
+		var body := StaticBody3D.new()
+		# Staged detail does not collide until it becomes the visible layout.
+		body.collision_layer = 0
+		body.collision_mask = 0
+		var collider := CollisionShape3D.new()
+		collider.shape = mesh.create_trimesh_shape()
+		body.add_child(collider)
+		chunk.add_child(body)
+		colliders[patch.key()] = body
+		maximum_collider_build_usec = maxi(maximum_collider_build_usec, Time.get_ticks_usec() - started)
 
 
 func _select_patch(x: int, segment: int, offset_z: int, size: int, view_x: int, view_route: RoutePosition, view_y: int) -> void:
@@ -231,9 +267,15 @@ func _commit_region() -> void:
 			_remove_chunk(key)
 		else:
 			chunks[key].visible = true
+			if colliders.has(key):
+				colliders[key].collision_layer = COLLISION_LAYER
+	layout_changed.emit()
 
 
 func _remove_chunk(key: String) -> void:
+	if colliders.has(key):
+		colliders[key].collision_layer = 0
+		colliders.erase(key)
 	origin.unregister_root(chunks[key])
 	chunks[key].queue_free()
 	chunks.erase(key)
