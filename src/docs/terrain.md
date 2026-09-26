@@ -1,6 +1,6 @@
 # Voxel terrain and journey progression
 
-One world unit is one meter; see the [unit conversion](world_units.md). Terrain is scenery generated with [FastNoiseLite](https://docs.godotengine.org/en/stable/classes/class_fastnoiselite.html). Its authoritative grid currently uses **50-meter cubic voxels** as a visual trial. TerrainProfile also supports 100-meter and 10-meter grids. Detailed assets use 1 meter per voxel; rough asset shapes use ten times that size. Full-detail patches have static collision for wrecks. Destruction, caves, and vegetation are not implemented. Default heights remain below the fleet and floating islands.
+One world unit is one meter; see the [unit conversion](world_units.md). Terrain is scenery generated with [FastNoiseLite](https://docs.godotengine.org/en/stable/classes/class_fastnoiselite.html). Its authoritative grid currently uses **50-meter cubic voxels** as a visual trial. TerrainProfile also supports 100-meter and 10-meter grids. Detailed assets use 1 meter per voxel; rough asset shapes use ten times that size. Full-detail patches have static collision for wrecks. Destruction, caves, and vegetation are not implemented. Default heights remain below the fleet's cruising altitude; mountain peaks reach into the lower floating-island altitude band.
 
 The [landscape performance investigation](terrain_performance.md) identified CPU meshing stalls. Mesh merging and adaptive detail remain, with background array generation added for this trial. Active generation work and remaining contact/placement requirements live in the [generation task list](todo/blockers-terrain.txt).
 
@@ -12,15 +12,15 @@ The scalar is convenient for thresholds and presentation. Signed segment/offset 
 
 Terrain is the first progression-dependent content. Every ground sample evaluates the same distance formula for **its own logical Z**, relative to the journey start. It does not use the fleet's current distance as a global terrain modifier. Distant mountains can be seen ahead before reaching them; passed grasslands retain their original shape and colors when revisited.
 
-Defaults:
+Authored Journey distances:
 
 | Travel distance | Terrain |
 | --- | --- |
-| 0–15000 meters | Rolling grassland. |
-| 15000–50000 meters | Smooth transition in landform height and palette. |
-| 50000+ meters | Mountain peaks with broad slopes. |
+| 0–1500 meters | Rolling grassland. |
+| 1500–10000 meters | Smooth transition in landform height and palette. |
+| 10000+ meters | Mountain peaks with broad slopes and dry valleys. |
 
-At 32500 meters the blend is 50%. The smoothstep transition has a gentle start and finish. Biome definitions and transition distances are tuning choices, not final balance.
+At 5750 meters the blend is 50%. At the fleet's 25 m/s cruise speed, blending begins after about one minute and reaches full mountains after about six minutes forty seconds, excluding acceleration and slowdowns. The 8500-meter smoothstep transition has a gentle start and finish. Biome definitions and transition distances are tuning choices, not final balance.
 
 ## Authoring
 
@@ -30,8 +30,9 @@ Open [journey_terrain.tres](../../resources/terrain/journey_terrain.tres), or Jo
 | --- | --- |
 | Voxel Size | Cubic source grid: 50 meters for this trial, or 100/10 meters for comparison. Restart after changing it; patch extents and height quantization adapt together. |
 | Mountain Start / Full Distance | Beginning and end of the progression interval. Full must exceed Start. |
-| Biome Height Range | Surface Y limits, divisible by Voxel Size. Grassland defaults to -300…700 (21 possible levels at size 50); mountains to -600…1300. Negative heights lie below the water surface. |
+| Biome Height Range | Surface Y limits, divisible by Voxel Size. Grassland defaults to -300…700 (21 possible levels at size 50); mountains to 800…3400. Negative heights lie below the water surface. |
 | Biome Height Noise | Seed, frequency, octaves, gain, and domain warp. Lower frequency makes broader landforms; higher-frequency octaves roughen edges, while domain warp bends regular contours. |
+| Biome Height Power | Tapers the normalized noise before contrast: 1 preserves its shape; higher powers narrow the upper slopes and summits. Mountains use 2, grassland 1. |
 | Biome Height Contrast | Smooth contrast within the height range. Higher values emphasize relief; a soft response avoids abruptly clipping high noise into flat plateaus. Values below one reduce relief continuously to a flat midpoint at zero. |
 | Biome Palette | Gradient stops map the biome height range to 0…1. Keep Constant interpolation for discrete elevation bands. |
 | Band Noise / Band Warp Height | Independent noise shifts color boundaries so equal heights need not share a color. |
@@ -39,11 +40,13 @@ Open [journey_terrain.tres](../../resources/terrain/journey_terrain.tres), or Jo
 
 The sampler blends the two unquantized elevations first, then rounds to the nearest selected voxel height. Color lookup uses the blended height range and noise-varied bands, with a gradual palette blend along the route. This preserves cubic steps while removing an abrupt biome boundary. One setting controls both horizontal and vertical voxel size. Current height limits are compatible with all three supported sizes, so changing Voxel Size alone is enough for a comparison.
 
-Grassland uses green bands and a wider -300…700 height range, replacing the previous four-level terraces. Lower contrast (1.6) and a normalized tanh response avoid hard-clipped hilltops; five octaves with gain 0.45 keep irregular edges without dominating the broad hills. Mountains use ordinary OpenSimplex2 height noise rather than folding every zero crossing into a crest. Four octaves, gain 0.35, and gentler domain warping produce broad bases and rising slopes with quieter fine detail. The same soft contrast preserves summit variation. Mountain height limits remain -600…1300, preserving clearance below the fleet/islands. Ships currently navigate only around floating islands; terrain avoidance is not implemented.
+Grassland uses green bands and a wider -300…700 height range, replacing the previous four-level terraces. Lower contrast (1.6) and a normalized tanh response avoid hard-clipped hilltops; five octaves with gain 0.45 keep irregular edges without dominating the broad hills.
+
+Mountains use ridged OpenSimplex2 noise at frequency 0.000075, with four octaves, gain 0.45, weighted strength 0.4, and broad domain warping. The larger base scale spreads out the ranges; Height Power 2 tapers the upper slopes into narrower crests. Contrast 1 keeps summit heights varied without flattening them into plateaus. Mountain height limits are 800…3400, giving elevated valleys and taller peaks while keeping full mountain terrain above sea level; ponds can remain in the grassland and early blend. Peaks remain below the fleet's 3800-meter cruising altitude but can intersect low floating islands, whose placement is independent of terrain height. Ships currently navigate only around floating islands; terrain avoidance is not implemented.
 
 ## Water and sea level
 
-Water is a flat scenery surface at **Y = 0**. Negative terrain heights form submerged basins; dry voxel columns naturally divide them into ponds. Heights are not clamped to sea level. The fleet starts at Y = 3800 and island reference heights span 2000…5600, preserving clearance above the raised landscape. Raising this whole flight space does not change route progression, formation offsets, or island avoidance.
+Water is a flat scenery surface at **Y = 0**. Negative terrain heights form submerged basins; dry voxel columns naturally divide them into ponds. Heights are not clamped to sea level. The fleet starts at Y = 3800 and island reference heights span 2000…5600. The fleet starts above the landscape, while the lower island band overlaps mountain elevations. These flight-space heights do not change route progression, formation offsets, or island avoidance.
 
 [water.tscn](../../scenes/water/water.tscn) contains one plane and its ShaderMaterial. Edit its shader parameters in the Inspector to tune shallow/deep/shore/highlight colors, depth-band size, shore depth, ripple strength, and animation speed. The [voxel water shader](../../shaders/water/voxel_water.gdshader) uses stepped depth colors and slowly changing ten-meter square highlights; it never displaces vertices or rounds the blocky shoreline. Fine highlights fade at a distance to reduce shimmer.
 
@@ -60,6 +63,14 @@ TerrainBiome owns each immutable landform and palette definition. TerrainProfile
 `sample(world_x, segment, offset_z)` returns continuous grassland noise in X, mountain noise in Y, and band noise in Z. `mountain_weight()` resolves location-based progression. `height_from_noise()` and `color_at()` produce the blended terrain. `surface_height(world_x, route)` returns the exact source column top on the selected grid, regardless of rendering detail.
 
 No model catalog or placement framework is implemented. Sampling never consumes island or ship RNG. Placement requirements are recorded under GEN-02 in the [generation task list](todo/blockers-terrain.txt).
+
+## Horizon haze
+
+Journey's WorldEnvironment owns shared depth fog for terrain, water, ships, and islands. It begins at the camera with a linear depth curve (1.0), providing light atmospheric haze nearby and progressively stronger fading with distance. It reaches full opacity at 28000 meters, before the camera's 30000-meter far clipping plane. This single fog profile supplies both atmospheric depth and horizon concealment; the former 12000-meter clear zone removed the nearer haze. Tune these values on Journey → WorldEnvironment → Environment → Fog.
+
+Fog uses the procedural sky's authored horizon color, with density 1 and full sky affect. Aerial perspective is disabled so fully obscured terrain and water match the fogged background; sampling the sky's darker lower hemisphere left a visible band at the clipping boundary. This is ordinary depth fog, with no volumetric fog or extra terrain coverage.
+
+Forward mountain and backward grassland/water captures were compared at 30000- and 40000-meter camera far distances. Mean summed RGB differences were 0.000033 and 0.000107, respectively, confirming that extending the clipping plane exposed no visible horizon seam in those views. The nearer atmospheric haze was inspected against the previous clear-zone profile. Close water, biome views, and rendered water rebasing also passed. These are visual checks, not performance measurements. Islands still stream inside the visible range; their separate visibility work remains in [GEN-03](todo/blockers-terrain.txt).
 
 ## Meshing, detail, and precision
 

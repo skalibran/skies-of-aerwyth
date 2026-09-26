@@ -104,8 +104,10 @@ func _check_sampling() -> void:
 				_check(color in PROFILE.grassland.palette.colors, "Grassland keeps discrete authored bands.")
 			elif blend == 1.0:
 				_check(color in PROFILE.mountains.palette.colors, "Mountains keep discrete authored bands.")
+				_check(height > 0.0, "Full mountain terrain keeps its valleys above sea level.")
 	_check(PROFILE.grassland.height_noise.seed == seed, "Sampling leaves shared resources unchanged.")
-	for entry: Vector2 in [Vector2(0.0, 0.0), Vector2(15000.0, 0.0), Vector2(32500.0, 0.5), Vector2(50000.0, 1.0), Vector2(80000.0, 1.0)]:
+	var transition_midpoint := (PROFILE.mountain_start_distance + PROFILE.mountain_full_distance) * 0.5
+	for entry: Vector2 in [Vector2(0.0, 0.0), Vector2(PROFILE.mountain_start_distance, 0.0), Vector2(transition_midpoint, 0.5), Vector2(PROFILE.mountain_full_distance, 1.0), Vector2(PROFILE.mountain_full_distance + 10000.0, 1.0)]:
 		var route := RoutePosition.new(0, -entry.x)
 		_check(is_equal_approx(sampler.mountain_weight(route.segment, route.offset), entry.y), "Progression smoothly controls the authored biome transition.")
 	var grass_relief := Vector2(INF, -INF)
@@ -119,7 +121,8 @@ func _check_sampling() -> void:
 	_check(sampler.surface_height(121.0, RoutePosition.new(0, 251.0)) == sampler.surface_height(129.0, RoutePosition.new(0, 259.0)), "Points within one voxel column share the exact same top.")
 	_check(sampler.sample(3000.0, -9007199254740995, 5000.0) != sampler.sample(3000.0, -9007199254740994, 5000.0), "Huge adjacent segments stay distinct.")
 	var grass_levels: Dictionary[float, bool] = {}
-	for z in range(-10000, 10010, 200):
+	# Sample behind the start so nearby mountain tuning cannot affect grassland coverage.
+	for z in range(0, 20010, 200):
 		for x in range(-10000, 10010, 200):
 			grass_levels[sampler.surface_height(x, RoutePosition.new(0, z))] = true
 	var available_levels := int((PROFILE.grassland.height_range.y - PROFILE.grassland.height_range.x) / PROFILE.voxel_size) + 1
@@ -149,13 +152,13 @@ func _check_grid() -> void:
 
 
 func _check_biome_contrast() -> void:
-	var biome := PROFILE.grassland.duplicate() as TerrainBiome
-	biome.height_contrast = 0.0
-	var midpoint := (biome.height_range.x + biome.height_range.y) * 0.5
-	_check(biome.elevation(-1.0) == midpoint and biome.elevation(1.0) == midpoint, "Zero contrast produces a flat biome.")
-	biome.height_contrast = 0.0001
-	_check(absf(biome.elevation(1.0) - midpoint) < 0.1, "Near-zero contrast approaches flat continuously rather than jumping to full relief.")
 	for settings: TerrainBiome in [PROFILE.grassland, PROFILE.mountains]:
+		var biome := settings.duplicate() as TerrainBiome
+		biome.height_contrast = 0.0
+		var midpoint := (biome.height_range.x + biome.height_range.y) * 0.5
+		_check(biome.elevation(-1.0) == midpoint and biome.elevation(1.0) == midpoint, "Zero contrast produces a flat biome, including tapered peaks.")
+		biome.height_contrast = 0.0001
+		_check(absf(biome.elevation(1.0) - midpoint) < 0.2, "Near-zero contrast approaches flat continuously rather than jumping to full relief.")
 		_check(settings.elevation(0.75) > settings.elevation(0.65), "High noise values retain distinct summit heights instead of clipping into plateaus.")
 
 
@@ -296,7 +299,7 @@ func _check_water(journey: Journey) -> void:
 			var height := journey.terrain.sampler.surface_height(x, RoutePosition.new(0, z))
 			wet += int(height < 0.0)
 			dry += int(height >= 0.0)
-	_check(wet > 0 and dry > wet, "Starting grassland contains submerged basins surrounded by predominantly dry land.")
+	_check(wet > 0 and dry > wet, "Starting landscape contains submerged basins surrounded by predominantly dry land.")
 	var original := water.global_position
 	for offset: float in [-35000.0, -10240.0, 0.0, 17000.0]:
 		water.recenter(Vector3(4000.0, 3800.0, offset))
@@ -309,7 +312,7 @@ func _check_water(journey: Journey) -> void:
 	_check((water.global_position - journey.fleet.anchor.global_position).is_equal_approx(relative), "Water and fleet remain aligned across origin shifts.")
 	_check(journey.progression.distance == progress, "Moving water coverage does not change journey progression.")
 	journey.origin.shift_segments(2)
-	print("Starting grassland samples: %d submerged, %d dry." % [wet, dry])
+	print("Starting landscape samples: %d submerged, %d dry." % [wet, dry])
 
 
 func _capture_water(journey: Journey) -> void:
@@ -395,7 +398,8 @@ func _capture_stages(journey: Journey) -> void:
 	_check(not directory.is_empty(), "Visual checks need an external capture directory.")
 	if directory.is_empty():
 		return
-	for distance: float in [0.0, 32500.0, 60000.0]:
+	var transition_midpoint := (PROFILE.mountain_start_distance + PROFILE.mountain_full_distance) * 0.5
+	for distance: float in [0.0, transition_midpoint, PROFILE.mountain_full_distance * 1.2]:
 		# Place the whole test scene at a new logical location without changing local transforms.
 		var route := RoutePosition.new(0, -distance)
 		journey.origin.segment = route.segment

@@ -5,12 +5,14 @@
 [sub_resource type="FastNoiseLite" id="Noise"]
 noise_type = 0
 seed = 52939
-frequency = 0.00018
+frequency = 7.5e-05
+fractal_type = 2
 fractal_octaves = 4
-fractal_gain = 0.35
+fractal_gain = 0.45
+fractal_weighted_strength = 0.4
 domain_warp_enabled = true
-domain_warp_amplitude = 1000.0
-domain_warp_frequency = 9e-05
+domain_warp_amplitude = 1400.0
+domain_warp_frequency = 6e-05
 domain_warp_fractal_octaves = 2
 domain_warp_fractal_lacunarity = 2.0
 
@@ -21,7 +23,8 @@ colors = PackedColorArray(0.12, 0.24, 0.13, 1, 0.24, 0.33, 0.17, 1, 0.37, 0.37, 
 
 [resource]
 script = ExtResource("1")
-height_range = Vector2(-600, 1300)
+height_range = Vector2(800, 3400)
 height_noise = SubResource("Noise")
-height_contrast = 1.7
+height_power = 2.0
+height_contrast = 1.0
 palette = SubResource("Palette")

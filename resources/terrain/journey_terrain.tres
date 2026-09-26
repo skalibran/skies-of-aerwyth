@@ -13,5 +13,7 @@ fractal_octaves = 2
 script = ExtResource("1")
 grassland = ExtResource("2")
 mountains = ExtResource("3")
+mountain_start_distance = 1500.0
+mountain_full_distance = 10000.0
 band_noise = SubResource("BandNoise")
 band_warp_height = 80.0

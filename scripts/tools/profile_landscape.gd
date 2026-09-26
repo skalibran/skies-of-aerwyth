@@ -3,6 +3,7 @@ extends SceneTree
 const JOURNEY_SCENE := preload("res://scenes/world/journey.tscn")
 const TERRAIN_SCENE := preload("res://scenes/terrain/voxel_terrain.tscn")
 const WATER_SCENE := preload("res://scenes/water/water.tscn")
+const PROFILE := preload("res://resources/terrain/journey_terrain.tres")
 
 class MeasuredTerrain extends VoxelTerrain:
 	var builds: Array[Dictionary] = []
@@ -66,7 +67,8 @@ func _run() -> void:
 		_save_results("cells.json")
 		quit()
 		return
-	for distance: float in [0.0, 32500.0, 60000.0]:
+	var transition_midpoint := (PROFILE.mountain_start_distance + PROFILE.mountain_full_distance) * 0.5
+	for distance: float in [0.0, transition_midpoint, PROFILE.mountain_full_distance * 1.2]:
 		var started := Time.get_ticks_usec()
 		_create_landscape(distance)
 		while _terrain.has_pending_work():
