@@ -1,4 +1,5 @@
-extends CanvasLayer
+class_name PerformanceOverlay
+extends MarginContainer
 
 @export var journey: Journey
 
@@ -11,4 +12,5 @@ func _ready() -> void:
 
 
 func _update_label() -> void:
-	stats_label.text = "Ships: %d  |  FPS: %d" % [journey.ships.size(), Engine.get_frames_per_second()]
+	var ship_count := journey.ships.size() if is_instance_valid(journey) else 0
+	stats_label.text = "Ships: %d  |  FPS: %d" % [ship_count, Engine.get_frames_per_second()]

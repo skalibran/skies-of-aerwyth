@@ -1,0 +1,20 @@
+[gd_scene format=3]
+
+[node name="CenterContainer" type="MarginContainer"]
+mouse_filter = 2
+
+[node name="DebugFill" type="ColorRect" parent="."]
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.15, 0.8, 0.35, 0.2)
+
+[node name="ZoneLabel" type="Label" parent="DebugFill"]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 16.0
+offset_right = 324.0
+offset_bottom = 64.0
+mouse_filter = 2
+theme_override_font_sizes/font_size = 30
+text = "CENTER"
+vertical_alignment = 1

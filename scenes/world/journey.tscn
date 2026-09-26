@@ -13,7 +13,7 @@
 [ext_resource type="Script" path="res://scripts/combat/projectile_controller.gd" id="12"]
 [ext_resource type="PackedScene" path="res://scenes/water/water.tscn" id="11"]
 [ext_resource type="Script" path="res://scripts/ships/wreck_controller.gd" id="14"]
-[ext_resource type="PackedScene" path="res://scenes/ui/performance_overlay.tscn" id="15"]
+[ext_resource type="PackedScene" path="res://scenes/ui/master_ui.tscn" id="15"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial"]
 sky_top_color = Color(0.10, 0.24, 0.34, 1)
@@ -138,5 +138,5 @@ fleet = NodePath("../FleetController")
 [node name="OrbitCamera" parent="." node_paths=PackedStringArray("fleet") instance=ExtResource("5")]
 fleet = NodePath("../FleetController")
 
-[node name="PerformanceOverlay" parent="." node_paths=PackedStringArray("journey") instance=ExtResource("15")]
+[node name="MasterUI" parent="." node_paths=PackedStringArray("journey") instance=ExtResource("15")]
 journey = NodePath("..")

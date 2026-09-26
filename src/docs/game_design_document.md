@@ -223,6 +223,8 @@ Terrain begins as rolling green grassland with a generous height range (currentl
 
 Water sits at **Y = 0**. Terrain may extend below zero so low basins form ponds, bounded by the stepped voxel shoreline. Use a flat surface with authorable depth-color bands, lighter shallows, and restrained square-pattern animation that matches the voxel art direction. Water is scenery; water physics, destruction, and underwater gameplay are outside the current scope.
 
+The current UI layout follows Dungeon Directive's master shell: a 1920 x 1080 logical canvas, uniform scaling, and three centered 1920-wide zones with 140/800/140 heights. Top and bottom follow the viewport edges while the center stays centered; ultrawide views reveal side space and taller views separate the zones. Translucent red, green, and blue fills currently visualize these regions. The top region contains ship count and FPS. See [UI layout and scaling](ui.md) for implemented ownership and aspect-ratio checks.
+
 **TBD:** Final orbit-camera framing, palette, lighting, cloud-transition effects, UI style, animation, and audio direction.
 
 ## Initial movement prototype

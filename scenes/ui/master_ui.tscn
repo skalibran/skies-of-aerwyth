@@ -1,0 +1,60 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/master_ui.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/ui/top_container.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/ui/center_container.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/ui/bottom_container.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/ui/performance_overlay.tscn" id="5"]
+
+[node name="MasterUI" type="CanvasLayer"]
+script = ExtResource("1")
+
+[node name="ViewportLayout" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="TopContainer" parent="ViewportLayout" instance=ExtResource("2")]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -960.0
+offset_right = 960.0
+offset_bottom = 140.0
+grow_horizontal = 2
+
+[node name="PerformanceOverlay" parent="ViewportLayout/TopContainer" instance=ExtResource("5")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="CenterContainer" parent="ViewportLayout" instance=ExtResource("3")]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -960.0
+offset_top = -400.0
+offset_right = 960.0
+offset_bottom = 400.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="BottomContainer" parent="ViewportLayout" instance=ExtResource("4")]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -960.0
+offset_top = -140.0
+offset_right = 960.0
+grow_horizontal = 2
+grow_vertical = 0
