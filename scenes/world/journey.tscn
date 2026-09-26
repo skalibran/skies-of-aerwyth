@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/journey.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/ships/kestrel.tscn" id="2"]
@@ -14,6 +14,8 @@
 [ext_resource type="PackedScene" path="res://scenes/water/water.tscn" id="11"]
 [ext_resource type="Script" path="res://scripts/ships/wreck_controller.gd" id="14"]
 [ext_resource type="PackedScene" path="res://scenes/ui/master_ui.tscn" id="15"]
+[ext_resource type="Script" path="res://scripts/ships/ship_definition.gd" id="16"]
+[ext_resource type="Resource" path="res://resources/ships/kestrel.tres" id="17"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial"]
 sky_top_color = Color(0.10, 0.24, 0.34, 1)
@@ -45,6 +47,7 @@ size = Vector3(4, 4, 4)
 [node name="Journey" type="Node3D" node_paths=PackedStringArray("initial_ships", "fleet", "origin", "island_spawner", "camera_rig", "terrain", "water", "progression", "projectiles", "wreck_controller")]
 script = ExtResource("1")
 initial_ships = Array[NodePath]([NodePath("Ships/Ship1"), NodePath("Ships/Ship2"), NodePath("Ships/Ship3")])
+available_ships = Array[ExtResource("16")]([ExtResource("17")])
 fleet = NodePath("FleetController")
 origin = NodePath("FloatingOrigin")
 island_spawner = NodePath("IslandSpawner")

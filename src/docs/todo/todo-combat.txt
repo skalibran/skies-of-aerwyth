@@ -42,6 +42,10 @@ CURRENT STARTING FLEET
 [x] Remove continuous combat spawning from the playable Journey and start with
     three friendly Kestrels. Keep the repeating encounter only in opt-in checks,
     with CombatSpawner under scripts/tools/. No automatic casualty replenishment.
+[x] Add the manual ship picker: five size classes, Kestrel under Skiffs, a single
+    horizontal choice row, and plain shared-theme styling on a four-pixel grid.
+    Journey handles explicit requests with random clear positions near the anchor.
+[ ] Define the intended reinforcement placement to replace temporary random spawning.
 
 Deliverable
 - Automatic combat between player and enemy Kestrels using the authored voxel

@@ -1,0 +1,8 @@
+[gd_scene format=3]
+
+[node name="ShipChoice" type="Button"]
+custom_minimum_size = Vector2(200, 56)
+theme_type_variation = &"ShipButton"
+text = "Ship"
+clip_text = true
+text_overrun_behavior = 3

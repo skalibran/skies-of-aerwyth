@@ -1,9 +1,14 @@
 class_name Journey
 extends Node3D
 
+signal ship_spawned(ship: Airship)
+signal ship_spawn_failed(definition: ShipDefinition)
+
 enum StepPhase { DECISIONS, AVOIDANCE, ISLAND_NAVIGATION, FORCE_SUBMISSION, PROJECTILES, WEAPONS, CLEANUP_STREAMING }
 
 @export var initial_ships: Array[Airship] = []
+@export var available_ships: Array[ShipDefinition] = []
+@export var spawn_extent := Vector3(240.0, 80.0, 240.0)
 @export var fleet: FleetController
 @export var origin: FloatingOrigin
 @export var island_spawner: IslandSpawner
@@ -23,6 +28,8 @@ var _corrections := PackedVector3Array()
 var _stream_timer: float = 0.0
 var _next_ship_id: int = 1
 var _dead_ships: Array[Airship] = []
+var _spawn_requests: Array[ShipDefinition] = []
+var _spawn_rng := RandomNumberGenerator.new()
 var destroyed_count: int = 0
 var profile_steps: bool = false
 var step_timings_usec := PackedInt64Array()
@@ -31,6 +38,7 @@ var combat_perception := CombatPerception.new()
 
 
 func _ready() -> void:
+	_spawn_rng.randomize()
 	step_timings_usec.resize(StepPhase.size())
 	for ship in initial_ships:
 		register_ship(ship)
@@ -93,6 +101,7 @@ func step_simulation(delta: float) -> void:
 		# Refresh registries without submitting forces or firing ready weapons.
 		fleet.advance(0.0)
 		return
+	_spawn_requested_ships()
 	_snapshot_ships()
 	fleet.advance(delta)
 	if combat_enabled:
@@ -152,6 +161,64 @@ func allocate_ship_id() -> int:
 	var result := _next_ship_id
 	_next_ship_id += 1
 	return result
+
+
+func request_ship_spawn(definition: ShipDefinition) -> void:
+	if definition != null and definition in available_ships and definition.scene != null:
+		_spawn_requests.append(definition)
+
+
+func _spawn_requested_ships() -> void:
+	# GUI requests enter the world at a physics boundary before snapshots are built.
+	for definition in _spawn_requests:
+		_spawn_ship(definition)
+	_spawn_requests.clear()
+
+
+func _spawn_ship(definition: ShipDefinition) -> void:
+	var instance := definition.scene.instantiate()
+	var ship := instance as Airship
+	if ship == null:
+		instance.free()
+		push_error("Ship definitions must reference an Airship scene: " + definition.display_name)
+		ship_spawn_failed.emit(definition)
+		return
+	var capsule := ship.hull_collider.shape as CapsuleShape3D
+	var radius := maxf(capsule.radius, capsule.height * 0.5) + 8.0
+	var probe := SphereShape3D.new()
+	probe.radius = radius
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = probe
+	query.collision_mask = 3
+	var space := get_world_3d().direct_space_state
+	for attempt in range(32):
+		var offset := Vector3(_spawn_rng.randf_range(-1.0, 1.0), _spawn_rng.randf_range(-1.0, 1.0), _spawn_rng.randf_range(-1.0, 1.0))
+		if offset.length_squared() > 1.0:
+			continue
+		var location := fleet.anchor.global_position + offset * spawn_extent
+		query.transform = Transform3D(Basis.IDENTITY, location)
+		if not space.intersect_shape(query, 1).is_empty():
+			continue
+		# Include ships added this tick, before the physics broadphase synchronizes.
+		var clear := true
+		for other in ships:
+			var clearance := radius + other.hull_radius + other.hull_half_segment
+			if location.distance_squared_to(other.global_position) < clearance * clearance:
+				clear = false
+				break
+		if not clear:
+			continue
+		ship.entity_id = allocate_ship_id()
+		ship.faction = Factions.PLAYER
+		ship.position = to_local(location)
+		add_child(ship)
+		ship.linear_velocity = fleet.velocity
+		register_ship(ship)
+		ship.reset_physics_interpolation()
+		ship_spawned.emit(ship)
+		return
+	ship.free()
+	ship_spawn_failed.emit(definition)
 
 
 func _on_ship_died(ship: Airship) -> void:

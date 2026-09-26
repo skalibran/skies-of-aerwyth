@@ -55,6 +55,10 @@ func _input(event: InputEvent) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		var focus := get_viewport().gui_get_focus_owner()
+		if focus != null:
+			focus.release_focus()
 	var wheel_factor: float = event.factor if event is InputEventMouseButton else 1.0
 	if event.is_action_pressed("camera_zoom_in"):
 		zoom(-zoom_step * wheel_factor * _speed_multiplier())
@@ -186,6 +190,9 @@ func _update_follow_focus() -> void:
 
 
 func _update_navigation(delta: float) -> void:
+	# Focused UI uses the same directional controls for button navigation.
+	if get_viewport().gui_get_focus_owner() != null:
+		return
 	var movement := Input.get_vector("camera_pan_left", "camera_pan_right", "camera_pan_forward", "camera_pan_back", 0.2)
 	if movement.length_squared() > 0.0 and mode != Mode.FREE:
 		# Release before turning so simultaneous move/look input cannot orbit for one frame.
