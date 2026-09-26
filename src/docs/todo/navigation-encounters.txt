@@ -1,0 +1,20 @@
+NAVIGATION AND ENCOUNTER FOLLOW-UP WORK
+
+Review scope: navigation refactor and threat implementation, not whole-game release.
+Runtime contracts and accepted content constraints: ../movement.md and ../encounters.md.
+Audit and route-regression results: ../navigation_encounter_review.md.
+Combat hardware, release, and broader hands-on acceptance: todo-combat.txt.
+
+[ ] NAV-02: Accept combat maneuvering while the marker moves.
+    Scoring uses the same world velocity as flight, including marker motion.
+    At 25 m/s cruise and 12 m/s local correction, requested horizontal velocity
+    cannot reverse along Z. Broadside/forward weapons need hands-on acceptance
+    against targets ahead, behind, and across the sphere. The stationary-marker
+    priority-target fixture is not evidence for all moving combat arrangements.
+
+[ ] ENCOUNTER-02: Decide progression beyond the authored random-pool ceiling.
+    Existing per-option limits total 324 points and 20 ships. From wave 29 onward,
+    the minimum 75% spending target exceeds that ceiling, so every ordinary wave
+    contains all options at their limits, differing only in placement/order.
+    Wave 100 has 1500 budget but still spends 324. Decide tiered pools, scaled
+    limits, or a deliberate plateau; retain separate costs and selection weights.

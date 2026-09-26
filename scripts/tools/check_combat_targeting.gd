@@ -148,14 +148,14 @@ func _check_pending_deletion() -> void:
 	var removed := _ship(Vector3.RIGHT * 300)
 	var alternative := _ship(Vector3.RIGHT * 600)
 	var fleet := FleetController.new()
-	fleet.anchor = Node3D.new()
-	_fixture.add_child(fleet.anchor)
+	fleet.marker = Node3D.new()
+	_fixture.add_child(fleet.marker)
 	_fixture.add_child(fleet)
 	removed.queue_free()
 	var weapon := player.mounted_slots[1].equipment as MountedWeapon
 	_check(weapon.launch_for(removed) == Vector3.ZERO, "Direct launch validation rejects a target queued for deletion.")
 	_check(player.combat.prepare(0.2, player, _ships, fleet) and player.combat.target == alternative, "Pursuit skips queued deletion and selects the next living opponent in the same tick.")
-	fleet.anchor.free()
+	fleet.marker.free()
 	fleet.free()
 
 
@@ -340,9 +340,9 @@ func _check_journey_cleanup() -> void:
 				_check(not enemy.is_queued_for_deletion() and enemy.collision_layer == 1 and enemy.collision_mask == (3 | VoxelTerrain.COLLISION_LAYER), "Death retains the wreck's physical hull after unregistering combat membership.")
 				journey.camera_rig.follow_ship(enemy)
 				_check(journey.camera_rig.mode == FleetCamera.Mode.FLEET, "Death restores fleet focus immediately and wrecks cannot be selected again.")
-				var relative_position := enemy.global_position - journey.fleet.anchor.global_position
+				var relative_position := enemy.global_position - journey.fleet.marker.global_position
 				journey.origin.shift_segments(-1)
-				_check((enemy.global_position - journey.fleet.anchor.global_position).distance_to(relative_position) < 0.001, "Unregistered wrecks still move with the floating origin.")
+				_check((enemy.global_position - journey.fleet.marker.global_position).distance_to(relative_position) < 0.001, "Unregistered wrecks still move with the floating origin.")
 				journey.origin.shift_segments(1)
 				var roots_with_wreck := journey.origin._roots.size()
 				for tick in range(ceili(0.4 * _rate)):

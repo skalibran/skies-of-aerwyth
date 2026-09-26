@@ -10,7 +10,7 @@ The player sustains the fleet by expanding island production, preparing replacem
 
 ## Design pillars
 
-- **Continuous journey:** Clearing enemies faster than they spawn allows forward progress. Distance traveled brings greater danger and opportunities to expand production.
+- **Continuous journey:** The fleet advances while fighting, bringing new encounters as distance increases. Distance traveled brings greater danger and opportunities to expand production.
 - **Preparation versus urgency:** Producing ships commits resources in advance and takes time. Buying ships with money provides quick support when prepared reserves are insufficient.
 - **Composition and counters:** The right vessels and weapons matter alongside the size and strength of the fleet.
 - **Accessible experimentation:** Players can rely entirely on pre-made ships or save custom configurations using existing hulls and their weapon mounting spots.
@@ -18,7 +18,7 @@ The player sustains the fleet by expanding island production, preparing replacem
 
 ## Core loop
 
-1. Automatically fight enemy waves and advance through the continuous 3D world as the fleet clears enemies faster than they spawn.
+1. Automatically fight enemy waves and advance through the continuous 3D world while new waves arrive at distance milestones.
 2. Reinforce the traveling fleet with purchased ships or ships drawn from prepared batches.
 3. Pass floating islands to liberate them and gain places to build production facilities and access natural resources.
 4. Expand production and use resources to produce airships over time, replenishing their respective batches.
@@ -31,29 +31,23 @@ These activities overlap during the journey. Reinforcement and island management
 
 One world unit is one meter. The tenfold [unit conversion](world_units.md) preserves the prototype's proportions, appearance, and timing.
 
-The fleet's journey proceeds forward along Z- through one continuous 3D space; Z+ leads back toward previously passed locations. A persistent fleet anchor acts as the journey's "main character." Its logical Z position determines progression, content placement, and increasing difficulty. Camera movement and changing fleet membership do not directly change progression.
+The fleet's journey proceeds forward along Z- through one continuous 3D space; Z+ leads back toward previously passed locations. A persistent fleet marker acts as the journey's "main character." Its logical Z position determines progression, content placement, and increasing difficulty. Camera movement and changing fleet membership do not directly change progression.
 
-Journey progression has a numeric value: forward distance traveled by the anchor, in meters, starting at zero. Derive it from the anchor's logical position relative to the journey start; floating-origin shifts and viewing another location do not add distance. Terrain is the first system to use it: start among grasslands and gradually transition into mountain ranges. Transition distances are authorable. Each location uses its own distance along the journey, so revisiting it restores the same landscape rather than applying the fleet's current biome everywhere.
+Journey progression has a numeric value: forward distance traveled by the marker, in meters, starting at zero. Derive it from the marker's logical position relative to the journey start; floating-origin shifts and viewing another location do not add distance. Terrain is the first system to use it: start among grasslands and gradually transition into mountain ranges. Transition distances are authorable. Each location uses its own distance along the journey, so revisiting it restores the same landscape rather than applying the fleet's current biome everywhere.
 
-Each vessel pursues and engages its selected opponent while opponents remain. When there are no opponents, it travels with the fleet by navigating around the advancing anchor. Clearing enemies faster than they spawn therefore creates time to make progress; sustained opposition keeps ships occupied with combat and can slow or effectively halt that progress as the fleet falls behind its anchor. Individual ships can move toward combat targets and fire while moving, so battle and movement can overlap.
+The fleet travels around one persistent fleet marker. It advances linearly toward Z- during both travel and combat, with fixed X and altitude. Living enemies and pending reinforcements keep combat active while the marker continues forward. Clearing the encounter changes local destination selection without restarting marker motion. There is no return or regrouping state.
 
-Every active ship is fighting, moving to engage an opponent, or traveling onward. A ship never waits merely because its preferred target category is absent: target priority orders opponents without excluding any of them.
+### Fleet marker and airship movement
 
-### Fleet anchor and airship movement
+Endgame play targets roughly seventy friendly ships and 150 enemies. The marker centers a sphere whose size grows with the hull footprints and maneuvering requirements of all living friendly and enemy ships. Only the friendly fleet governs travel pace. Growth is smooth; casualties do not shrink a battle around surviving ships. Terrain heights and supported fleet sizes are authored to keep terrain below this navigation volume; terrain avoidance is not part of ship navigation. The marker is independent of the ship average, so membership changes cannot move the camera or trigger a wave.
 
-Endgame play should support roughly seventy friendly ships and 150 enemy ships together. Navigation space and camera range must accommodate those fleets while preserving nearby individual maneuvers. This is a scale target, not a new starting fleet size or a fixed ship cap.
+Ships choose nearby destinations inside this sphere, with meaningful vertical variation. Destinations move with the marker, and navigation includes its velocity. Combat and travel share one navigator. Combat scores feasible local maneuvers for weapon presentation and range, while target choice remains independent: a priority opponent across the sphere can be approached through successive nearby destinations. The target-priority system remains planned; the current selector retains its nearest eligible opponent.
 
-The anchor advances continuously along Z- while the journey simulation is running and friendly ships remain. Calculate the average position of the active friendly ships separately. The farther the anchor moves from that average, the more its forward speed decreases; as the ships catch up, it recovers speed. The average regulates the anchor's movement without replacing its position. Adding or losing a ship can affect the speed response, but must not teleport the anchor or advance milestones immediately.
+Navigation anticipates braking, turning, hull clearance, obstacles and separation before requesting motion. Ships never intentionally choose destinations outside the sphere. Momentum or contacts may displace a body; the same navigator then guides it inward without a separate return state. Collision-free alternatives must also fit inside the sphere. Route selection first accounts for intended marker translation and tries slower viable paths when needed. If geometry blocks every available friendly route, ships brake and the marker waits.
 
-Each ship generates its own navigation destination around the anchor. These destinations move with the anchor. Ships occupy a volume with meaningful vertical spread, and nearby destinations may move up or down as well as sideways and forward/back. On reaching its destination, the ship chooses another within a limited nearby area, producing gentle movement within the fleet. Routine destination changes must not send a ship from the front to the back of the entire fleet. Combat pursuit takes priority over this travel behavior when opponents are present.
+Heavy airships retain forward propulsion, gradual yaw, limited lift and visual banking. Rigid-body physics owns momentum and contacts, with no contact damage. The marker's travel speed leaves maneuvering room for its slowest member and slows preventively when a trailing member cannot keep up. This does not delay travel after combat clears. Relative navigation carries the sphere and local destinations forward during combat.
 
-Ships avoid one another while allowing fairly close pass-bys. Their movement should convey heavy, sluggish airships: gradual acceleration, braking, and turns, with limited pitch and banking. They must not perform loops, flips, or abrupt model rotations.
-
-Each ship has a primary propulsion direction, normally forward. Heading redirects thrust while existing velocity retains momentum; sideways drift gradually decays. Turning builds and brakes gradually, and sharp course changes reduce forward thrust. Altitude uses separate lift control. Combat and travel use the same flight controller, so a broadside ship approaches and turns into firing passes instead of sustaining sideways pursuit while facing its guns at the target. Momentum should create imperfect, weighty maneuvers without random steering noise. RigidBody3D is the accepted movement implementation after hands-on comparison: thrust and yaw torque guide flight while physics resolves motion and contact momentum. Hulls stay upright with visual pitch/bank, living ships have no gravity, and contacts cause no damage. The earlier scripted controller remains a historical performance baseline; see the [comparison and acceptance record](rigid_body_trial.md).
-
-Combat remains near the persistent fleet anchor. Both factions use an authorable soft engagement boundary: near its edge, favor inward firing passes and gradually steer toward the anchor. Beyond the outer radius, break off pursuit and return inside a smaller radius before resuming combat. Do not pursue opponents outside the engagement area. Weapons may still fire at eligible targets while regrouping, and island avoidance and momentum remain active. The initial inner/outer radii are 1800/2600 meters in three dimensions; these are steering thresholds, not an invisible collision wall or position clamp.
-
-Floating islands occupy a broad surrounding landscape at varied heights above, through, and below the fleet, including directly in its path. The journey should feel like crossing an open world, with scenery beside and behind the fleet as well as ahead. Ships steer around solid islands, temporarily departing from their travel destinations as needed, then resume formation travel. Clear routes above or below an island remain usable. The anchor continues to drive progression and slows according to the existing fleet-average feedback while ships maneuver around obstacles.
+The current runtime and tuning are described in [fleet movement](movement.md). Camera focus, scenery streaming, floating origin, and progression all use the persistent marker. Floating islands remain obstacles throughout the journey; the volume is a navigation constraint, not an invisible physical wall.
 
 ### Encounters
 
@@ -63,11 +57,13 @@ Enemy difficulty increases with distance through:
 - Stronger individual enemy airships.
 - Boss battles.
 
+Threat increases every 500 meters of forward journey progress. Each increase currently schedules a wave whose budget follows an authorable threat curve. Ships have explicit loadout costs; weighted spawn entries contain either a ship or a complete fleet preset, with fleet cost equal to its members' sum. The generator selects affordable entries, allows leftover budget, and limits repeated selections. Costs and weights are independent. Optional authored wave overrides guarantee copies of these same ship/fleet entries: each guarantee either consumes budget or spawns on top, and random filling can be disabled for a wholly authored wave. Guaranteed entries remain guaranteed even when they exceed the budget. See [implemented encounter contracts](encounters.md).
+
 Combat is automatic. The player's central decisions concern fleet composition, weapon configurations, production, and reinforcement timing.
 
 The same targeting, engagement, and weapon-slot firing rules apply to friendly and enemy vessels. Enemy travel after eliminating the player's fleet has no gameplay role: when no friendly ships remain, the failure condition is reached. The failure response, recovery options, and relationship to a wipe remain TBD.
 
-**TBD:** Travel speed, the anchor slowdown curve, fleet spread and navigation distances, avoidance clearance, turn and acceleration limits, wave spacing and spawning rules, boss cadence, formations, and detailed combat movement.
+**TBD:** Travel speed, the marker slowdown curve, fleet spread and navigation distances, avoidance clearance, turn and acceleration limits, final threat/budget tuning, boss cadence, formations, and detailed combat movement.
 
 ### Continuous coordinates and persistence
 
@@ -75,11 +71,11 @@ The continuous journey uses logical world positions separately from the coordina
 
 Only nearby content needs a loaded 3D scene. Passed islands retain their identity, route position, buildings, resources, and production state after their scenes unload. During normal fleet play, unloaded liberated islands continue participating in the economy. Loading or unloading a view must not start a second production simulation.
 
-Savegames preserve versioned gameplay state: the anchor's logical position, active ships and relevant simulation state, encounter and milestone state, island records, resources, and production queues. Stable entity IDs reconnect references on load. The scene origin and loaded visual nodes are replaceable presentation details. Loading restores the active region near a fresh local origin and must not repeat already completed encounters or island liberation. Persistent profile data and current-journey data remain distinct; what survives a wipe is still TBD.
+Savegames preserve versioned gameplay state: the marker's logical position, active ships and relevant simulation state, encounter and milestone state, island records, resources, and production queues. Stable entity IDs reconnect references on load. The scene origin and loaded visual nodes are replaceable presentation details. Loading restores the active region near a fresh local origin and must not repeat already completed encounters or island liberation. Persistent profile data and current-journey data remain distinct; what survives a wipe is still TBD.
 
 ## Camera and fleet controls
 
-The player uses an orbit camera that can snap its focus to a selected ship or the persistent fleet anchor, then follow that target while orbiting it. Fleet tracking uses the anchor so spawning or losing ships does not shift the camera with the calculated ship average.
+The player uses an orbit camera that can snap its focus to a selected ship or the persistent fleet marker, then follow that target while orbiting it. Fleet tracking uses the marker so spawning or losing ships does not shift the camera with the calculated ship average.
 
 - Mouse clicking a ship selects it and snaps the camera focus to that ship. Controller ship selection remains **TBD**.
 - WASD or the controller's left thumbstick releases tracking without a camera jump and enters free flight within the fleet viewing area. Free rotation turns around the camera's own position, as in an FPS camera; forward/back movement follows the view direction and left/right strafes.
@@ -89,11 +85,11 @@ The player uses an orbit camera that can snap its focus to a selected ship or th
 - Holding Shift or LT increases orbit zoom speed and free-flight movement speed. It does not change look sensitivity. Free flight permits looking above and below the horizon without flipping.
 - A fleet-focus action restores fleet tracking. If a followed ship disappears, fall back to fleet tracking.
 
-Ordinary fleet camera movement is constrained to a sphere centered on the persistent fleet anchor. This includes released camera movement and ship tracking; the viewing area follows the anchor without shifting when fleet membership changes. Ordinary panning, orbiting, or selecting a ship does not pause gameplay. The separate island-view transition described below can leave this viewing area.
+Ordinary fleet camera movement is constrained to a sphere centered on the persistent fleet marker. This includes released camera movement and ship tracking; the viewing area follows the marker without shifting when fleet membership changes. Ordinary panning, orbiting, or selecting a ship does not pause gameplay. The separate island-view transition described below can leave this viewing area.
 
-In free movement, the camera retains an offset from the persistent fleet anchor and inherits its translation, so the fleet does not leave the camera behind while the player looks around. Looking rotates at the camera's own position; movement input changes the offset. Both translation and viewing bounds use the anchor, keeping the view stable as ships maneuver or membership changes.
+In free movement, the camera retains an offset from the persistent fleet marker and inherits its translation, so the fleet does not leave the camera behind while the player looks around. Looking rotates at the camera's own position; movement input changes the offset. Both translation and viewing bounds use the marker, keeping the view stable as ships maneuver or membership changes.
 
-The ship average regulates the anchor's travel speed without becoming a camera target or boundary center. This camera choice preserves the anchor's ownership of progression.
+The slowest member, trailing hull clearance, and blocked routes regulate the marker's travel speed. No ship average drives movement, camera tracking, or progression.
 
 **TBD:** Camera distance and angle limits, pan/rotation speeds, viewing-sphere radius, controller ship selection, and keyboard/controller bindings for the fleet-focus action.
 
@@ -103,11 +99,11 @@ The ship average regulates the anchor's travel speed without becoming a camera t
 
 Each vessel has a predefined ordered target priority. Its **main target** determines which opposing ship it pursues and engages. The priority model follows Dungeon Directive's party-member targeting:
 
-1. Consider the available opposing vessels inside the anchor's engagement area.
+1. Consider the available opposing vessels inside the marker's engagement area.
 2. Select the nearest vessel in the highest-priority category that currently has candidates.
 3. If no configured category has a candidate, select the nearest remaining opponent. Unlisted categories remain valid and rank after the configured categories.
 4. Keep the current target while it remains valid, unless an opponent from a higher-priority category becomes available. A closer opponent of equal priority alone does not cause a switch.
-5. Select again when the target is destroyed, leaves the engagement area, or otherwise becomes invalid. Finish any active regrouping before resuming pursuit. With no eligible opponents remaining, player ships resume forward travel.
+5. Select again when the target is destroyed, leaves the engagement area, or otherwise becomes invalid. With no eligible opponents remaining, immediately choose a nearby ordinary navigation destination and continue forward travel.
 
 Priority is a preference order, never a category exclusion rule. Every opposing vessel inside the engagement area remains a possible target, so a vessel continues fighting even when none of its preferred categories are present. Both fleets use this model, with predefined priorities appropriate to their vessels. The spatial pursuit boundary does not restrict weapon-slot pass-by fire.
 
@@ -156,7 +152,7 @@ The camera transition creates the impression of traveling back through the conti
 
 The camera travels a short distance at each end; the cloud conceals the skipped distance. The destination must be ready before the cloud clears. A short transition independent of the island's actual distance preserves the impression without requiring a long wait. Each viewing space remains close to its own origin.
 
-Gameplay pauses when this island transition carries the view away from the fleet, stays paused throughout island management and the return transition, and resumes once the fleet view is restored. This pauses the whole gameplay simulation: anchor movement, all simulated entity positioning, combat, spawning, production, construction, and other gameplay timers. No elapsed gameplay time is accumulated for catch-up on return. Camera controls, the transition, and management UI remain usable; edits can be made, but timed work does not advance. Future purely visual or atmosphere animations may continue independently.
+Gameplay pauses when this island transition carries the view away from the fleet, stays paused throughout island management and the return transition, and resumes once the fleet view is restored. This pauses the whole gameplay simulation: marker movement, all simulated entity positioning, combat, spawning, production, construction, and other gameplay timers. No elapsed gameplay time is accumulated for catch-up on return. Camera controls, the transition, and management UI remain usable; edits can be made, but timed work does not advance. Future purely visual or atmosphere animations may continue independently.
 
 This pause is specific to visiting an island. Ordinary fleet camera movement remains within its viewing sphere and never triggers it. Island management, cloud transitions, and their pause behavior belong to a later milestone, outside the initial movement prototype.
 
@@ -225,7 +221,7 @@ Water sits at **Y = 0**. Terrain may extend below zero so low basins form ponds,
 
 The current sky is blue, with subtle atmospheric haze to convey height and scale. Fog ramps up more strongly near the distant landscape edge to conceal its cutoff while preserving the visible blue sky. Terrain and water share the horizon treatment; see [horizon haze](terrain.md#horizon-haze) for the current authoring settings.
 
-The current UI layout follows Dungeon Directive's master shell: a 1920 x 1080 logical canvas, uniform scaling, and three centered 1920-wide zones with 140/800/140 heights. Top and bottom follow the viewport edges while the center stays centered; ultrawide views reveal side space and taller views separate the zones. The zone hosts are invisible layout regions; their feature views supply the visible UI. The top region contains ship count and FPS. The bottom region has five size classes, smallest to largest: Skiffs, Corvettes, Frigates, Cruisers, and Dreadnoughts. Selecting a class filters a single horizontally scrollable row; Kestrel belongs to Skiffs. Clicking a ship currently creates one friendly vessel at a random clear position near the anchor, without production or purchase costs. Plain shared-theme styling uses spacing in multiples of four logical pixels, with two-pixel borders allowed. See [UI layout and scaling](ui.md) for implemented ownership and aspect-ratio checks.
+The current UI layout follows Dungeon Directive's master shell: a 1920 x 1080 logical canvas, uniform scaling, and three centered 1920-wide zones with 140/800/140 heights. Top and bottom follow the viewport edges while the center stays centered; ultrawide views reveal side space and taller views separate the zones. The zone hosts are invisible layout regions; their feature views supply the visible UI. The top region contains ship count and FPS. The bottom region has five size classes, smallest to largest: Skiffs, Corvettes, Frigates, Cruisers, and Dreadnoughts. Selecting a class filters a single horizontally scrollable row; Kestrel belongs to Skiffs. Clicking a ship currently creates one friendly vessel at a random clear position near the marker, without production or purchase costs. Plain shared-theme styling uses spacing in multiples of four logical pixels, with two-pixel borders allowed. See [UI layout and scaling](ui.md) for implemented ownership and aspect-ratio checks.
 
 **TBD:** Final orbit-camera framing, palette, lighting, cloud-transition effects, UI style, animation, and audio direction.
 
@@ -234,10 +230,10 @@ The current UI layout follows Dungeon Directive's master shell: a 1920 x 1080 lo
 The first implementation milestone establishes movement and camera behavior using primitive geometry:
 
 - A reusable ship scene shared across factions, hulls, and weapon configurations, initially shown as two primitives forming a zeppelin envelope and gondola.
-- An orbit camera with mouse ship selection, fleet/ship tracking, scroll/controller zoom, released FPS-style free flight, a Shift/LT speed boost, and a spherical fleet viewing boundary. Compare anchor and average-position fleet tracking.
+- An orbit camera with mouse ship selection, fleet/ship tracking, scroll/controller zoom, released FPS-style free flight, a Shift/LT speed boost, and a spherical fleet viewing boundary. Compare marker and average-position fleet tracking.
 - A reusable floating-island scene, independent of its eventual resources and building spots, represented by primitives with approximate capsule collision. Islands spawn throughout the route at varied heights, and ships navigate around them.
-- The advancing fleet anchor, average-position feedback, local ship destinations, close-range avoidance, and sluggish airship movement.
-- Toggleable in-world navigation debug showing ship destinations, arrival radii, island detours, desired velocity, and actual velocity.
+- The persistent fleet marker, size-aware navigation sphere, local ship destinations, close-range avoidance, and sluggish airship movement.
+- Toggleable in-world navigation debug showing the fleet sphere, local destinations, arrival radii, requested velocity, and actual velocity.
 - Floating-origin travel along Z- with occasional island spawning and bounded loading of nearby scenery. Additional content, such as clouds, comes later.
 - Streamed voxel ground scenery below the fleet, with noise-generated heights and authorable, varied color bands.
 
@@ -249,9 +245,9 @@ The combat milestone's implemented ownership, tuning, and validation are recorde
 
 Cannonballs follow gravity-driven ballistic arcs, with weapons calculating elevation and lead for moving targets before firing. Scripted flight and hit detection follow the same curve; Godot rigid bodies are not required. The slot cone constrains the initial launch direction, including elevation and lead. Rusty cannon favors the earliest intercept and a low arc, using authorable stylized gravity that permits its 1000-meter level shot at the specified launch speed. Range measures muzzle-to-target distance, while an independent lifetime allows the longer curved flight; targets within range can still be ballistically unreachable. Gravity and lifetime tuning are recorded in the combat plan.
 
-The playable journey starts with three friendly Kestrels and no automatic combat spawning or casualty replenishment. The repeating debug encounter is confined to the opt-in combat validation tools. There is no encounter difficulty curve or combat progression in this slice. Friendly projectile impacts consume the projectile without damaging the ally. Rusty cannons emit brief muzzle-smoke bursts; the effect can be assigned to other selected cannon scenes. Impacts have no visual explosion effect. Destroyed ships stop flight control, retain their momentum and collider, and fall under 0.2-times project gravity (19.6 meters/s²) with native damping. Authored death-smoke emitters leave trails of camera-facing squares while airborne and stop on first ground contact. Wrecks continue rebasing, settle for three seconds before freezing while supported, and expire 25 seconds after first ground contact. Wrecks without ground contact expire after 45 seconds. Wrecks and smoke remain hidden over coarse terrain. Water-specific wreck behavior, production, player-directed reinforcements, and the visual ship editor remain later work. Existing journey and terrain progression continues independently.
+The playable journey starts with three friendly Kestrels and adds threat-budget enemy waves every 500 meters, without automatic casualty replenishment. Swift (Skiff), Manta (Corvette), and Bastion (Frigate) use distinguishable primitive hulls with different health, flight tuning, and cannon counts. All are available to the enemy pool and friendly picker. The repeating capped debug encounter remains confined to opt-in combat validation tools with normal waves disabled. Friendly projectile impacts consume the projectile without damaging the ally. Rusty cannons emit brief muzzle-smoke bursts; the effect can be assigned to other selected cannon scenes. Impacts have no visual explosion effect. Destroyed ships stop flight control, retain their momentum and collider, and fall under 0.2-times project gravity (19.6 meters/s²) with native damping. Authored death-smoke emitters leave trails of camera-facing squares while airborne and stop on first ground contact. Wrecks continue rebasing, settle for three seconds before freezing while supported, and expire 25 seconds after first ground contact. Wrecks without ground contact expire after 45 seconds. Wrecks and smoke remain hidden over coarse terrain. Water-specific wreck behavior, production, production-backed or purchased reinforcements, and the visual ship editor remain later work. Journey progression continues during combat, allowing distance-based waves to overlap.
 
-In the opt-in combat fixture, center both factions' spawn region on the persistent anchor, independent of the ship average and camera: initially 1000–1500 horizontal meters away and within 1500 meters above or below its altitude. Reject overlaps with ships and loaded islands using bounded placement attempts.
+In the opt-in combat fixture, center both factions' spawn region on the persistent marker, independent of the ship average and camera: initially 1000–1500 horizontal meters away and within 1500 meters above or below its altitude. Reject overlaps with ships and loaded islands using bounded placement attempts.
 
 Measure the combined combat workload at roughly **70 friendly ships and 150 enemy ships** as an endgame target for low-end hardware. This benchmark is independent of the playable three-ship starting fleet. Begin with ordinary readable optimizations; further low-level work depends on profiling. Ship health values, reload cadence, final cone angles, and engagement distances remain provisional authoring choices.
 

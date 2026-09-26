@@ -56,7 +56,7 @@ func navigation_candidates(ship: Airship) -> Array[FloatingIsland]:
 	if _navigation_dirty or _navigation_count != obstacles.size() or _navigation_segment != origin.segment:
 		_rebuild_navigation_cells()
 	var position := Vector2(ship.global_position.x, ship.global_position.z)
-	var radius := ShipIslandNavigation.search_radius(ship, _maximum_navigation_radius)
+	var radius := ShipNavigation.search_radius(ship, _maximum_navigation_radius)
 	var minimum := Vector2i(((position - Vector2.ONE * radius) / NAVIGATION_CELL_SIZE).floor())
 	var maximum := Vector2i(((position + Vector2.ONE * radius) / NAVIGATION_CELL_SIZE).floor())
 	_candidate_indices.clear()

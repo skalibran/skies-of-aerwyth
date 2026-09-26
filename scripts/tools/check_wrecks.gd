@@ -202,8 +202,8 @@ func _check_picking() -> void:
 	var fixture := Node3D.new()
 	root.add_child(fixture)
 	var fleet := FleetController.new()
-	fleet.anchor = Node3D.new()
-	fixture.add_child(fleet.anchor)
+	fleet.marker = Node3D.new()
+	fixture.add_child(fleet.marker)
 	fixture.add_child(fleet)
 	var rig := CAMERA.instantiate() as FleetCamera
 	rig.fleet = fleet

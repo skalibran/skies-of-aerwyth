@@ -24,7 +24,7 @@ var _rotating: bool = false
 var _window_active: bool = true
 var _cursor_before_rotation := Vector2.ZERO
 var _pending_pick := Vector2.INF
-var _free_anchor_offset := Vector3.ZERO
+var _free_marker_offset := Vector3.ZERO
 
 
 func _ready() -> void:
@@ -138,8 +138,8 @@ func pan(displacement: Vector3) -> void:
 		_clear_followed_ship()
 		mode = Mode.FREE
 		camera.position = Vector3.ZERO
-		_free_anchor_offset = eye_position - fleet.anchor.get_global_transform_interpolated().origin
-	_free_anchor_offset += displacement
+		_free_marker_offset = eye_position - fleet.marker.get_global_transform_interpolated().origin
+	_free_marker_offset += displacement
 	_update_follow_focus()
 	apply_view_bounds()
 
@@ -156,13 +156,13 @@ func apply_view_bounds() -> void:
 	if not is_instance_valid(fleet) or not is_instance_valid(camera):
 		return
 	_update_rotation()
-	var center := fleet.anchor.get_global_transform_interpolated().origin
+	var center := fleet.marker.get_global_transform_interpolated().origin
 	var radius := maxf(viewing_radius, 100.0)
 	if mode == Mode.FREE:
 		var relative_eye := global_position - center
 		if relative_eye.length_squared() > radius * radius:
 			global_position = center + relative_eye.limit_length(radius)
-			_free_anchor_offset = global_position - center
+			_free_marker_offset = global_position - center
 		camera.position = Vector3.ZERO
 		return
 	var relative_focus := (global_position - center).limit_length(radius - 80.0)
@@ -183,10 +183,10 @@ func _update_follow_focus() -> void:
 			return
 		global_position = followed_ship.get_global_transform_interpolated().origin
 	elif mode == Mode.FLEET:
-		global_position = fleet.anchor.get_global_transform_interpolated().origin
+		global_position = fleet.marker.get_global_transform_interpolated().origin
 	elif mode == Mode.FREE:
-		# Follow translation only; the offset survives rebasing and never rotates with the anchor.
-		global_position = fleet.anchor.get_global_transform_interpolated().origin + _free_anchor_offset
+		# Follow translation only; the offset survives rebasing and never rotates with the marker.
+		global_position = fleet.marker.get_global_transform_interpolated().origin + _free_marker_offset
 
 
 func _update_navigation(delta: float) -> void:

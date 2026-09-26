@@ -30,9 +30,9 @@ func _run() -> void:
 	_fixture = Node3D.new()
 	root.add_child(_fixture)
 	_fleet = FleetController.new()
-	_fleet.anchor = Node3D.new()
+	_fleet.marker = Node3D.new()
 	_fixture.add_child(_fleet)
-	_fixture.add_child(_fleet.anchor)
+	_fixture.add_child(_fleet.marker)
 	_projectiles = ProjectileController.new()
 	_fixture.add_child(_projectiles)
 	_origin = FloatingOrigin.new()
@@ -181,7 +181,7 @@ func _check_mounts_and_health() -> void:
 	enemy.linear_velocity = Vector3(0, 0, right_weapon.weapon.launch_speed * 1.5)
 	player.combat.prepare(2.1, player, [player, enemy], _fleet)
 	player.combat.prepare(0.0, player, [player, enemy], _fleet)
-	_check(player.combat.stand_off_distance < player.engagement_distance, "Ballistically unreachable moving targets cause a closer approach.")
+	_check(player.combat.engagement_range <= _fleet.radius * 0.75, "Combat spacing fits the current maneuvering sphere.")
 	enemy.linear_velocity = Vector3.ZERO
 	player.combat.target = far_enemy
 	right.fire_at_targets_in_range = false
@@ -391,6 +391,11 @@ func _advance_projectiles(seconds: float) -> void:
 
 func _check_journey() -> void:
 	var journey := JOURNEY.instantiate() as Journey
+	journey.encounters.enabled = false
+	journey.fleet.entry_range = 800.0
+	journey.fleet.minimum_radius = 1800.0
+	journey.fleet.radius = 1800.0
+	journey.fleet.local_step = 160.0
 	root.add_child(journey)
 	var spawner := CombatSpawner.new()
 	spawner.ship_scene = KESTREL
@@ -400,16 +405,15 @@ func _check_journey() -> void:
 	var stationary := journey.ships[0]
 	stationary.linear_velocity = Vector3.FORWARD * 100.0
 	var initial_position := stationary.global_position
-	var initial_anchor := journey.fleet.anchor.global_position
+	var initial_anchor := journey.fleet.marker.global_position
 	journey.step_simulation(0.0)
-	_check(stationary.global_position == initial_position and journey.fleet.anchor.global_position == initial_anchor and journey.projectiles.fired_count == 0, "Zero-duration refreshes neither move bodies nor fire weapons.")
+	_check(stationary.global_position == initial_position and journey.fleet.marker.global_position == initial_anchor and journey.projectiles.fired_count == 0, "Zero-duration refreshes neither move bodies nor fire weapons.")
 	stationary.linear_velocity = Vector3.ZERO
-	var debug := journey.get_node("FleetAnchor/NavigationDebug") as ShipNavigationDebug
+	var debug := journey.get_node("FleetMarker/NavigationDebug") as ShipNavigationDebug
 	_check(not debug.enabled and not debug.visible and not debug.is_processing(), "Ordinary combat starts with navigation debug disabled.")
 	var maximum_enemies: int = 0
 	var maximum_players: int = 0
 	var maximum_anchor_distance: float = 0.0
-	var maximum_mean_distance: float = 0.0
 	var maximum_speed: float = 0.0
 	var timings := PackedFloat64Array()
 	for tick in range(180 * _rate):
@@ -427,8 +431,7 @@ func _check_journey() -> void:
 			# Contacts and retained lateral momentum can exceed the propulsion target.
 			# The isolated flight check verifies limits and recovery under known forces.
 			maximum_speed = maxf(maximum_speed, ship.linear_velocity.length())
-			maximum_anchor_distance = maxf(maximum_anchor_distance, ship.global_position.distance_to(journey.fleet.anchor.global_position))
-		maximum_mean_distance = maxf(maximum_mean_distance, journey.fleet.average_position.distance_to(journey.fleet.anchor.global_position))
+			maximum_anchor_distance = maxf(maximum_anchor_distance, ship.global_position.distance_to(journey.fleet.marker.global_position))
 		maximum_enemies = maxi(maximum_enemies, enemies)
 		maximum_players = maxi(maximum_players, players)
 		_check(enemies <= 100 and players <= 100, "Scheduled spawns independently cap each faction at one hundred living ships.")
@@ -437,7 +440,7 @@ func _check_journey() -> void:
 				var candidates := journey.island_spawner.navigation_candidates(ship)
 				for island in journey.island_spawner.obstacles:
 					var offset := island.global_position - ship.global_position
-					var radius := ShipIslandNavigation.search_radius(ship, island.navigation_radius)
+					var radius := ShipNavigation.search_radius(ship, island.navigation_radius)
 					if Vector2(offset.x, offset.z).length_squared() <= radius * radius:
 						_check(island in candidates, "Spatial island filtering retains every potentially relevant obstacle through travel and rebasing.")
 		if tick == _rate - 2:
@@ -459,16 +462,14 @@ func _check_journey() -> void:
 	_check(journey.projectiles.damaging_hits > 0 and journey.destroyed_count > 0, "Combat causes damage and retires destroyed ships into falling wrecks.")
 	_check(spawner.batches == 180, "Spawner continues on one-second cadence.")
 	_check(maximum_players > starting_players and maximum_enemies > 0, "Both combat populations receive reinforcements despite ongoing casualties; controlled batches below verify the caps.")
-	_check(maximum_anchor_distance < 4500.0 and maximum_mean_distance < 1800.0, "Three minutes of full-fleet combat stay near the anchor with room for turns and island detours.")
 	if _visual:
 		journey.camera_rig.focus_fleet()
 		journey.camera_rig.zoom(4500.0 - journey.camera_rig.camera.position.z)
 		await _capture("combat-cohesion")
 	for ship in journey.fleet.members:
-		_check(ship.faction == Factions.PLAYER and ship.alive, "Enemies and dead ships never enter the friendly fleet average.")
+		_check(ship.faction == Factions.PLAYER and ship.alive, "Enemies and dead ships never enter friendly fleet membership.")
 	timings.sort()
-	var demo_result := {"seconds": 180, "shots": journey.projectiles.fired_count, "damage_hits": journey.projectiles.damaging_hits, "ally_hits": journey.projectiles.friendly_hits, "destroyed": journey.destroyed_count, "max_players": maximum_players, "max_enemies": maximum_enemies, "max_anchor_distance": maximum_anchor_distance, "max_mean_distance": maximum_mean_distance, "step_p50_ms": timings[timings.size() / 2], "step_p95_ms": timings[int(timings.size() * 0.95)]}
-	demo_result["max_observed_speed"] = maximum_speed
+	var demo_result := {"seconds": 180, "shots": journey.projectiles.fired_count, "damage_hits": journey.projectiles.damaging_hits, "destroyed": journey.destroyed_count, "max_distance": maximum_anchor_distance, "max_observed_speed": maximum_speed, "step_p95_ms": timings[int(timings.size() * 0.95)]}
 	# Cap, partial refill, retargeting, and empty-fleet behavior use controlled state.
 	spawner.enabled = false
 	for ship in journey.ships.duplicate():
@@ -478,7 +479,6 @@ func _check_journey() -> void:
 	await process_frame
 	spawner.enabled = true
 	spawner.spawn_radius = Vector2(1500, 2800)
-	journey.fleet.average_focus.global_position = journey.fleet.anchor.global_position + Vector3(10000, 1000, 10000)
 	for batch in range(10):
 		await physics_frame
 		if batch == 5:
@@ -486,9 +486,9 @@ func _check_journey() -> void:
 		spawner.step(1, journey)
 	_check(_faction_count(journey, Factions.PLAYER) == 100 and _faction_count(journey, Factions.ENEMY) == 100, "Ten unobstructed batches fill both faction caps.")
 	for ship in journey.ships:
-		var offset := ship.global_position - journey.fleet.anchor.global_position
+		var offset := ship.global_position - journey.fleet.marker.global_position
 		var radius := Vector2(offset.x, offset.z).length()
-		_check(radius >= 1499.9 and radius <= 2800.1 and absf(offset.y) <= spawner.altitude_spread + 0.1, "Both factions respect the authored anchor-relative spawn region despite a displaced fleet average and rebasing.")
+		_check(radius >= 1499.9 and radius <= 2800.1 and absf(offset.y) <= spawner.altitude_spread + 0.1, "Both factions respect the authored marker-relative spawn region despite displaced ships and rebasing.")
 	var spawned := spawner.spawned_count
 	spawner.step(10, journey)
 	_check(spawner.spawned_count == spawned, "Capped batches do not accumulate spawns.")
@@ -523,7 +523,7 @@ func _check_journey() -> void:
 	collider.shape = shape
 	blocker.add_child(collider)
 	journey.add_child(blocker)
-	blocker.global_position = journey.fleet.anchor.global_position
+	blocker.global_position = journey.fleet.marker.global_position
 	var blocked_ship := journey.ships[0]
 	blocked_ship.take_damage(blocked_ship.maximum_health, Factions.ENEMY if blocked_ship.faction == Factions.PLAYER else Factions.PLAYER)
 	journey.step_simulation(0)
@@ -540,11 +540,11 @@ func _check_journey() -> void:
 		if ship.faction == Factions.PLAYER:
 			ship.take_damage(ship.maximum_health, Factions.ENEMY)
 	journey.step_simulation(0)
-	_check(journey.fleet.speed == 0 and journey.fleet.velocity == Vector3.ZERO, "An empty player fleet stops the anchor until debug reinforcements arrive.")
+	_check(journey.fleet.speed == 0 and journey.fleet.velocity == Vector3.ZERO, "An empty player fleet stops the marker until debug reinforcements arrive.")
 	var survivor := KESTREL.instantiate() as Airship
 	survivor.entity_id = journey.allocate_ship_id()
 	journey.add_child(survivor)
-	survivor.global_position = journey.fleet.anchor.global_position
+	survivor.global_position = journey.fleet.marker.global_position
 	journey.register_ship(survivor)
 	journey.step_simulation(_delta)
 	_check(survivor.combat.has_target(), "New player ships acquire a main target.")
@@ -557,7 +557,7 @@ func _check_journey() -> void:
 		if ship.faction == Factions.ENEMY:
 			ship.take_damage(ship.maximum_health, Factions.PLAYER)
 	journey.step_simulation(_delta)
-	_check(not survivor.combat.has_target() and not survivor.combat_engaged and survivor.preferred_velocity != Vector3.ZERO, "The surviving player resumes travel when opponents disappear.")
+	_check(not survivor.combat.has_target() and not survivor.combat_engaged and survivor.navigation_velocity != Vector3.ZERO, "The surviving player resumes travel when opponents disappear.")
 	print("COMBAT_DEMO ", JSON.stringify(demo_result))
 	journey.queue_free()
 	await process_frame

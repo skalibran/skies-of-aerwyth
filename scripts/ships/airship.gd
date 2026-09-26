@@ -23,8 +23,6 @@ const ENEMY_TINT := preload("res://materials/ships/enemy_tint.tres")
 ## Fraction of project gravity used by passive wrecks; momentum/damping stay native.
 @export_range(0.01, 1.0, 0.01) var wreck_gravity_scale: float = 0.2
 @export_range(100.0, 900.0) var engagement_distance: float = 600.0
-@export_range(0.1, 1.0) var combat_speed_ratio: float = 0.5
-@export_range(2.0, 15.0) var combat_pass_seconds: float = 6.0
 ## Primary horizontal propulsion axis in ship-local space. Altitude uses lift control.
 @export var primary_movement_direction := Vector3.FORWARD
 ## Propulsion target limit. Contact impulses and retained lateral momentum can exceed it.
@@ -38,16 +36,14 @@ const ENEMY_TINT := preload("res://materials/ships/enemy_tint.tres")
 @export_range(0.1, 5.0) var lateral_drag: float = 1.4
 @export_range(0.0, 20.0) var pitch_limit_degrees: float = 8.0
 @export_range(0.0, 20.0) var bank_limit_degrees: float = 7.0
-@export_range(20.0, 200.0) var island_clearance: float = 80.0
+@export_range(5.0, 200.0) var island_clearance: float = 20.0
 
-var travel := ShipTravel.new()
-var island_navigation := ShipIslandNavigation.new()
+var navigation := ShipNavigation.new()
 var combat := ShipCombat.new()
 var current_health: float = 500.0
 var alive: bool = true
 var combat_engaged: bool = false
 var navigation_time_usec: int = 0
-var preferred_velocity := Vector3.ZERO
 var navigation_velocity := Vector3.ZERO
 var hull_radius: float = 22.0
 var hull_half_segment: float = 28.0
@@ -78,7 +74,6 @@ func _apply_faction_tint(root: Node3D) -> void:
 
 func _on_equipment_changed(slot: MountedSlot) -> void:
 	combat.clear_target()
-	combat_engaged = false
 	_apply_faction_tint(slot)
 
 
@@ -100,7 +95,6 @@ func take_damage(amount: float, source_faction: StringName) -> void:
 func _become_wreck() -> void:
 	combat.clear_target()
 	combat_engaged = false
-	preferred_velocity = Vector3.ZERO
 	navigation_velocity = Vector3.ZERO
 	# Leave momentum with the engine and restore passive rigid-body behavior.
 	gravity_scale = wreck_gravity_scale
@@ -164,23 +158,28 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 
 
-func prepare_travel(delta: float, anchor_position: Vector3, anchor_velocity: Vector3) -> void:
-	set_preferred_velocity(travel.preferred_velocity(delta, global_position - anchor_position, anchor_velocity))
-
-
-func set_preferred_velocity(value: Vector3) -> void:
-	preferred_velocity = value
+func prepare_navigation(delta: float, ships: Array[Airship], fleet: FleetController, combat_enabled: bool = true) -> void:
+	if navigation.fleet == null:
+		navigation.initialize(fleet, self)
+	if combat_enabled:
+		combat_engaged = combat.prepare(delta, self, ships, fleet)
+	else:
+		combat.clear_target()
+		combat_engaged = false
+	navigation.prepare(delta, self)
 
 
 func apply_movement_forces(delta: float, avoidance: Vector3, islands: Array[FloatingIsland], measure: bool = false) -> void:
 	navigation_time_usec = 0
-	if not alive or freeze or delta <= 0.0:
+	if not alive or freeze or delta <= 0.0 or navigation.fleet == null:
 		return
 	var started: int = Time.get_ticks_usec() if measure else 0
-	navigation_velocity = island_navigation.steer(self, islands, delta)
+	navigation_velocity = navigation.steer(self, avoidance, islands)
+	if navigation.fleet.members.is_empty():
+		navigation_velocity = Vector3.ZERO
 	if measure:
 		navigation_time_usec = Time.get_ticks_usec() - started
-	ShipFlight.apply_forces(self, navigation_velocity + avoidance, delta)
+	ShipFlight.apply_forces(self, navigation_velocity, delta)
 	_update_attitude(delta)
 
 

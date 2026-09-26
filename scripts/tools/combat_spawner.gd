@@ -48,7 +48,7 @@ func step(delta: float, journey: Journey) -> void:
 
 
 func _spawn_one(journey: Journey, faction: StringName) -> void:
-	var center := journey.fleet.anchor.global_position
+	var center := journey.fleet.marker.global_position
 	var space := journey.get_world_3d().direct_space_state
 	for attempt in range(16):
 		var angle := rng.randf_range(0.0, TAU)

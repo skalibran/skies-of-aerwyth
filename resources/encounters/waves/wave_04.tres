@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WaveOverride" format=3 uid="uid://dm4p4vbe5kbea"]
+
+[ext_resource type="Script" uid="uid://edm37kdw2nmx" path="res://scripts/encounters/wave_override.gd" id="1"]
+[ext_resource type="Script" uid="uid://dnw6f8m0o5jmb" path="res://scripts/encounters/guaranteed_spawn.gd" id="2"]
+[ext_resource type="Resource" path="res://resources/encounters/entries/escort_patrol.tres" id="3"]
+
+[sub_resource type="Resource" id="Guaranteed"]
+script = ExtResource("2")
+entry = ExtResource("3")
+
+[resource]
+script = ExtResource("1")
+wave_number = 4
+guaranteed = Array[ExtResource("2")]([SubResource("Guaranteed")])

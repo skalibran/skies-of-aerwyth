@@ -1,0 +1,56 @@
+[gd_resource type="Resource" script_class="EncounterProfile" format=3 uid="uid://t00qlrqgywgk"]
+
+[ext_resource type="Script" uid="uid://d4dao36pbxvxp" path="res://scripts/encounters/encounter_profile.gd" id="1"]
+[ext_resource type="Script" uid="uid://dygqqn4rdmb7l" path="res://scripts/encounters/encounter_option.gd" id="2"]
+[ext_resource type="Script" uid="uid://edm37kdw2nmx" path="res://scripts/encounters/wave_override.gd" id="3"]
+[ext_resource type="Resource" path="res://resources/encounters/entries/kestrel.tres" id="entry0"]
+[ext_resource type="Resource" path="res://resources/encounters/entries/swift.tres" id="entry1"]
+[ext_resource type="Resource" path="res://resources/encounters/entries/manta.tres" id="entry2"]
+[ext_resource type="Resource" path="res://resources/encounters/entries/bastion.tres" id="entry3"]
+[ext_resource type="Resource" path="res://resources/encounters/entries/scout_pair.tres" id="entry4"]
+[ext_resource type="Resource" path="res://resources/encounters/entries/escort_patrol.tres" id="entry5"]
+[ext_resource type="Resource" path="res://resources/encounters/entries/battle_group.tres" id="entry6"]
+[ext_resource type="Resource" uid="uid://capjttomdinpt" path="res://resources/encounters/waves/wave_02.tres" id="wave0"]
+[ext_resource type="Resource" uid="uid://dm4p4vbe5kbea" path="res://resources/encounters/waves/wave_04.tres" id="wave1"]
+[ext_resource type="Resource" uid="uid://d2d2x8xwwomvv" path="res://resources/encounters/waves/wave_08.tres" id="wave2"]
+
+[sub_resource type="Resource" id="Option0"]
+script = ExtResource("2")
+entry = ExtResource("entry0")
+
+[sub_resource type="Resource" id="Option1"]
+script = ExtResource("2")
+entry = ExtResource("entry1")
+
+[sub_resource type="Resource" id="Option2"]
+script = ExtResource("2")
+entry = ExtResource("entry2")
+weight = 1.8
+maximum_selections = 2
+
+[sub_resource type="Resource" id="Option3"]
+script = ExtResource("2")
+entry = ExtResource("entry3")
+maximum_selections = 1
+
+[sub_resource type="Resource" id="Option4"]
+script = ExtResource("2")
+entry = ExtResource("entry4")
+maximum_selections = 1
+
+[sub_resource type="Resource" id="Option5"]
+script = ExtResource("2")
+entry = ExtResource("entry5")
+weight = 1.5
+maximum_selections = 1
+
+[sub_resource type="Resource" id="Option6"]
+script = ExtResource("2")
+entry = ExtResource("entry6")
+weight = 0.75
+maximum_selections = 1
+
+[resource]
+script = ExtResource("1")
+options = Array[ExtResource("2")]([SubResource("Option0"), SubResource("Option1"), SubResource("Option2"), SubResource("Option3"), SubResource("Option4"), SubResource("Option5"), SubResource("Option6")])
+wave_overrides = Array[ExtResource("3")]([ExtResource("wave0"), ExtResource("wave1"), ExtResource("wave2")])

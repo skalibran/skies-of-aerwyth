@@ -1,0 +1,122 @@
+[gd_scene format=3 uid="uid://dkvl08mkd2kie"]
+
+[ext_resource type="PackedScene" path="res://scenes/ships/ship.tscn" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/ships/mounted_slot.tscn" id="2"]
+[ext_resource type="PackedScene" uid="uid://dgdooeqaxxrxt" path="res://scenes/weapons/rusty_cannon.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/ships/ship_death_smoke.tscn" id="4"]
+
+[sub_resource type="CapsuleShape3D" id="Hull"]
+radius = 20.0
+height = 70.0
+
+[sub_resource type="StandardMaterial3D" id="EnvelopeMaterial"]
+albedo_color = Color(0.32, 0.62, 0.57, 1)
+roughness = 0.8
+
+[sub_resource type="CapsuleMesh" id="EnvelopeMesh"]
+material = SubResource("EnvelopeMaterial")
+radius = 6.0
+height = 40.0
+radial_segments = 12
+rings = 4
+
+[sub_resource type="StandardMaterial3D" id="HullMaterial"]
+albedo_color = Color(0.15, 0.24, 0.29, 1)
+metallic = 0.35
+roughness = 0.65
+
+[sub_resource type="BoxMesh" id="GondolaMesh"]
+material = SubResource("HullMaterial")
+size = Vector3(12, 6, 28)
+
+[sub_resource type="CapsuleMesh" id="StarboardEnvelopeMesh"]
+material = SubResource("EnvelopeMaterial")
+radius = 6.0
+height = 40.0
+radial_segments = 12
+rings = 4
+
+[sub_resource type="StandardMaterial3D" id="AccentMaterial"]
+albedo_color = Color(0.87, 0.75, 0.46, 1)
+metallic = 0.25
+roughness = 0.7
+
+[sub_resource type="BoxMesh" id="ForeBeamMesh"]
+material = SubResource("AccentMaterial")
+size = Vector3(32, 3, 4)
+
+[sub_resource type="BoxMesh" id="AftBeamMesh"]
+material = SubResource("AccentMaterial")
+size = Vector3(32, 3, 4)
+
+[sub_resource type="BoxMesh" id="TailMesh"]
+material = SubResource("HullMaterial")
+size = Vector3(36, 2, 8)
+
+[node name="Manta" unique_id=2004893222 node_paths=PackedStringArray("mounted_slots", "death_smoke_points") instance=ExtResource("1")]
+mass = 22.0
+mounted_slots = [NodePath("VisualRoot/PortForeSlot"), NodePath("VisualRoot/PortAftSlot"), NodePath("VisualRoot/StarboardForeSlot"), NodePath("VisualRoot/StarboardAftSlot")]
+death_smoke_scene = ExtResource("4")
+death_smoke_points = NodePath("VisualRoot/DeathSmokePoints")
+preferred_combat_positions = PackedStringArray("front_bottom", "bottom", "back_bottom")
+maximum_health = 800.0
+maximum_speed = 45.0
+acceleration = 3.5
+braking = 5
+climb_speed = 4
+yaw_speed_degrees = 10
+yaw_acceleration_degrees = 8
+lateral_drag = 0.7
+
+[node name="HullCollider" parent="." index="0"]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
+shape = SubResource("Hull")
+
+[node name="Envelope" parent="VisualRoot" index="0"]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, -10, 3, 0)
+mesh = SubResource("EnvelopeMesh")
+
+[node name="Gondola" parent="VisualRoot" index="1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -6, 0)
+mesh = SubResource("GondolaMesh")
+
+[node name="StarboardEnvelope" type="MeshInstance3D" parent="VisualRoot" index="2" unique_id=450554323]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 10, 3, 0)
+mesh = SubResource("StarboardEnvelopeMesh")
+
+[node name="ForeBeam" type="MeshInstance3D" parent="VisualRoot" index="3" unique_id=1404178907]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -8)
+mesh = SubResource("ForeBeamMesh")
+
+[node name="AftBeam" type="MeshInstance3D" parent="VisualRoot" index="4" unique_id=306007844]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 8)
+mesh = SubResource("AftBeamMesh")
+
+[node name="Tail" type="MeshInstance3D" parent="VisualRoot" index="5" unique_id=19245418]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 16)
+mesh = SubResource("TailMesh")
+
+[node name="PortForeSlot" parent="VisualRoot" index="6" unique_id=100600430 instance=ExtResource("2")]
+transform = Transform3D(0.7071067, -0.6123724, 0.35355332, 0, 0.49999994, 0.8660254, -0.7071067, -0.6123724, 0.35355332, -7, -10, -15)
+cone_half_angle = 65.0
+equipment_scene = ExtResource("3")
+
+[node name="PortAftSlot" parent="VisualRoot" index="7" unique_id=1612311508 instance=ExtResource("2")]
+transform = Transform3D(-0.7071067, -0.6123724, 0.35355332, 0, 0.49999994, 0.8660254, -0.7071067, 0.6123724, -0.35355332, -7, -10, 15)
+cone_half_angle = 65.0
+equipment_scene = ExtResource("3")
+
+[node name="StarboardForeSlot" parent="VisualRoot" index="8" unique_id=1117365647 instance=ExtResource("2")]
+transform = Transform3D(0.7071067, 0.6123724, -0.35355332, 0, 0.49999994, 0.8660254, 0.7071067, -0.6123724, 0.35355332, 7, -10, -15)
+cone_half_angle = 65.0
+equipment_scene = ExtResource("3")
+
+[node name="StarboardAftSlot" parent="VisualRoot" index="9" unique_id=572305097 instance=ExtResource("2")]
+transform = Transform3D(-0.7071067, 0.6123724, -0.35355332, 0, 0.49999994, 0.8660254, 0.7071067, 0.6123724, -0.35355332, 7, -10, 15)
+cone_half_angle = 65.0
+equipment_scene = ExtResource("3")
+
+[node name="DeathSmokePoints" type="Node3D" parent="VisualRoot" index="10" unique_id=850299983]
+
+[node name="HullSmoke" type="Marker3D" parent="VisualRoot/DeathSmokePoints" index="0" unique_id=26221865]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -5, 4)

@@ -6,9 +6,9 @@ The [landscape performance investigation](terrain_performance.md) identified CPU
 
 ## Progression
 
-Read `journey.progression.distance` for forward distance in meters, starting at zero. JourneyProgress records the starting logical RoutePosition and derives the number from the anchor after each movement step. Camera movement, membership changes, and origin shifts do not add distance. A stopped anchor means stopped progression. This is journey distance, not meta progression or a frame/time counter.
+Read `journey.progression.distance` for forward distance in meters, starting at zero. JourneyProgress records the starting logical RoutePosition and derives the number from the marker after each movement step. Camera movement, membership changes, and origin shifts do not add distance. A stopped marker means stopped progression. This is journey distance, not meta progression or a frame/time counter.
 
-The scalar is convenient for thresholds and presentation. Signed segment/offset coordinates remain authoritative for exact long-range placement. The journey start and anchor position together define progression; neither is persisted by the current runtime.
+The scalar is convenient for thresholds and presentation. Signed segment/offset coordinates remain authoritative for exact long-range placement. The journey start and marker position together define progression; neither is persisted by the current runtime.
 
 Terrain is the first progression-dependent content. Every ground sample evaluates the same distance formula for **its own logical Z**, relative to the journey start. It does not use the fleet's current distance as a global terrain modifier. Distant mountains can be seen ahead before reaching them; passed grasslands retain their original shape and colors when revisited.
 
@@ -52,7 +52,7 @@ Water is a flat scenery surface at **Y = 0**. Negative terrain heights form subm
 
 The shader reconstructs opaque terrain depth using Forward+'s reverse-Z depth buffer. Shallow regions are lighter and slightly translucent; deeper water becomes darker and nearly opaque. Zero-height terrain stays dry. This is a visual depth effect, not a stored water volume. Transparent objects are not part of the sampled depth buffer. See Godot's [depth reconstruction](https://docs.godotengine.org/en/stable/tutorials/shaders/advanced_postprocessing.html) and [spatial shader reference](https://docs.godotengine.org/en/stable/tutorials/shaders/shader_reference/spatial_shader.html).
 
-WaterSurface recenters the 122880-meter plane in whole route segments around the anchor, always at Y = 0. Journey registers it as one independent origin root. The shader uses world X/Z rather than plane UVs; its 2560-meter pattern period divides the 10240-meter origin shift, keeping the pattern fixed through coverage movement and rebasing without giant float coordinates. Its coverage exceeds the camera sphere plus far range. Keep these extents in sync if expanding the camera range.
+WaterSurface recenters the 122880-meter plane in whole route segments around the marker, always at Y = 0. Journey registers it as one independent origin root. The shader uses world X/Z rather than plane UVs; its 2560-meter pattern period divides the 10240-meter origin shift, keeping the pattern fixed through coverage movement and rebasing without giant float coordinates. Its coverage exceeds the camera sphere plus far range. Keep these extents in sync if expanding the camera range.
 
 Water has no collision, buoyancy, destruction, or underwater rendering. The free camera can pass through it as it can through terrain; the water surface is visible from above. No water simulation or model-placement system is introduced here.
 
@@ -78,7 +78,7 @@ Each patch samples a 32 × 32 display grid. At the current 50-meter resolution, 
 
 Flat neighboring tops merge into rectangles only when height and color match. Matching vertical colors also merge. This removes unnecessary triangles without smoothing silhouettes or erasing nearby voxel steps. Vertical edge skirts close joins between patches at different detail levels. Looking beneath the scenery can reveal these skirts; underground views are not a terrain feature.
 
-VoxelTerrain covers 9 × 9 root regions around the anchor, extending at least 51200 meters to each outer edge with 50/100-meter voxels (40960 at size 10). This covers the 9000-meter camera sphere plus its 30000-meter far range. Detail follows the camera, quantized to 400-meter intervals at size 50, and includes its altitude above the maximum terrain height. Flying high avoids generating unnecessary fine detail. Camera movement changes display detail only. The exported Detail Distance controls how far fine patches extend.
+VoxelTerrain covers 9 × 9 root regions around the marker, extending at least 51200 meters to each outer edge with 50/100-meter voxels (40960 at size 10). This covers the 9000-meter camera sphere plus its 30000-meter far range. Detail follows the camera, quantized to 400-meter intervals at size 50, and includes its altitude above the maximum terrain height. Flying high avoids generating unnecessary fine detail. Camera movement changes display detail only. The exported Detail Distance controls how far fine patches extend.
 
 Initial coarse coverage builds before play. Two WorkerThreadPool jobs then build plain vertex/index/color arrays, each with its own sampler/noise state and immutable profile snapshot. Live scene-tree changes and ArrayMesh creation happen on the main thread, under a soft three-millisecond publication budget. One upload or layout commit can still exceed that budget; it is not a hard frame-time guarantee. `build_pending()` remains a synchronous drain for checks/offline tools, not the runtime path.
 

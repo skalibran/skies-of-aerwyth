@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/master_ui.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/ui/top_container.tscn" id="2"]
@@ -7,6 +7,7 @@
 [ext_resource type="PackedScene" path="res://scenes/ui/performance_overlay.tscn" id="5"]
 [ext_resource type="Theme" path="res://resources/ui/main_theme.tres" id="6"]
 [ext_resource type="PackedScene" path="res://scenes/ui/ship_picker.tscn" id="7"]
+[ext_resource type="PackedScene" path="res://scenes/ui/wave_announcement.tscn" id="8"]
 
 [node name="MasterUI" type="CanvasLayer"]
 script = ExtResource("1")
@@ -32,6 +33,10 @@ offset_bottom = 140.0
 grow_horizontal = 2
 
 [node name="PerformanceOverlay" parent="ViewportLayout/TopContainer" instance=ExtResource("5")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="WaveAnnouncement" parent="ViewportLayout/TopContainer" instance=ExtResource("8")]
 unique_name_in_owner = true
 layout_mode = 2
 

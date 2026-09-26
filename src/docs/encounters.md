@@ -1,0 +1,78 @@
+# Threat and enemy encounters
+
+Journey starts with three friendly Kestrels. Its `Encounters` node reads the marker's [journey progress](terrain.md#progression) and raises threat every **500 meters**. Each increase schedules one enemy wave at the next physics boundary, starting at 500 meters. Time alone, camera movement, and floating-origin shifts cannot trigger waves. A milestone is consumed once, including when its composition is empty; traveling backward cannot repeat it.
+
+[`journey_encounters.tres`](../../resources/encounters/journey_encounters.tres) owns the editable threat interval, budget growth, random pool, and optional wave overrides. There is no automatic casualty replenishment. The fleet marker keeps moving during encounters and crosses milestones at its normal travel pace. Each crossed milestone schedules once on the next physics tick, so a new wave may arrive while previous enemies remain alive or placement is pending. Empty plans also consume their milestone without interrupting movement. Existing fleet-clearance and obstacle safeguards still apply.
+
+## Budget and selection
+
+The budget is `base_budget + budget_per_threat * threat_level ^ budget_growth`, rounded to an integer. The authored defaults are zero base, 15 points per level, and linear growth: wave 1 receives 15 points, wave 2 receives 30, and wave 8 receives 120. Each wave gets a fresh budget; unused points do not carry over.
+
+Each [`ShipDefinition`](../../scripts/ships/ship_definition.gd) has an explicit **Spawn Cost** for its complete loadout. Stats do not automatically change that cost. A [`FleetPreset`](../../scripts/encounters/fleet_preset.gd) contains ship/count members and costs their exact sum. A reusable [`SpawnEntry`](../../scripts/encounters/spawn_entry.gd) references exactly one ship definition or fleet preset. Entries live under `resources/encounters/entries/`; presets live under `resources/encounters/fleets/`. Both the random pool and guaranteed overrides use these same entries.
+
+An [`EncounterOption`](../../scripts/encounters/encounter_option.gd) adds **Weight** and **Maximum Selections** to a spawn entry in the pool. Weight is relative to other currently affordable options; it is independent of cost, and weights need not sum to 100. Zero weight disables a random option. A fleet is an indivisible selection: the whole bundle must fit, and every member enters the plan. Maximum Selections limits that pool option, not every occurrence of its ships through other presets or guarantees.
+
+The planner first adds guaranteed entries, then chooses a random spending target between **75% and 100%** of the original budget. Charged guarantees count toward this target; bonus entries do not. It repeatedly selects an affordable option by weight until the target is met or no eligible option remains. The final selection may cross the spending target but cannot cross the remaining budget. Leftover points are allowed, including when repetition limits exhaust the pool. There is no retry to force a nonempty composition.
+
+## Authoring guaranteed waves
+
+Add a [`WaveOverride`](../../scripts/encounters/wave_override.gd) resource to the profile's **Wave Overrides** array. **Wave Number** identifies its threat milestone: 2 means 1000 meters with the current 500-meter spacing. Only one override per number is allowed; place all its guaranteed entries in that override.
+
+Each [`GuaranteedSpawn`](../../scripts/encounters/guaranteed_spawn.gd) supplies:
+
+- **Entry:** any reusable ship or fleet spawn entry, whether or not it also appears in the random pool.
+- **Count:** complete copies of the entry. Two fleet copies include twice every member.
+- **Charge Budget:** enabled deducts the full entry cost before random filling; disabled adds the entry on top of the budget.
+
+Guarantees always take precedence. If their charged cost exceeds the wave budget, they still spawn, with no random extras and no debt applied to later waves. Disable the override's **Fill Random Budget** to make that wave entirely authored. An override with random filling enabled adds to the ordinary generator; it does not replace the pool.
+
+The supplied examples are:
+
+| Wave | Distance | Guaranteed entry | Budget treatment |
+| --- | ---: | --- | --- |
+| 2 | 1000 m | Manta | Charges 24 points |
+| 4 | 2000 m | Escort patrol: Manta + 2 Swifts | Charges 36 points |
+| 8 | 4000 m | Battle group: Bastion + Manta + 2 Kestrels | Adds 104 points on top |
+
+Other waves use the weighted pool alone. The pool includes all four individual ships, a two-Swift scout pair, the escort patrol, and the battle group. The authored sequence continues every 500 meters beyond the example overrides.
+
+The current pool's repetition limits cap random composition at 324 points and 20 ships. From wave 29 onward, the minimum spending target exceeds that cap, so ordinary waves exhaust every option regardless of their larger budget. This follows the authored per-option limits, not a planner failure; increasing the budget alone cannot exceed them. Threat-pool tuning remains in the [navigation and encounter follow-ups](todo/navigation-encounters.txt).
+
+Scheduling and blocked-placement retries have no session-wide population or pending-plan limit. This is accepted for the current gameplay: unhandled waves accumulate and overwhelm the player. No population cap, expiry, or guarantee-dropping policy is introduced. An empty friendly fleet stops further scheduling and placement. Release-build content validation and journey saves belong to whole-game work, separate from this refactor review.
+
+## Ships and presentation
+
+All four definitions are also available through the friendly ship picker. Spawn Cost is an enemy encounter cost, not a player purchase price.
+
+| Ship | Class | Cost | Health | Cannons | Speed | Appearance |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| Kestrel | Skiff | 10 | 500 | 2 broadside | 50 m/s | Existing authored voxel model |
+| Swift | Skiff | 6 | 250 | 1 forward | 65 m/s | Small amber envelope, pointed nose and upright tail |
+| Manta | Corvette | 24 | 800 | 4 downward/outward | 45 m/s | Twin teal envelopes and connecting beams |
+| Bastion | Frigate | 60 | 1600 | 6 broadside | 38 m/s | Large blue envelope, armored gondola and side pods |
+
+The three primitive scenes inherit `ship.tscn`, author their own capsule collider and flight tuning, and use tier-one Rusty cannons in ordinary mounted slots. They retain native flight/contact handling, faction tint, damage, death smoke, wreck cleanup, and floating-origin registration. Their composed visuals and mounted loadouts are editable in `scenes/ships/`. Tuning and broader combat acceptance remain in [COMBAT-02/04](todo/todo-combat.txt).
+
+Manta's four muzzles sit just outside the gondola's lower corners at X = +/-7, Y = -10, Z = +/-15 meters. Each points diagonally outward and 45 degrees downward, retaining its 65-degree cone half-angle. Its preferred target bearings are `front_bottom`, `bottom`, and `back_bottom`, so navigation favors positions above opponents instead of broadside presentation.
+
+## Runtime ownership
+
+[`EncounterDirector`](../../scripts/encounters/encounter_director.gd) owns reached threat, consumed wave numbers, the composition RNG, and pending plans. [`EncounterPlanner`](../../scripts/encounters/encounter_planner.gd) builds each plan once without mutating shared resources. A nonzero director **Random Seed** reproduces compositions; zero randomizes a new journey. Placement has a separate Journey-owned RNG, independent of both composition and the friendly picker.
+
+Journey steps the director before movement and combat snapshots. Spawning uses the existing registration path, assigning enemy faction and a unique ID before entering the tree. Enemies spawn ahead of the party along travel Z-, with a **100-meter minimum hull-to-hull gap** from the leading living friendly ship. Clearance projects each friendly capsule onto Z, including its yaw, and reserves the incoming hull's full extent. The region extends another 240 meters forward, spans 240 meters to either side of the marker, and varies altitude by up to 200 meters around it. These four temporary placement dimensions are hardcoded as `ENEMY_SPAWN_*` constants in Journey. Enemies initially face the fleet marker. Living enemies contribute to the shared sphere size, while only friendlies govern marker pace. Spawns outside the current sphere enter through the same bounded navigator as it grows. Camera movement does not affect placement. The altitude band keeps these hulls above the current 3400-meter terrain maximum; collision queries and same-tick hull checks reject overlaps with ships and loaded islands.
+
+At most eight ships are placed per tick, with at most 32 candidate positions per ship. Failed placement retains the selected ship and retries after 0.5 seconds of simulation time; it never rerolls or drops a guaranteed member. Pending fleets can therefore finish over several ticks. Large distance jumps catch up at most one crossed wave per tick, using each milestone's own budget and override. Empty plans consume their milestone normally. Existing plans and counters belong to the Journey instance and are released with it; encounter persistence is not implemented.
+
+Disabling the director or `Journey.combat_enabled`, stepping with zero duration, or having no living friendly fleet stops scheduling and placement. The separate `CombatSpawner` remains an opt-in stress fixture; combat and scale checks disable authored encounters when managing their own populations. The top-center [wave announcement](ui.md#wave-announcement) displays the wave number and its full composition cost as a provisional difficulty score for four seconds. `wave_spawned` emits once when the first ship is successfully placed, independently of `wave_planned`; empty or fully blocked waves do not announce. The score includes bonus fleet/ship costs and excludes unused budget.
+
+## Threat boundary lines
+
+[`threat_boundaries.tscn`](../../scenes/world/threat_boundaries.tscn) displays horizontal world-space lines at the journey start and each threat milestone, using the same **Threat Distance** as the encounter profile. At the default spacing, the lines divide progress into 500-meter sections. They follow the marker's rendered altitude while their logical Z positions stay fixed along the route. They have no collision and do not affect progression or spawning.
+
+A single batched mesh extends each line beyond the camera's visible horizontal range, including far-plane corners. Only nearby geometry is retained and rebuilt when the covered milestone range or view coverage changes. Logical route coordinates determine its local transform after origin shifts. Camera movement can change coverage, but cannot move a milestone along the route. The material keeps depth testing and fades the lines between 2000 and 6000 meters of forward/backward separation from the camera, avoiding a dense band at the horizon while preserving each line's horizontal span. Color and fade distances are authored on its shader material.
+
+## Validation
+
+Use the isolated APPDATA and log setup in [AGENTS.md](../../AGENTS.md), then run `res://scripts/tools/check_encounters.gd` with `--headless --fixed-fps 30`. The check covers budget accounting, weighted ratios, affordable whole fleets, repetition limits, charged/bonus and over-budget guarantees, deterministic rolls, exact distance boundaries, skipped and empty milestones, blocked placement retries, no-fleet suppression, registration, forward hull clearance with a yawed leading ship, logical boundary placement and coverage, capsule coverage, mounted loadouts, firing, origin shifts, and announcement timing, full-cost scores, and expiry.
+
+For rendered inspection, omit `--headless`, set `AERWYTH_CAPTURE_DIR` to an external directory, and append `-- --visual`. It captures the moving combat marker and navigation sphere, the forward spawn region and threat boundaries, the wave announcement, Swift, Manta, Bastion, and a mixed encounter. This fixture advances across eight milestones to exercise the content quickly; it is not a normal pacing or balance playthrough. The focused encounter check, rendered inspection, default combat fixtures, and UI catalog/spawning check passed at the project 30 Hz baseline. Scale and long-session performance were not measured for this change.

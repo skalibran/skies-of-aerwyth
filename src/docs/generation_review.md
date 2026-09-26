@@ -4,13 +4,13 @@ The measurements and spatial values below retain the units used when recorded. T
 
 Reviewed 2026-09-25 against the current five-unit terrain, water, progression, island streaming, and fleet integration. **The architecture is coherent and suitable for the current scenery prototype. This review does not establish production readiness.** Active blockers and completion criteria live in the [generation task list](todo/blockers-terrain.txt). A terrain rewrite is not justified by this pass.
 
-Subsequent combat work added spatial filtering for ship avoidance and loaded-island navigation. The measurements below preserve the pre-combat review baseline; see [combat runtime notes](combat.md#recorded-validation-and-limits) for the 220-ship workload and its measured CPU limits.
+Subsequent combat work added spatial filtering for ship avoidance and loaded-island navigation. The measurements below preserve the pre-combat review baseline; see [combat runtime notes](combat.md#validation) for the 220-ship workload and its measured CPU limits.
 
 ## Ownership and wiring
 
 | Owner | Contract |
 | --- | --- |
-| [Journey](../../scripts/world/journey.gd) / [JourneyProgress](../../scripts/world/journey_progress.gd) | Initialize the journey start once, derive progression from the anchor, and request scenery every 0.25 seconds. Camera motion and rebasing do not advance progression. |
+| [Journey](../../scripts/world/journey.gd) / [JourneyProgress](../../scripts/world/journey_progress.gd) | Initialize the journey start once, derive progression from the marker, and request scenery every 0.25 seconds. Camera motion and rebasing do not advance progression. |
 | [RoutePosition](../../scripts/world/route_position.gd) / [FloatingOrigin](../../scripts/world/floating_origin.gd) / [TerrainGrid](../../scripts/terrain/terrain_grid.gd) | Keep logical coordinates separate from small scene coordinates. Exact integer tile identities preserve five-unit alignment across 1024-unit shifts. Registered roots shift once. |
 | [TerrainProfile](../../scripts/terrain/terrain_profile.gd) / [TerrainBiome](../../scripts/terrain/terrain_biome.gd) | Own authored voxel size, noise, height limits, palettes, and transition distances. Runtime state does not mutate the authored resources. |
 | [TerrainSampler](../../scripts/terrain/terrain_sampler.gd) | Derive shape and color from logical location and journey start. Blend grassland/mountain heights before voxel quantization. Bound noise inputs through seeded regions; never consume island/ship RNG. |

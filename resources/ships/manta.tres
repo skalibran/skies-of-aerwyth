@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ShipDefinition" format=3 uid="uid://wdfb0oo54sdt"]
+
+[ext_resource type="Script" uid="uid://brg0fw7j0m7co" path="res://scripts/ships/ship_definition.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://dkvl08mkd2kie" path="res://scenes/ships/manta.tscn" id="2"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Manta"
+ship_class = 1
+scene = ExtResource("2")

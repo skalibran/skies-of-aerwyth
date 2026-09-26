@@ -2,6 +2,7 @@ class_name ProjectileController
 extends Node3D
 
 const MAX_CHORD_ERROR: float = 0.1
+const TRACER_MESH := preload("res://resources/weapons/cannon_tracer_mesh.tres")
 
 class Shot extends RefCounted:
 	var position: Vector3
@@ -19,19 +20,10 @@ var damaging_hits: int = 0
 var friendly_hits: int = 0
 var expired_count: int = 0
 var smoke_batches: Dictionary[PackedScene, CannonShotSmoke] = {}
-var _mesh := SphereMesh.new()
 var _query := PhysicsRayQueryParameters3D.new()
 
 
 func _ready() -> void:
-	_mesh.radius = 3.0
-	_mesh.height = 6.0
-	_mesh.radial_segments = 8
-	_mesh.rings = 4
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(0.85, 0.64, 0.24)
-	material.roughness = 0.9
-	_mesh.material = material
 	_query.collision_mask = 3
 	_query.hit_from_inside = true
 
@@ -46,10 +38,10 @@ func fire(shooter: Airship, muzzle: Vector3, velocity: Vector3, weapon: WeaponDe
 	shot.faction = shooter.faction
 	shot.source = weakref(shooter)
 	shot.visual = MeshInstance3D.new()
-	shot.visual.mesh = _mesh
+	shot.visual.mesh = TRACER_MESH
 	shot.visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(shot.visual)
-	shot.visual.position = shot.position
+	_update_visual(shot)
 	shot.visual.reset_physics_interpolation()
 	shots.append(shot)
 	fired_count += 1
@@ -100,7 +92,20 @@ func step(delta: float) -> void:
 			shot.visual.queue_free()
 			shots.remove_at(index)
 		else:
-			shot.visual.position = shot.position
+			_update_visual(shot)
+
+
+func _update_visual(shot: Shot) -> void:
+	var direction := shot.velocity.normalized()
+	if direction == Vector3.ZERO:
+		direction = shot.visual.basis.y
+	var reference := Vector3.FORWARD if absf(direction.y) > 0.99 else Vector3.UP
+	var side := reference.cross(direction).normalized()
+	# Anchor the rear tip at the shot position so the tracer extends out of the muzzle.
+	shot.visual.transform = Transform3D(
+		Basis(side, direction, side.cross(direction)),
+		shot.position + direction * TRACER_MESH.height * 0.5
+	)
 
 
 func clear() -> void:

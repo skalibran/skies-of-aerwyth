@@ -32,14 +32,14 @@ func _run() -> void:
 	var original_keys := terrain.chunks.keys()
 	var original_chunk: MeshInstance3D = terrain.chunks[original_keys[0]]
 	var original_arrays := original_chunk.mesh.surface_get_arrays(0)
-	var relative := original_chunk.global_position - journey.fleet.anchor.global_position
+	var relative := original_chunk.global_position - journey.fleet.marker.global_position
 	journey.origin.shift_segments(-1)
-	_check((original_chunk.global_position - journey.fleet.anchor.global_position).is_equal_approx(relative), "Rebasing preserves terrain/fleet alignment.")
+	_check((original_chunk.global_position - journey.fleet.marker.global_position).is_equal_approx(relative), "Rebasing preserves terrain/fleet alignment.")
 	_check(original_chunk.mesh.surface_get_arrays(0) == original_arrays, "Origin shifts do not rebuild terrain.")
 	_check_layout(terrain)
 	var visible_before := _visible_count(terrain)
 	var distance_before := journey.progression.distance
-	terrain.update_region(0.0, journey.anchor_route_position(), Vector3(7000.0, -3500.0, 10240.0))
+	terrain.update_region(0.0, journey.marker_route_position(), Vector3(7000.0, -3500.0, 10240.0))
 	terrain.build_pending(1)
 	_check(_visible_count(terrain) == visible_before, "Old coverage remains visible while replacement detail is incomplete.")
 	_check(journey.progression.distance == distance_before, "Changing terrain detail or camera position does not advance progression.")
@@ -305,11 +305,11 @@ func _check_water(journey: Journey) -> void:
 		water.recenter(Vector3(4000.0, 3800.0, offset))
 		_check(water.global_position.y == 0.0 and absf(water.global_position.z - offset) <= 5120.0, "Recentered water stays at Y = 0 with bounded local coverage.")
 	water.global_position = original
-	var relative := water.global_position - journey.fleet.anchor.global_position
+	var relative := water.global_position - journey.fleet.marker.global_position
 	var progress := journey.progression.distance
 	journey.origin.shift_segments(-2)
-	water.recenter(journey.fleet.anchor.global_position)
-	_check((water.global_position - journey.fleet.anchor.global_position).is_equal_approx(relative), "Water and fleet remain aligned across origin shifts.")
+	water.recenter(journey.fleet.marker.global_position)
+	_check((water.global_position - journey.fleet.marker.global_position).is_equal_approx(relative), "Water and fleet remain aligned across origin shifts.")
 	_check(journey.progression.distance == progress, "Moving water coverage does not change journey progression.")
 	journey.origin.shift_segments(2)
 	print("Starting landscape samples: %d submerged, %d dry." % [wet, dry])
@@ -339,7 +339,7 @@ func _capture_water(journey: Journey) -> void:
 	eye.global_position = pond + Vector3(500.0, 550.0, 700.0)
 	eye.look_at(pond)
 	eye.make_current()
-	journey.terrain.update_region(0.0, journey.anchor_route_position(), eye.global_position)
+	journey.terrain.update_region(0.0, journey.marker_route_position(), eye.global_position)
 	journey.terrain.build_pending(10000)
 	# Freeze shader time to compare the same view across a floating-origin shift.
 	var material := journey.water.material_override.duplicate() as ShaderMaterial
@@ -351,7 +351,7 @@ func _capture_water(journey: Journey) -> void:
 	var before := root.get_texture().get_image()
 	_check(before.save_png(directory.path_join("water-pond.png")) == OK, "Pond capture saved.")
 	journey.origin.shift_segments(-1)
-	journey.water.recenter(journey.fleet.anchor.global_position)
+	journey.water.recenter(journey.fleet.marker.global_position)
 	for frame in range(3):
 		await process_frame
 	await RenderingServer.frame_post_draw
@@ -403,10 +403,9 @@ func _capture_stages(journey: Journey) -> void:
 		# Place the whole test scene at a new logical location without changing local transforms.
 		var route := RoutePosition.new(0, -distance)
 		journey.origin.segment = route.segment
-		journey.fleet.anchor.position.z = route.offset
-		journey.fleet.average_focus.position.z = route.offset
+		journey.fleet.marker.position.z = route.offset
 		journey.progression.update(route)
-		journey.water.recenter(journey.fleet.anchor.global_position)
+		journey.water.recenter(journey.fleet.marker.global_position)
 		var rig := journey.camera_rig
 		rig.focus_fleet()
 		rig.pan(Vector3.ZERO)

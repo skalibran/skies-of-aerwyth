@@ -75,7 +75,7 @@ The accepted hardware target remains sustained 30 FPS on Steam Deck. This high-e
 
 ## Audit confirmation (2026-09-26)
 
-After the [lifecycle audit fixes](combat.md#integration-audit-2026-09-26), the same rendered 30 Hz scale workload passed again with identical authored configuration, 12,164 shots, 6,692 damaging impacts, 2,757 allied impacts, ten replacements, and the same peak ship/projectile node counts. This is a follow-up check, not a replacement for the paired baseline above.
+After the [registry and targeting cleanup](combat.md#spatial-filtering-and-measurement), the same rendered 30 Hz scale workload passed again with identical authored configuration, 12,164 shots, 6,692 damaging impacts, 2,757 allied impacts, ten replacements, and the same peak ship/projectile node counts. This is a follow-up check, not a replacement for the paired baseline above.
 
 | Phase | Previous script mean / p95 | Audit script mean / p95 | Audit wall-frame p95 |
 | --- | ---: | ---: | ---: |

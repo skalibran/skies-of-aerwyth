@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/fleet/fleet_navigation_sphere.gd" id="1"]
+
+[sub_resource type="StandardMaterial3D" id="WireMaterial"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(0.8, 0.4, 1, 0.65)
+disable_fog = true
+
+[node name="NavigationSphere" type="MeshInstance3D"]
+cast_shadow = 0
+gi_mode = 0
+material_override = SubResource("WireMaterial")
+script = ExtResource("1")

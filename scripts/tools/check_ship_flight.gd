@@ -8,12 +8,9 @@ var _delta: float = 1.0 / _rate
 var _failures: Array[String] = []
 var _fixture: Node3D
 var _fleet: FleetController
-var _visual: bool = false
-var _paths: Array[Dictionary] = []
 
 
 func _initialize() -> void:
-	_visual = "--visual" in OS.get_cmdline_user_args()
 	_run.call_deferred()
 
 
@@ -21,22 +18,22 @@ func _run() -> void:
 	_fixture = Node3D.new()
 	root.add_child(_fixture)
 	_fleet = FleetController.new()
-	_fleet.anchor = Node3D.new()
+	_fleet.marker = Node3D.new()
 	_fixture.add_child(_fleet)
-	_fixture.add_child(_fleet.anchor)
+	_fixture.add_child(_fleet.marker)
 	await _check_turn()
 	await _check_braking_and_axis()
-	await _check_cohesion()
+	_check_moving_navigation_heading()
+	await _check_navigation()
 	await _check_contacts()
 	await _check_impulse_recovery()
 	await _check_death()
-	await _check_pass()
 	_fixture.queue_free()
 	await process_frame
 	for failure in _failures:
 		printerr("FAIL: ", failure)
 	if _failures.is_empty():
-		print("PASS: forward thrust, braking, authored axes, physical contacts, impulse recovery, passive wreck physics, rebasing, and broadside passes.")
+		print("PASS: forward thrust, braking, authored axes, physical contacts, impulse recovery, passive wreck physics, rebasing, and bounded priority-target navigation.")
 	quit(0 if _failures.is_empty() else 1)
 
 
@@ -44,6 +41,8 @@ func _ship(scene: PackedScene = SHIP, faction: StringName = Factions.PLAYER) -> 
 	var ship := scene.instantiate() as Airship
 	ship.faction = faction
 	_fixture.add_child(ship)
+	_fleet.register_ship(ship)
+	ship.navigation.initialize(_fleet, ship)
 	return ship
 
 
@@ -92,131 +91,100 @@ func _check_braking_and_axis() -> void:
 	ship.free()
 
 
-func _check_cohesion() -> void:
-	var ship := _ship(KESTREL)
-	var nearby := _ship(KESTREL, Factions.ENEMY)
-	var distant := _ship(KESTREL, Factions.ENEMY)
-	var vessels: Array[Airship] = [ship, nearby, distant]
-	ship.position = Vector3(2500, 0, 0)
-	nearby.position = Vector3(2100, 0, 0)
-	distant.position = Vector3(2800, 0, 0)
-	ship.combat.prepare(1.0, ship, vessels, _fleet)
-	_check(ship.combat.target == nearby, "Target selection ignores a closer opponent outside the engagement area.")
-	_check(ship.combat.passing and ship.combat._pass_direction.x < -0.1 and ship.preferred_velocity.x < 0.0, "Near the boundary, an eligible broadside pass favors an inward course.")
-	nearby.position.x = 3100.0
-	ship.position.x = 2700.0
-	ship.combat.prepare(1.0, ship, vessels, _fleet)
-	_check(ship.combat.returning_to_anchor and not ship.combat.has_target() and ship.preferred_velocity.x < 0.0, "An outer-boundary crossing breaks off pursuit and returns toward the anchor.")
-	var projectiles := ProjectileController.new()
-	_fixture.add_child(projectiles)
-	var perception := CombatPerception.new()
-	perception.rebuild(vessels)
-	ship.mounted_slots[1].step(1.0, ship, perception, projectiles)
-	_check(projectiles.fired_count == 1, "Regrouping ships can still fire at nearby opponents outside the pursuit area.")
-	projectiles.clear()
-	projectiles.free()
-	ship.position.x = 2200.0
-	ship.combat.prepare(1.0, ship, vessels, _fleet)
-	_check(ship.combat.returning_to_anchor, "Regrouping persists through the boundary band instead of oscillating.")
-	ship.position.x = 1700.0
-	nearby.position.x = 2100.0
-	ship.combat.prepare(1.0, ship, vessels, _fleet)
-	_check(not ship.combat.returning_to_anchor and ship.combat.has_target(), "Returning inside the inner radius resumes combat.")
-	ship.free()
-	nearby.free()
-	distant.free()
-	# Recover from an existing displaced battle, including altitude and a moving anchor.
-	for faction in [Factions.PLAYER, Factions.ENEMY]:
-		for displacement in [Vector3(3400, 0, 0), Vector3(0, 3000, 0)]:
-			ship = _ship(KESTREL, faction)
-			ship.position = displacement
-			var recovery_speed := ship.climb_speed if displacement.y > 0.0 else ship.maximum_speed
-			ship.linear_velocity = displacement.normalized() * recovery_speed * (2.0 / 3.0)
-			ship.rotation.y = -PI * 0.5
-			_fleet.velocity = Vector3.FORWARD * ship.maximum_speed * 0.5
-			var resumed := false
-			var peak_distance: float = displacement.length()
-			var anchor_distance: float = 0.0
-			var recovery_seconds := ceili((displacement.length() - _fleet.combat_radii.x) / recovery_speed + 60.0)
-			for tick in range(recovery_seconds * _rate):
-				await physics_frame
-				_fleet.anchor.position += _fleet.velocity * _delta
-				ship.combat.prepare(_delta, ship, [ship], _fleet)
-				if not ship.combat.returning_to_anchor:
-					resumed = true
-					break
-				ShipFlight.apply_forces(ship, ship.preferred_velocity, _delta)
-				anchor_distance = ship.global_position.distance_to(_fleet.anchor.global_position)
-				peak_distance = maxf(peak_distance, anchor_distance)
-				if tick == 2 * _rate:
-					ship.combat.prepare(0.0, ship, [ship], _fleet)
-					var course := ship.preferred_velocity
-					ship.global_position.z += 10240.0
-					_fleet.anchor.global_position.z += 10240.0
-					ship.reset_physics_interpolation()
-					ship.combat.prepare(0.0, ship, [ship], _fleet)
-					_check(ship.preferred_velocity.distance_to(course) < 0.01, "Regrouping remains relative to the anchor across an origin shift.")
-			_check(resumed and anchor_distance <= 1810.0 and peak_distance < 3800.0, "Both factions recover from horizontal and vertical displacement with momentum and a moving anchor.")
-			ship.free()
-			_fleet.anchor.position = Vector3.ZERO
-			_fleet.velocity = Vector3.ZERO
-			_fixture.position = Vector3.ZERO
-
-
-func _check_pass() -> void:
-	var ship := _ship(KESTREL)
+func _check_moving_navigation_heading() -> void:
+	var ship := _ship(preload("res://scenes/ships/swift.tscn"))
 	var target := _ship(KESTREL, Factions.ENEMY)
-	ship.entity_id = 1
-	target.entity_id = 2
-	target.freeze = true
-	ship.global_position = Vector3(0, 0, 1500)
-	target.global_position = Vector3.ZERO
-	ship.preferred_combat_positions = PackedStringArray(["right"])
-	if _visual:
-		_setup_view()
-	var vessels: Array[Airship] = [ship, target]
-	var had_approach := false
-	var had_pass := false
-	var armed_ticks: int = 0
-	var aligned_ticks: int = 0
-	var moving_ticks: int = 0
-	var nearest: float = INF
-	var encounter_seconds := ceili(1500.0 / ship.maximum_speed + 30.0)
-	for tick in range(encounter_seconds * _rate):
+	ship.engagement_distance = 120.0
+	target.position.z = -120.0
+	_fleet.radius = 400.0
+	_fleet.velocity = Vector3.FORWARD * 25.0
+	ship.prepare_navigation(_delta, [ship, target], _fleet)
+	ship.navigation.goal_offset = Vector3.BACK * 20.0
+	ship.navigation._goal_age = 0.0
+	# A destination behind the ship slows forward travel; it cannot reverse it.
+	var request := ship.navigation.steer(ship, Vector3.ZERO, [])
+	_check(request.is_equal_approx(Vector3.FORWARD * 13.0), "A rearward local goal retains the moving marker's forward translation.")
+	_check(is_zero_approx(ShipFlight._yaw_acceleration(ship, request, _delta)), "Flight holds its forward heading for that rearward local goal.")
+	var goal := _fleet.marker.global_position + ship.navigation.goal_offset
+	_check(ship.combat.score_destination(ship, goal, request) > 0.0, "Combat scores the forward gun using actual world steering rather than a reversed local course.")
+	_check(ship.combat.score_destination(ship, goal, Vector3.ZERO) > 0.0, "A stopped horizontal request preserves the current firing heading.")
+	_fleet.velocity = Vector3.ZERO
+	request = ship.navigation.steer(ship, Vector3.ZERO, [])
+	_check(ship.combat.score_destination(ship, goal, request) < 0.0, "A stationary marker allows the same destination to request a real turn away from a forward target.")
+	ship.free()
+	target.free()
+	_fleet.initialize()
+
+
+func _check_navigation() -> void:
+	var ship := _ship(KESTREL)
+	var priority := _ship(KESTREL, Factions.ENEMY)
+	var nearby := _ship(KESTREL, Factions.ENEMY)
+	priority.freeze = true
+	nearby.freeze = true
+	_fleet.minimum_radius = 400.0
+	_fleet.initialize()
+	_fleet.in_combat = true
+	ship.position = Vector3(-270, 0, 0)
+	priority.position = Vector3(270, 0, 0)
+	nearby.position = Vector3(-240, 80, -30)
+	ship.rotation.y = -PI * 0.5
+	ship.prepare_navigation(_delta, [ship, priority, nearby], _fleet)
+	# A future priority selector can replace the target without changing navigation.
+	ship.combat.target = priority
+	var start_distance := ship.position.distance_to(priority.position)
+	var firing_samples: int = 0
+	var peak_extent: float = 0.0
+	for tick in range(45 * _rate):
 		await physics_frame
-		ship.combat_engaged = ship.combat.prepare(_delta, ship, vessels, _fleet)
+		ship.prepare_navigation(_delta, [ship, priority, nearby], _fleet)
 		ship.apply_movement_forces(_delta, Vector3.ZERO, [])
-		had_approach = had_approach or not ship.combat.passing
-		had_pass = had_pass or ship.combat.passing
-		nearest = minf(nearest, ship.global_position.distance_to(target.global_position))
-		if ship.linear_velocity.length() > ship.maximum_speed / 6.0:
-			moving_ticks += 1
-			if (ship.global_basis * ShipFlight.primary_axis(ship)).dot(ship.linear_velocity.normalized()) > cos(deg_to_rad(25.0)):
-				aligned_ticks += 1
-		if tick % int(0.2 * _rate) == 0:
-			var weapon := ship.mounted_slots[1].equipment as MountedWeapon
-			armed_ticks += int(weapon.launch_for(target) != Vector3.ZERO)
-			if _visual:
-				_paths.append({"position": ship.global_position - target.global_position, "forward": -ship.global_basis.z})
-		if tick == roundi((50.0 / 3.0) * _rate):
-			var before := target.position - ship.position
-			var course := ship.preferred_velocity
-			var yaw_rate := ship.angular_velocity.y
-			ship.global_position.z += 10240.0
-			target.global_position.z += 10240.0
-			_fleet.anchor.global_position.z += 10240.0
-			ship.reset_physics_interpolation()
-			target.reset_physics_interpolation()
-			_check((target.global_position - ship.global_position).distance_to(before) < 0.01 and ship.preferred_velocity == course and ship.angular_velocity.y == yaw_rate, "Rebasing preserves the pass course, relative target, and angular momentum.")
-	_check(had_approach and had_pass and nearest < 900.0, "A bow-first approach transitions into a firing pass.")
-	_check(armed_ticks > 20, "Broadside passes expose a working cannon to the target for repeated firing opportunities.")
-	_check(aligned_ticks > moving_ticks * 0.85, "Combat spends most moving time aligned with the primary propulsion axis.")
-	print("FLIGHT_PASS ", JSON.stringify({"nearest": nearest, "firing_samples": armed_ticks, "aligned_fraction": float(aligned_ticks) / maxi(1, moving_ticks)}))
-	if _visual:
-		await _capture_path()
-	ship.queue_free()
-	target.queue_free()
-	await process_frame
+		_check(ship.combat.target == priority, "A selected distant target is retained despite a nearer opponent.")
+		_check(ship.navigation.goal_offset.length() <= ship.navigation.usable_radius(ship) + 0.001, "Every combat destination remains inside the sphere.")
+		peak_extent = maxf(peak_extent, ship.position.length() / _fleet.radius)
+		for slot in ship.mounted_slots:
+			var weapon := slot.equipment as MountedWeapon
+			if tick % 6 == 0 and weapon.launch_for(priority) != Vector3.ZERO:
+				firing_samples += 1
+	_check(ship.position.distance_to(priority.position) < start_distance - 120.0, "Successive nearby goals cross the sphere toward a distant priority target.")
+	_check(firing_samples > 20, "Bounded maneuvers provide repeated firing opportunities against the selected target.")
+	_check(peak_extent < 1.1, "Ordinary combat turns stay close to the intended sphere.")
+	var old_goal := ship.navigation.goal_offset
+	var old_position := ship.position
+	var old_velocity := ship.linear_velocity
+	ship.combat.clear_target()
+	_fleet.in_combat = false
+	_fleet.velocity = Vector3.FORWARD * 0.1
+	ship.prepare_navigation(_delta, [ship], _fleet, false)
+	ship.apply_movement_forces(_delta, Vector3.ZERO, [])
+	_check(ship.navigation.goal_offset != old_goal and not ship.combat_engaged, "Combat completion selects a fresh ordinary destination immediately.")
+	_check(ship.position == old_position and ship.linear_velocity == old_velocity, "The handoff never snaps a hull or overwrites momentum.")
+	_fleet.velocity = Vector3.ZERO
+	# Test final containment after a deliberately outward separation request.
+	ship.position = Vector3(_fleet.radius - 25, 0, 0)
+	ship.linear_velocity = Vector3.RIGHT * 40
+	ship.prepare_navigation(_delta, [ship], _fleet, false)
+	ship.apply_movement_forces(_delta, Vector3.RIGHT * 1000, [])
+	var endpoint := ship.position + ship.navigation_velocity * ship.navigation._horizon(ship)
+	_check(endpoint.length() <= ship.navigation.usable_radius(ship) + 0.01, "Even separation cannot deliberately steer beyond the boundary.")
+	ship.position.x = _fleet.radius + 80
+	ship.prepare_navigation(_delta, [ship], _fleet, false)
+	ship.apply_movement_forces(_delta, Vector3.RIGHT * 1000, [])
+	_check(ship.navigation_velocity.x < 0.0 and ship.navigation.goal_offset.length() < _fleet.radius, "Momentum displacement requests an inward goal through the same navigator.")
+	var goal := ship.navigation.goal_offset
+	var request := ship.navigation_velocity
+	ship.position.z += 10240
+	_fleet.marker.position.z += 10240
+	ship.prepare_navigation(0.0, [ship], _fleet, false)
+	ship.apply_movement_forces(_delta, Vector3.RIGHT * 1000, [])
+	_check(ship.navigation.goal_offset == goal and ship.navigation_velocity.distance_to(request) < 0.01, "Relative navigation survives rebasing without consuming a new goal.")
+	print("NAVIGATION: priority approach=", start_distance - old_position.distance_to(priority.position), ", firing samples=", firing_samples, ", peak radius=", peak_extent)
+	ship.free()
+	priority.free()
+	nearby.free()
+	_fleet.marker.position = Vector3.ZERO
+	_fleet.minimum_radius = 180.0
+	_fleet.initialize()
 
 
 func _check_contacts() -> void:
@@ -322,7 +290,7 @@ func _check_death() -> void:
 	var passive_start := passive.position
 	for tick in range(_rate):
 		# Exercise both control entry points with demands that would change every axis.
-		ship.set_preferred_velocity(Vector3(180, 20, 0))
+		ship.navigation_velocity = Vector3(180, 20, 0)
 		ship.apply_movement_forces(_delta, Vector3.RIGHT * 100, [])
 		ShipFlight.apply_forces(ship, Vector3(180, 20, 0), _delta)
 		await physics_frame
@@ -337,59 +305,6 @@ func _check_death() -> void:
 	_check(ship.angular_velocity.distance_to(passive.angular_velocity) < 0.001 and absf(ship.angular_velocity.x) > 0.01 and absf(ship.angular_velocity.z) > 0.01, "A wreck can tumble under physical impulses without upright control locks.")
 	ship.free()
 	passive.free()
-
-
-func _setup_view() -> void:
-	var camera := Camera3D.new()
-	_fleet.anchor.add_child(camera)
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = 2200.0
-	camera.near = 0.5
-	camera.far = 40000.0
-	camera.position = Vector3(1000, 2200, 1800)
-	camera.look_at(_fleet.anchor.global_position + Vector3(0, 0, 500))
-	camera.current = true
-	var light := DirectionalLight3D.new()
-	_fixture.add_child(light)
-	light.rotation_degrees = Vector3(-55, -25, 0)
-	var environment := WorldEnvironment.new()
-	environment.environment = Environment.new()
-	environment.environment.background_mode = Environment.BG_COLOR
-	environment.environment.background_color = Color(0.04, 0.07, 0.12)
-	environment.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.environment.ambient_light_color = Color.WHITE
-	environment.environment.ambient_light_energy = 0.5
-	_fixture.add_child(environment)
-	var caption := Label.new()
-	caption.position = Vector2(20, 20)
-	caption.text = "Forward flight / broadside pass\nGreen: travel path   Orange: bow direction   Red ship: stationary target"
-	root.add_child(caption)
-
-
-func _capture_path() -> void:
-	var geometry := MeshInstance3D.new()
-	var lines := ImmediateMesh.new()
-	geometry.mesh = lines
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.vertex_color_use_as_albedo = true
-	geometry.material_override = material
-	_fleet.anchor.add_child(geometry)
-	lines.surface_begin(Mesh.PRIMITIVE_LINES)
-	for index in range(1, _paths.size()):
-		lines.surface_set_color(Color(0.15, 0.9, 0.5))
-		lines.surface_add_vertex(_paths[index - 1].position)
-		lines.surface_add_vertex(_paths[index].position)
-		if index % 5 == 0:
-			lines.surface_set_color(Color(1.0, 0.6, 0.15))
-			lines.surface_add_vertex(_paths[index].position)
-			lines.surface_add_vertex(_paths[index].position + _paths[index].forward * 50.0)
-	lines.surface_end()
-	await RenderingServer.frame_post_draw
-	var directory := OS.get_environment("AERWYTH_CAPTURE_DIR")
-	_check(not directory.is_empty(), "Flight captures require an external directory.")
-	if not directory.is_empty():
-		_check(root.get_texture().get_image().save_png(directory.path_join("flight-pass.png")) == OK, "Flight trajectory capture is written.")
 
 
 func _check(condition: bool, message: String) -> void:

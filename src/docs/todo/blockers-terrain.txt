@@ -22,7 +22,7 @@ Problem:
   world's layout after generation code or authored resources change.
 
 Completion criteria:
-- Persist the journey start, anchor state, generator/profile identity, island
+- Persist the journey start, fleet marker state, generator/profile identity, island
   records and changes, next island coordinate/ID, and relevant RNG state.
 - Bound resident record storage while retaining access to passed islands.
 - Restore a passed island and its terrain after restart without duplicate

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="FleetPreset" format=3 uid="uid://ho2rj4jkjakg"]
+
+[ext_resource type="Script" uid="uid://dxptkbbfnfuq1" path="res://scripts/encounters/fleet_preset.gd" id="1"]
+[ext_resource type="Script" uid="uid://by5jkikbnrdqu" path="res://scripts/encounters/fleet_member.gd" id="2"]
+[ext_resource type="Resource" path="res://resources/ships/manta.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/ships/swift.tres" id="4"]
+
+[sub_resource type="Resource" id="Member0"]
+script = ExtResource("2")
+ship = ExtResource("3")
+
+[sub_resource type="Resource" id="Member1"]
+script = ExtResource("2")
+ship = ExtResource("4")
+count = 2
+
+[resource]
+script = ExtResource("1")
+display_name = "Escort patrol"
+members = Array[ExtResource("2")]([SubResource("Member0"), SubResource("Member1")])

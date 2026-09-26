@@ -4,11 +4,16 @@ extends Node3D
 signal ship_spawned(ship: Airship)
 signal ship_spawn_failed(definition: ShipDefinition)
 
-enum StepPhase { DECISIONS, AVOIDANCE, ISLAND_NAVIGATION, FORCE_SUBMISSION, PROJECTILES, WEAPONS, CLEANUP_STREAMING }
+enum StepPhase { DECISIONS, AVOIDANCE, NAVIGATION, FORCE_SUBMISSION, PROJECTILES, WEAPONS, CLEANUP_STREAMING }
+
+# Temporary enemy placement dimensions, in meters.
+const ENEMY_SPAWN_GAP: float = 100.0
+const ENEMY_SPAWN_HALF_WIDTH: float = 240.0
+const ENEMY_SPAWN_DEPTH: float = 240.0
+const ENEMY_SPAWN_ALTITUDE_SPREAD: float = 200.0
 
 @export var initial_ships: Array[Airship] = []
 @export var available_ships: Array[ShipDefinition] = []
-@export var spawn_extent := Vector3(240.0, 80.0, 240.0)
 @export var fleet: FleetController
 @export var origin: FloatingOrigin
 @export var island_spawner: IslandSpawner
@@ -18,6 +23,7 @@ enum StepPhase { DECISIONS, AVOIDANCE, ISLAND_NAVIGATION, FORCE_SUBMISSION, PROJ
 @export var progression: JourneyProgress
 @export var projectiles: ProjectileController
 @export var wreck_controller: WreckController
+@export var encounters: EncounterDirector
 @export var combat_enabled: bool = true
 
 var ships: Array[Airship] = []
@@ -30,6 +36,7 @@ var _next_ship_id: int = 1
 var _dead_ships: Array[Airship] = []
 var _spawn_requests: Array[ShipDefinition] = []
 var _spawn_rng := RandomNumberGenerator.new()
+var _enemy_spawn_rng := RandomNumberGenerator.new()
 var destroyed_count: int = 0
 var profile_steps: bool = false
 var step_timings_usec := PackedInt64Array()
@@ -39,21 +46,21 @@ var combat_perception := CombatPerception.new()
 
 func _ready() -> void:
 	_spawn_rng.randomize()
+	_enemy_spawn_rng.randomize()
 	step_timings_usec.resize(StepPhase.size())
 	for ship in initial_ships:
 		register_ship(ship)
-	fleet.initialize_anchor()
-	progression.initialize(anchor_route_position())
-	origin.register_root(fleet.anchor)
-	origin.register_root(fleet.average_focus)
+	fleet.initialize()
+	progression.initialize(marker_route_position())
+	origin.register_root(fleet.marker)
 	origin.register_root(camera_rig)
 	origin.register_root(water)
 	origin.register_root(projectiles)
-	water.recenter(fleet.anchor.global_position)
+	water.recenter(fleet.marker.global_position)
 	camera_rig.focus_fleet()
-	terrain.update_region(fleet.anchor.global_position.x, anchor_route_position(), camera_rig.camera.global_position)
-	island_spawner.initialize(anchor_route_position())
-	island_spawner.update_region(anchor_route_position())
+	terrain.update_region(fleet.marker.global_position.x, marker_route_position(), camera_rig.camera.global_position)
+	island_spawner.initialize(marker_route_position())
+	island_spawner.update_region(marker_route_position())
 
 
 func _physics_process(delta: float) -> void:
@@ -69,6 +76,7 @@ func register_ship(ship: Airship) -> void:
 	_next_ship_id = maxi(_next_ship_id, ship.entity_id + 1)
 	origin.register_root(ship)
 	fleet.register_ship(ship)
+	ship.navigation.initialize(fleet, ship)
 	ship.tree_exiting.connect(unregister_ship.bind(ship), CONNECT_ONE_SHOT)
 	ship.died.connect(_on_ship_died)
 	_resize_snapshots()
@@ -99,20 +107,17 @@ func step_simulation(delta: float) -> void:
 	_remove_dead_ships()
 	if delta <= 0.0:
 		# Refresh registries without submitting forces or firing ready weapons.
-		fleet.advance(0.0)
 		return
 	_spawn_requested_ships()
+	if encounters != null:
+		encounters.step(delta, self)
 	_snapshot_ships()
-	fleet.advance(delta)
+	var battle := encounters.is_combat_active(self) if encounters != null else false
+	fleet.prepare_step(delta, battle)
 	if combat_enabled:
 		combat_perception.rebuild(ships)
 	for ship in ships:
-		ship.combat_engaged = combat_enabled and ship.combat.prepare(delta, ship, ships, fleet)
-		if not ship.combat_engaged:
-			if ship in fleet.members:
-				ship.prepare_travel(delta, fleet.anchor.global_position, fleet.velocity)
-			elif ship.faction == Factions.ENEMY:
-				ship.set_preferred_velocity(Vector3.ZERO)
+		ship.prepare_navigation(delta, ships, fleet, combat_enabled)
 	if profile_steps:
 		step_timings_usec[StepPhase.DECISIONS] = Time.get_ticks_usec() - measured_at
 		measured_at = Time.get_ticks_usec()
@@ -120,7 +125,15 @@ func step_simulation(delta: float) -> void:
 	if profile_steps:
 		step_timings_usec[StepPhase.AVOIDANCE] = Time.get_ticks_usec() - measured_at
 		measured_at = Time.get_ticks_usec()
-		step_timings_usec[StepPhase.ISLAND_NAVIGATION] = 0
+		step_timings_usec[StepPhase.NAVIGATION] = 0
+	# Plan against intended travel, then let friendly route limits set this tick's
+	# marker speed. A stopped marker must not make its obstructed route look clear.
+	for ship in ships:
+		ship.navigation.plan(ship, island_spawner.navigation_candidates(ship))
+	fleet.advance(delta)
+	if profile_steps:
+		step_timings_usec[StepPhase.NAVIGATION] = Time.get_ticks_usec() - measured_at
+		measured_at = Time.get_ticks_usec()
 	# Resolve lethal hits before submitting this tick's control forces.
 	if combat_enabled:
 		projectiles.step(delta)
@@ -129,12 +142,14 @@ func step_simulation(delta: float) -> void:
 		measured_at = Time.get_ticks_usec()
 	# Submit control once per engine tick. Hull motion/contact solving happens in
 	# native physics; queries below still use the latest completed body state.
+	var steering_usec: int = 0
 	for index in range(ships.size()):
 		ships[index].apply_movement_forces(delta, _corrections[index], island_spawner.navigation_candidates(ships[index]), profile_steps)
 		if profile_steps:
-			step_timings_usec[StepPhase.ISLAND_NAVIGATION] += ships[index].navigation_time_usec
+			steering_usec += ships[index].navigation_time_usec
 	if profile_steps:
-		step_timings_usec[StepPhase.FORCE_SUBMISSION] = Time.get_ticks_usec() - measured_at - step_timings_usec[StepPhase.ISLAND_NAVIGATION]
+		step_timings_usec[StepPhase.NAVIGATION] += steering_usec
+		step_timings_usec[StepPhase.FORCE_SUBMISSION] = Time.get_ticks_usec() - measured_at - steering_usec
 		measured_at = Time.get_ticks_usec()
 	if combat_enabled:
 		for ship in ships:
@@ -145,14 +160,14 @@ func step_simulation(delta: float) -> void:
 		step_timings_usec[StepPhase.WEAPONS] = Time.get_ticks_usec() - measured_at
 		measured_at = Time.get_ticks_usec()
 	_remove_dead_ships()
-	origin.recenter_if_needed(fleet.anchor.global_position.z)
-	water.recenter(fleet.anchor.global_position)
-	progression.update(anchor_route_position())
+	origin.recenter_if_needed(fleet.marker.global_position.z)
+	water.recenter(fleet.marker.global_position)
+	progression.update(marker_route_position())
 	_stream_timer -= delta
 	if _stream_timer <= 0.0:
 		_stream_timer = 0.25
-		island_spawner.update_region(anchor_route_position())
-		terrain.update_region(fleet.anchor.global_position.x, anchor_route_position(), camera_rig.camera.global_position)
+		island_spawner.update_region(marker_route_position())
+		terrain.update_region(fleet.marker.global_position.x, marker_route_position(), camera_rig.camera.global_position)
 	if profile_steps:
 		step_timings_usec[StepPhase.CLEANUP_STREAMING] = Time.get_ticks_usec() - measured_at
 
@@ -171,31 +186,46 @@ func request_ship_spawn(definition: ShipDefinition) -> void:
 func _spawn_requested_ships() -> void:
 	# GUI requests enter the world at a physics boundary before snapshots are built.
 	for definition in _spawn_requests:
-		_spawn_ship(definition)
+		if not _spawn_ship(definition, Factions.PLAYER):
+			ship_spawn_failed.emit(definition)
 	_spawn_requests.clear()
 
 
-func _spawn_ship(definition: ShipDefinition) -> void:
+func try_spawn_enemy(definition: ShipDefinition) -> bool:
+	return _spawn_ship(definition, Factions.ENEMY)
+
+
+func _spawn_ship(definition: ShipDefinition, faction: StringName) -> bool:
 	var instance := definition.scene.instantiate()
 	var ship := instance as Airship
 	if ship == null:
 		instance.free()
 		push_error("Ship definitions must reference an Airship scene: " + definition.display_name)
-		ship_spawn_failed.emit(definition)
-		return
+		return false
 	var capsule := ship.hull_collider.shape as CapsuleShape3D
-	var radius := maxf(capsule.radius, capsule.height * 0.5) + 8.0
+	var hull_extent := maxf(capsule.radius, capsule.height * 0.5)
+	var radius := hull_extent + ShipNavigation.HULL_CLEARANCE
 	var probe := SphereShape3D.new()
 	probe.radius = radius
 	var query := PhysicsShapeQueryParameters3D.new()
 	query.shape = probe
 	query.collision_mask = 3
 	var space := get_world_3d().direct_space_state
+	var front_z := _friendly_front_z() if faction == Factions.ENEMY else 0.0
 	for attempt in range(32):
-		var offset := Vector3(_spawn_rng.randf_range(-1.0, 1.0), _spawn_rng.randf_range(-1.0, 1.0), _spawn_rng.randf_range(-1.0, 1.0))
-		if offset.length_squared() > 1.0:
-			continue
-		var location := fleet.anchor.global_position + offset * spawn_extent
+		var offset: Vector3
+		if faction == Factions.ENEMY:
+			offset = Vector3(
+				_enemy_spawn_rng.randf_range(-ENEMY_SPAWN_HALF_WIDTH, ENEMY_SPAWN_HALF_WIDTH),
+				_enemy_spawn_rng.randf_range(-ENEMY_SPAWN_ALTITUDE_SPREAD, ENEMY_SPAWN_ALTITUDE_SPREAD),
+				front_z - fleet.marker.global_position.z - ENEMY_SPAWN_GAP - hull_extent - _enemy_spawn_rng.randf_range(0.0, ENEMY_SPAWN_DEPTH)
+			)
+		else:
+			offset = Vector3(_spawn_rng.randf_range(-1.0, 1.0), _spawn_rng.randf_range(-1.0, 1.0), _spawn_rng.randf_range(-1.0, 1.0))
+			if offset.length_squared() > 1.0:
+				continue
+			offset *= maxf(1.0, fleet.radius - hull_extent - ShipNavigation.HULL_CLEARANCE)
+		var location := fleet.marker.global_position + offset
 		query.transform = Transform3D(Basis.IDENTITY, location)
 		if not space.intersect_shape(query, 1).is_empty():
 			continue
@@ -209,16 +239,30 @@ func _spawn_ship(definition: ShipDefinition) -> void:
 		if not clear:
 			continue
 		ship.entity_id = allocate_ship_id()
-		ship.faction = Factions.PLAYER
+		ship.faction = faction
 		ship.position = to_local(location)
+		if faction == Factions.ENEMY:
+			var from_party := location - fleet.marker.global_position
+			ship.rotation.y = atan2(from_party.x, from_party.z)
 		add_child(ship)
-		ship.linear_velocity = fleet.velocity
+		if faction == Factions.PLAYER:
+			ship.linear_velocity = fleet.velocity
 		register_ship(ship)
 		ship.reset_physics_interpolation()
 		ship_spawned.emit(ship)
-		return
+		return true
 	ship.free()
-	ship_spawn_failed.emit(definition)
+	return false
+
+
+func _friendly_front_z() -> float:
+	var front_z: float = INF
+	for member in fleet.members:
+		if member.alive:
+			# Project the forward capsule onto travel Z; yaw can change its extent.
+			var extent_z := member.hull_radius + member.hull_half_segment * absf(member.global_basis.z.z)
+			front_z = minf(front_z, member.global_position.z - extent_z)
+	return fleet.marker.global_position.z if is_inf(front_z) else front_z
 
 
 func _on_ship_died(ship: Airship) -> void:
@@ -235,8 +279,8 @@ func _remove_dead_ships() -> void:
 		destroyed_count += 1
 
 
-func anchor_route_position() -> RoutePosition:
-	return RoutePosition.from_scene(fleet.anchor.global_position.z, origin.segment)
+func marker_route_position() -> RoutePosition:
+	return RoutePosition.from_scene(fleet.marker.global_position.z, origin.segment)
 
 
 func _snapshot_ships() -> void:

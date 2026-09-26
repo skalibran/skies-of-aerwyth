@@ -19,6 +19,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	_journey = JOURNEY.instantiate() as Journey
+	_journey.encounters.enabled = false
 	root.add_child(_journey)
 	await _frames(3)
 	_journey.set_physics_process(false)
@@ -103,13 +104,22 @@ func _check_ship_picker(master: MasterUI) -> void:
 	await _frames(4)
 	var picker := master.ship_picker
 	_check(picker.categories.get_child_count() == 5, "Five ship classes are available.")
-	for index in range(1, 5):
+	for index in range(5):
 		await _click(picker.categories.get_child(index) as Control)
 		await _frames(2)
-		_check(picker.selected_class == index and _choices(picker).is_empty() and picker.status_label.text == "No ships available", "An empty class filters out Kestrel and explains the empty row.")
+		var expected: Array[String] = []
+		for definition in _journey.available_ships:
+			if definition.ship_class == index:
+				expected.append(definition.display_name)
+		var labels: Array[String] = []
+		for choice in _choices(picker):
+			labels.append(choice.text)
+		_check(picker.selected_class == index and labels == expected, "Each category shows its authored catalog entries.")
+		if expected.is_empty():
+			_check(picker.status_label.text == "No ships available", "An empty class explains its empty row.")
 	await _click(picker.categories.get_child(0) as Control)
 	await _frames(2)
-	_check(_choices(picker).size() == 1 and _choices(picker)[0].text == "Kestrel", "Kestrel belongs to the smallest class, Skiffs.")
+	_check(_choices(picker).size() == 2 and _choices(picker)[0].text == "Kestrel" and _choices(picker)[1].text == "Swift", "Kestrel and Swift belong to Skiffs.")
 	_journey._spawn_rng.seed = 71937
 	var initial_count := _journey.ships.size()
 	var spawned: Array[Airship] = []
@@ -126,7 +136,7 @@ func _check_ship_picker(master: MasterUI) -> void:
 		ship.freeze = true
 		spawned.append(ship)
 		_check(ship.faction == Factions.PLAYER and ship in _journey.fleet.members and ship in _journey.origin._roots, "Spawned ships join player flight and origin registries.")
-		_check(((ship.global_position - _journey.fleet.anchor.global_position) / _journey.spawn_extent).length() <= 1.001, "Random placement stays near the live anchor, including after rebasing.")
+		_check(ship.global_position.distance_to(_journey.fleet.marker.global_position) <= ship.navigation.usable_radius(ship) + 0.1, "Random placement stays inside the fleet sphere, including after rebasing.")
 		_check(_journey.camera_rig.mode == camera_mode and root.gui_get_focus_owner() == null, "Pointer spawning neither picks the world nor keeps camera controls locked.")
 	_check(spawned[0].entity_id != spawned[1].entity_id and spawned[1].entity_id != spawned[2].entity_id, "Repeated spawning assigns independent stable IDs.")
 	_check(spawned[1].position.distance_to(spawned[2].position) > 31.0, "Repeated random spawns do not stack hulls.")
@@ -193,7 +203,7 @@ func _check_blocked_spawn(picker: ShipPicker) -> void:
 	collider.shape = box
 	blocker.add_child(collider)
 	_journey.add_child(blocker)
-	blocker.global_position = _journey.fleet.anchor.global_position
+	blocker.global_position = _journey.fleet.marker.global_position
 	await _frames(2)
 	var before := _journey.ships.size()
 	_journey.request_ship_spawn(_journey.available_ships[0])

@@ -7,6 +7,17 @@ static func primary_axis(ship: Airship) -> Vector3:
 	return axis.normalized() if axis.length_squared() > 0.0001 else Vector3.FORWARD
 
 
+static func turn_time(ship: Airship, course: Vector3) -> float:
+	var horizontal := Vector3(course.x, 0.0, course.z)
+	if horizontal.length_squared() < 0.01:
+		return 0.0
+	var forward := ship.global_basis * primary_axis(ship)
+	var angle := forward.angle_to(horizontal.normalized())
+	var rate := deg_to_rad(ship.yaw_speed_degrees)
+	var build_time := rate / deg_to_rad(ship.yaw_acceleration_degrees)
+	return angle / rate + minf(build_time, sqrt(2.0 * angle / deg_to_rad(ship.yaw_acceleration_degrees)))
+
+
 static func apply_forces(ship: Airship, desired: Vector3, delta: float) -> void:
 	if not ship.alive or delta <= 0.0 or ship.freeze:
 		return

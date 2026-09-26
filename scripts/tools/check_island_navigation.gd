@@ -1,160 +1,170 @@
 extends SceneTree
 
-const JOURNEY_SCENE := preload("res://scenes/world/journey.tscn")
-const SHIP_SCENE := preload("res://scenes/ships/ship.tscn")
-
-var _journey: Journey
-var _rate: int = Engine.physics_ticks_per_second
+const KESTREL := preload("res://scenes/ships/kestrel.tscn")
+const ISLAND := preload("res://scenes/islands/island.tscn")
 var _failures: Array[String] = []
-var _visual: bool = false
 
 
 func _initialize() -> void:
-	_visual = "--visual" in OS.get_cmdline_user_args()
 	_run.call_deferred()
 
 
 func _run() -> void:
-	await _encounter("head_on", 0.0, false, false)
-	await _encounter("cluster", 0.0, true, false)
-	await _encounter("upper_cap", 160.0, false, false)
-	await _encounter("above", 350.0, false, false, false)
-	await _encounter("below", -450.0, false, false, false)
-	await _encounter("moving_goal", 0.0, false, true)
-	await _unload_during_detour()
+	var fixture := Node3D.new()
+	root.add_child(fixture)
+	var fleet := FleetController.new()
+	fixture.add_child(fleet)
+	fleet.marker = Node3D.new()
+	fixture.add_child(fleet.marker)
+	fleet.minimum_radius = 400.0
+	fleet.initialize()
+	fleet.in_combat = true
+	var ship := KESTREL.instantiate() as Airship
+	ship.entity_id = 17
+	ship.position = Vector3(-230, 0, 0)
+	ship.rotation.y = -PI * 0.5
+	fixture.add_child(ship)
+	fleet.register_ship(ship)
+	ship.navigation.initialize(fleet, ship)
+	var target := KESTREL.instantiate() as Airship
+	target.faction = Factions.ENEMY
+	target.position = Vector3(230, 0, 0)
+	target.freeze = true
+	fixture.add_child(target)
+	var island := ISLAND.instantiate() as FloatingIsland
+	fixture.add_child(island)
+	var record := IslandRecord.new()
+	record.route_position = RoutePosition.new()
+	record.radius = 50
+	record.depth = 100
+	record.altitude = 60
+	island.configure(record, 0)
+	var islands: Array[FloatingIsland] = [island]
+	var dt := 1.0 / Engine.physics_ticks_per_second
+	ship.linear_velocity = Vector3.LEFT * 300.0
+	fleet.velocity = Vector3.FORWARD * 25.0
+	ship.navigation.goal_offset = Vector3.RIGHT * 200.0
+	var lookahead_request := ship.navigation._goal_velocity(ship, fleet.marker.position + ship.navigation.goal_offset)
+	var lookahead := lookahead_request.length() * ship.navigation._horizon(ship)
+	_check(ShipNavigation.search_radius(ship, island.navigation_radius) >= lookahead + island.navigation_radius, "Island filtering covers the steering horizon after a contact exceeds propulsion speed.")
+	ship.position.x = -6000.0
+	_check(ShipNavigation.search_radius(ship, island.navigation_radius) > 6200.0, "Island filtering covers a displaced hull's retained goal as well as newly sampled inward goals.")
+	ship.position.x = -230.0
+	ship.linear_velocity = Vector3.ZERO
+	fleet.velocity = Vector3.ZERO
+	_check(not ship.navigation._path_clear(ship, target.position, islands), "Solid island geometry rejects a direct route.")
+	_check(ship.navigation._path_clear(ship, target.position + Vector3.UP * 600.0, islands), "A rising segment can clear the island before entering its horizontal footprint.")
+	_check(ship.navigation._path_clear(ship, target.position + Vector3.DOWN * 600.0, islands), "A descending segment can pass below the island before entering its footprint.")
+	ship.position.y = 300
+	_check(ship.navigation._path_clear(ship, target.position + Vector3.UP * 300, islands), "A route above island collision remains available.")
+	ship.position.y = -300
+	_check(ship.navigation._path_clear(ship, target.position - Vector3.UP * 300, islands), "A route below island collision remains available.")
+	ship.position.y = 0
+	for tick in range(45 * Engine.physics_ticks_per_second):
+		await physics_frame
+		ship.prepare_navigation(dt, [ship, target], fleet)
+		ship.apply_movement_forces(dt, Vector3.ZERO, islands)
+		_check(ship.navigation.goal_offset.length() <= ship.navigation.usable_radius(ship) + 0.01, "Obstacle choices also stay inside the fleet sphere.")
+		_check(ship.position.distance_to(island.position) > island.navigation_radius + ship.hull_radius, "The moving hull stays outside island solids.")
+		if tick == 15 * Engine.physics_ticks_per_second:
+			var offset := ship.navigation.goal_offset
+			var request := ship.navigation_velocity
+			ship.position.z += 10240
+			target.position.z += 10240
+			island.position.z += 10240
+			fleet.marker.position.z += 10240
+			ship.apply_movement_forces(dt, Vector3.ZERO, islands)
+			_check(ship.navigation.goal_offset == offset and ship.navigation_velocity.distance_to(request) < 0.02, "Rebasing preserves obstacle-relative route choices.")
+	_check(ship.position.x > -130, "A bounded obstacle route makes progress toward the selected target.")
+	# An enclosing obstruction offers no legal outward route; the ship must wait.
+	ship.freeze = true
+	ship.position = fleet.marker.position
+	island.position = fleet.marker.position
+	island.navigation_radius = 1000
+	island.bottom_offset = -1000
+	island.top_offset = 1000
+	ship.navigation._goal_age = INF
+	ship.prepare_navigation(dt, [ship], fleet, false)
+	fleet.prepare_step(dt)
+	ship.navigation.plan(ship, islands)
+	var stopped_at := fleet.marker.position
+	fleet.advance(dt)
+	_check(fleet.marker.position == stopped_at and ship.navigation.safe_marker_speed == 0.0, "A completely obstructed friendly route stops marker travel on the same tick.")
+	ship.apply_movement_forces(dt, Vector3.ZERO, islands)
+	# Test steering directly because a frozen validation body does not submit forces.
+	var request := ship.navigation.steer(ship, Vector3.ZERO, islands)
+	_check(ship.navigation.goal_offset.length() < fleet.radius, "Even an obstructed fleet retains bounded destinations.")
+	_check(ship.navigation.blocked and request == Vector3.ZERO, "An enclosing obstruction stops movement instead of authoring a route outside the sphere.")
+	island.queue_free()
+	await process_frame
+	islands.clear()
+	ship.navigation._goal_age = INF
+	fleet.prepare_step(dt)
+	ship.navigation.plan(ship, islands)
+	fleet.advance(dt)
+	request = ship.navigation.steer(ship, Vector3.ZERO, islands)
+	_check(not ship.navigation.blocked and request.is_finite(), "Unloading an island leaves no stale route references.")
+	_check(fleet.speed > 0.0, "Clearing a complete obstruction resumes marker travel without a separate return state.")
+	fixture.queue_free()
+	await process_frame
+	_check_route_pacing()
 	for failure in _failures:
 		printerr("FAIL: ", failure)
 	if _failures.is_empty():
-		print("PASS: island navigation, collision, rebasing, and unloading checks.")
+		print("PASS: bounded obstacle navigation, intended-speed detours, safe slowing, blockage recovery, altitude routes, rebasing, and unloading.")
 	quit(0 if _failures.is_empty() else 1)
 
 
-func _create_journey() -> void:
-	_journey = JOURNEY_SCENE.instantiate() as Journey
-	_journey.combat_enabled = false
-	root.add_child(_journey)
-	for ship in _journey.ships.duplicate():
-		_journey.unregister_ship(ship)
-		ship.queue_free()
-	var spawner := _journey.island_spawner
-	for island in spawner.obstacles:
-		_journey.origin.unregister_root(island)
-		island.queue_free()
-	spawner.obstacles.clear()
-	spawner.active.clear()
-	spawner.records.clear()
-	spawner.next_position = RoutePosition.new(-1000, 0.0)
-
-
-func _add_island(id: int, position: Vector3) -> FloatingIsland:
+func _check_route_pacing() -> void:
+	var fixture := Node3D.new()
+	root.add_child(fixture)
+	var fleet := FleetController.new()
+	fixture.add_child(fleet)
+	fleet.marker = Node3D.new()
+	fixture.add_child(fleet.marker)
+	fleet.minimum_radius = 400.0
+	var ship := KESTREL.instantiate() as Airship
+	ship.entity_id = 17
+	ship.freeze = true
+	fixture.add_child(ship)
+	fleet.register_ship(ship)
+	fleet.initialize()
+	ship.navigation.initialize(fleet, ship)
+	var island := ISLAND.instantiate() as FloatingIsland
+	fixture.add_child(island)
 	var record := IslandRecord.new()
-	record.entity_id = id
-	record.route_position = RoutePosition.from_scene(position.z, _journey.origin.segment)
-	record.lateral_position = position.x
-	record.altitude = _journey.fleet.anchor.global_position.y + position.y
-	record.radius = 220.0
-	record.depth = 250.0
-	_journey.island_spawner.records.append(record)
-	_journey.island_spawner._load_record(record)
-	return _journey.island_spawner.active[id]
-
-
-func _add_ship(height: float, friendly: bool = false) -> Airship:
-	var ship := SHIP_SCENE.instantiate() as Airship
-	ship.entity_id = 9001
-	ship.faction = Factions.PLAYER if friendly else Factions.NEUTRAL
-	_journey.add_child(ship)
-	ship.global_position = Vector3(0.0, _journey.fleet.anchor.global_position.y + height, 900.0)
-	_journey.register_ship(ship)
-	ship.set_preferred_velocity(Vector3.FORWARD * 90.0)
-	if friendly:
-		ship.travel.goal_offset = Vector3.ZERO
-	ship.reset_physics_interpolation()
-	_journey.camera_rig.follow_ship(ship)
-	_journey.camera_rig.orbit_distance = 1300.0
-	return ship
-
-
-func _encounter(label: String, height: float, cluster: bool, friendly: bool, blocked: bool = true) -> void:
-	_create_journey()
-	var island := _add_island(5001, Vector3(-150.0 if cluster else 0.0, 100.0, 0.0))
-	if cluster:
-		_add_island(5002, Vector3(180.0, 100.0, -120.0))
-	var ship := _add_ship(height, friendly)
-	await physics_frame
-	await physics_frame
-	_check(island.collider.shape is CapsuleShape3D, label + ": islands use capsule colliders.")
-	if blocked:
-		var motion := PhysicsTestMotionParameters3D.new()
-		motion.margin = 0.01
-		motion.from = ship.global_transform
-		motion.motion = Vector3(0.0, 0.0, -1800.0)
-		var contact := PhysicsTestMotionResult3D.new()
-		_check(PhysicsServer3D.body_test_motion(ship.get_rid(), motion, contact) and contact.get_collider() is StaticBody3D, label + ": the capsule island collider blocks direct physical travel.")
-	var query := PhysicsShapeQueryParameters3D.new()
-	var probe := CapsuleShape3D.new()
-	probe.radius = ship.hull_radius - 1.5
-	probe.height = ship.hull_half_segment * 2.0 + ship.hull_radius * 2.0 - 3.0
-	query.shape = probe
-	query.collision_mask = 2
-	var detoured := false
-	var rebased := false
-	var passed := false
-	var lateral_motion: float = 0.0
-	for tick in range(60 * _rate):
-		await physics_frame
-		lateral_motion = maxf(lateral_motion, absf(ship.global_position.x))
-		if ship.island_navigation.has_waypoint():
-			detoured = true
-			if not rebased:
-				var before := ship.island_navigation.waypoint_position() - ship.global_position
-				_journey.origin.shift_segments(-1)
-				var after := ship.island_navigation.waypoint_position() - ship.global_position
-				_check(before.distance_to(after) < 0.01, label + ": detour waypoint survives rebasing.")
-				rebased = true
-		if tick % maxi(1, roundi(_rate / 6.0)) == 0:
-			query.transform = ship.hull_collider.global_transform
-			_check(ship.get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty(), label + ": the ship hull does not penetrate an island.")
-		if _visual and tick == 10 * _rate:
-			await _capture(label)
-		if ship.global_position.z < island.global_position.z - 700.0:
-			passed = true
-			break
-	_check(passed, label + ": the ship passes the obstacle instead of stalling.")
-	if blocked:
-		_check(detoured and lateral_motion > 250.0, label + ": the blocked path produces a lateral detour.")
-	else:
-		_check(not detoured and lateral_motion < 1.0, label + ": clear altitude does not require a lateral detour.")
-	print(label, ": passed=", passed, ", detoured=", detoured, ", maximum lateral motion=", lateral_motion, ", final position=", ship.global_position)
-	_journey.queue_free()
-	await process_frame
-
-
-func _unload_during_detour() -> void:
-	_create_journey()
-	var island := _add_island(5001, Vector3(0.0, 100.0, 0.0))
-	var ship := _add_ship(0.0)
-	for tick in range(roundi(0.5 * _rate)):
-		await physics_frame
-	_check(ship.island_navigation.has_waypoint(), "Unloading fixture starts with an active detour.")
-	_journey.island_spawner.obstacles.erase(island)
-	_journey.island_spawner.active.erase(5001)
-	_journey.origin.unregister_root(island)
-	island.queue_free()
-	for tick in range(roundi(_rate / 6.0)):
-		await physics_frame
-	_check(not ship.island_navigation.has_waypoint(), "Unloading an obstacle clears its detour reference.")
-	_journey.queue_free()
-	await process_frame
-
-
-func _capture(label: String) -> void:
-	var directory := OS.get_environment("AERWYTH_CAPTURE_DIR")
-	_check(not directory.is_empty(), "Rendered checks require an external capture directory.")
-	if directory.is_empty():
-		return
-	await RenderingServer.frame_post_draw
-	_check(root.get_texture().get_image().save_png(directory.path_join("island-" + label + ".png")) == OK, "Island capture was written.")
+	record.route_position = RoutePosition.new()
+	record.radius = 50.0
+	record.depth = 100.0
+	record.altitude = 60.0
+	island.configure(record, 0)
+	island.position.z = -150.0
+	var islands: Array[FloatingIsland] = [island]
+	var dt := 1.0 / Engine.physics_ticks_per_second
+	ship.linear_velocity = Vector3.FORWARD * fleet.cruise_speed
+	_check(ship.navigation._path_clear(ship, Vector3.FORWARD * fleet.local_step, islands), "The regression fixture has a clear short local waypoint.")
+	_check(not ship.navigation._course_clear(ship, Vector3.FORWARD * (fleet.cruise_speed + fleet.local_speed), islands), "That waypoint's combined travel course intersects the island.")
+	for sample in range(10):
+		fleet.prepare_step(dt)
+		ship.navigation.plan(ship, islands)
+		_check(not ship.navigation.blocked and ship.navigation.safe_marker_speed > 0.0 and ship.navigation.safe_marker_speed < fleet.cruise_speed, "A viable slower route reports a speed allowance without declaring complete blockage.")
+		_check(fleet.velocity == Vector3.ZERO and fleet.requested_speed == fleet.cruise_speed, "Repeated planning uses intended cruise even while the marker is stopped.")
+	fleet.speed = fleet.cruise_speed
+	fleet.advance(dt)
+	_check(fleet.speed == ship.navigation.safe_marker_speed, "The marker honors the friendly route's speed allowance immediately.")
+	var request := ship.navigation.steer(ship, Vector3.ZERO, islands)
+	_check(ship.navigation._course_clear(ship, request, islands), "The actual slower course remains clear after marker translation.")
+	var offset := ship.navigation.goal_offset
+	var route_speed := ship.navigation.safe_marker_speed
+	for node in [ship, island, fleet.marker]:
+		node.position.z += 10240.0
+	var rebased := ship.navigation.steer(ship, Vector3.ZERO, islands)
+	_check(ship.navigation.goal_offset == offset and ship.navigation.safe_marker_speed == route_speed and request.distance_to(rebased) < 0.02, "Rebasing preserves the slower detour and its pace allowance.")
+	island.position.z -= 1000.0
+	fleet.prepare_step(dt)
+	ship.navigation.plan(ship, islands)
+	_check(ship.navigation.safe_marker_speed == fleet.cruise_speed, "An open intended course releases the slowdown without waiting for current speed to recover.")
+	fixture.free()
 
 
 func _check(condition: bool, message: String) -> void:

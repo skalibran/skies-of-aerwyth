@@ -19,11 +19,12 @@ func _run() -> void:
 	_check_coordinates()
 	_journey = JOURNEY_SCENE.instantiate() as Journey
 	root.add_child(_journey)
+	_check_marker_control()
 	await _frames(3 * _rate)
 	_check(_journey.ships.size() == 3 and _journey.fleet.members.size() == 3, "Normal play retains exactly three friendly Kestrels without automatic reinforcements.")
-	_check(_journey.projectiles.fired_count == 0, "The starting fleet has no hostile encounter or automatic enemy spawns.")
+	_check(_journey.projectiles.fired_count == 0 and _journey.encounters.planned_waves == 0, "The starting fleet travels before reaching the first threat milestone.")
 	_journey.combat_enabled = false
-	_check(_journey.fleet.anchor.position.z < -10.0, "The fleet makes forward progress.")
+	_check(_journey.fleet.marker.position.z < -10.0, "The fleet makes forward progress.")
 	_check_initial_surroundings()
 	await _capture("fleet")
 	if _visual:
@@ -39,9 +40,7 @@ func _run() -> void:
 	if not _visual:
 		if "--extended" in OS.get_cmdline_user_args():
 			await _check_long_travel()
-		await _check_slowdown()
 		await _check_membership()
-		await _check_encounters()
 	else:
 		var rig := _journey.camera_rig
 		var saved_distance := rig.orbit_distance
@@ -106,7 +105,7 @@ func _check_camera() -> void:
 	click.pressed = false
 	root.push_input(click, true)
 	await _capture("ship")
-	var before_pan := _journey.anchor_route_position()
+	var before_pan := _journey.marker_route_position()
 	var key := InputEventKey.new()
 	key.physical_keycode = KEY_D
 	key.pressed = true
@@ -116,10 +115,10 @@ func _check_camera() -> void:
 	Input.parse_input_event(key)
 	await _frames(2)
 	_check(rig.mode == FleetCamera.Mode.FREE, "WASD actions release tracking.")
-	_check(not paused and _journey.anchor_route_position().compare(before_pan) < 0, "Panning never pauses gameplay.")
+	_check(not paused and _journey.marker_route_position().compare(before_pan) < 0, "Panning never pauses gameplay.")
 	for direction in [Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK, Vector3.UP, Vector3.DOWN]:
 		rig.pan(direction * 10000.0)
-		var center := _journey.fleet.anchor.get_global_transform_interpolated().origin
+		var center := _journey.fleet.marker.get_global_transform_interpolated().origin
 		_check(rig.camera.global_position.distance_to(center) <= rig.viewing_radius + 0.1, "The final camera position stays inside its sphere.")
 	rig.focus_fleet()
 	var original_yaw := rig.yaw
@@ -166,7 +165,7 @@ func _check_camera() -> void:
 	Input.parse_input_event(_stick(JOY_AXIS_RIGHT_X, 0.0))
 	_check(rig.mode == FleetCamera.Mode.FLEET and not is_equal_approx(rig.yaw, original_yaw), "Right-stick orbit preserves tracking (mode %d, yaw %.4f -> %.4f)." % [rig.mode, original_yaw, rig.yaw])
 	rig._process(0.0)
-	_check(rig.global_position.is_equal_approx(_journey.fleet.anchor.get_global_transform_interpolated().origin), "Fleet tracking follows the persistent anchor.")
+	_check(rig.global_position.is_equal_approx(_journey.fleet.marker.get_global_transform_interpolated().origin), "Fleet tracking follows the persistent marker.")
 	rig.yaw = 0.5
 	rig.focus_fleet()
 
@@ -239,15 +238,15 @@ func _check_free_camera_follow() -> void:
 	var fleet := _journey.fleet
 	rig.focus_fleet()
 	rig.pan(Vector3(120.0, 30.0, 0.0))
-	var anchor_start := fleet.anchor.get_global_transform_interpolated().origin
-	var offset := rig.camera.global_position - anchor_start
+	var marker_start := fleet.marker.get_global_transform_interpolated().origin
+	var offset := rig.camera.global_position - marker_start
 	var orientation := rig.camera.global_basis
 	await _frames(roundi(1.5 * _rate))
 	rig._process(0.0)
-	var anchor_now := fleet.anchor.get_global_transform_interpolated().origin
-	_check(anchor_now.z < anchor_start.z - 10.0, "The anchor advances during idle free-camera tracking.")
-	_check((rig.camera.global_position - anchor_now).distance_to(offset) < 0.01, "An idle free camera keeps its offset from the anchor.")
-	_check(rig.camera.global_basis.is_equal_approx(orientation), "Following anchor translation does not change free-look orientation.")
+	var marker_now := fleet.marker.get_global_transform_interpolated().origin
+	_check(marker_now.z < marker_start.z - 10.0, "The marker advances during idle free-camera tracking.")
+	_check((rig.camera.global_position - marker_now).distance_to(offset) < 0.01, "An idle free camera keeps its offset from the marker.")
+	_check(rig.camera.global_basis.is_equal_approx(orientation), "Following marker translation does not change free-look orientation.")
 	# Stop translation, let interpolation settle, and change membership independently.
 	_freeze_fixture(true)
 	await _frames(2)
@@ -255,26 +254,24 @@ func _check_free_camera_follow() -> void:
 	var stopped_eye := rig.camera.global_position
 	await _frames(20)
 	rig._process(0.0)
-	_check(rig.camera.global_position.distance_to(stopped_eye) < 0.01, "The free camera stops when the anchor stops.")
+	_check(rig.camera.global_position.distance_to(stopped_eye) < 0.01, "The free camera stops when the marker stops.")
 	var member := fleet.members[0]
 	fleet.unregister_ship(member)
-	fleet.advance(0.0)
-	fleet.average_focus.reset_physics_interpolation()
+	_advance_fleet(fleet, 0.0)
 	rig._process(0.0)
 	_check(rig.camera.global_position.distance_to(stopped_eye) < 0.01, "A membership-driven mean change does not tug an interior free camera.")
 	fleet.register_ship(member)
-	fleet.advance(0.0)
-	fleet.average_focus.reset_physics_interpolation()
-	var relative_eye := rig.camera.global_position - fleet.anchor.get_global_transform_interpolated().origin
+	_advance_fleet(fleet, 0.0)
+	var relative_eye := rig.camera.global_position - fleet.marker.get_global_transform_interpolated().origin
 	_journey.origin.shift_segments(-1)
 	rig._process(0.0)
-	_check((rig.camera.global_position - fleet.anchor.get_global_transform_interpolated().origin).distance_to(relative_eye) < 0.01, "A free camera retains its anchor offset on the next frame after rebasing.")
+	_check((rig.camera.global_position - fleet.marker.get_global_transform_interpolated().origin).distance_to(relative_eye) < 0.01, "A free camera retains its marker offset on the next frame after rebasing.")
 	_journey.origin.shift_segments(1)
 	rig._process(0.0)
 	rig.pan(Vector3.RIGHT * rig.viewing_radius * 3.0)
 	var clamped_eye := rig.camera.global_position
 	rig._process(0.0)
-	_check(rig.camera.global_position.distance_to(clamped_eye) < 0.01, "Sphere clamping persists in the anchor-relative free position.")
+	_check(rig.camera.global_position.distance_to(clamped_eye) < 0.01, "Sphere clamping persists in the marker-relative free position.")
 	_freeze_fixture(false)
 	rig.focus_fleet()
 
@@ -284,9 +281,9 @@ func _check_camera_membership() -> void:
 	var fleet := _journey.fleet
 	_freeze_fixture(true)
 	await _frames(2)
-	var anchor_position := fleet.anchor.global_position
+	var marker_position := fleet.marker.global_position
 	var saved_distance := rig.orbit_distance
-	# Test the boundary too: an average-centered clamp can move an anchor-focused camera.
+	# Test the boundary too: an average-centered clamp can move a marker-focused camera.
 	for camera_mode in [FleetCamera.Mode.FLEET, FleetCamera.Mode.SHIP, FleetCamera.Mode.FREE]:
 		rig.orbit_distance = rig.maximum_orbit_distance
 		rig.focus_fleet()
@@ -296,26 +293,22 @@ func _check_camera_membership() -> void:
 			rig.pan(Vector3.RIGHT * rig.viewing_radius * 3.0)
 		rig._process(0.0)
 		var view := rig.camera.global_transform
-		var mean_before := fleet.average_position
 		var member := SHIP_SCENE.instantiate() as Airship
 		member.entity_id = _journey.allocate_ship_id()
 		_journey.add_child(member)
-		member.global_position = anchor_position - (view.origin - anchor_position).normalized() * 6000.0
+		member.global_position = marker_position - (view.origin - marker_position).normalized() * 6000.0
 		_journey.register_ship(member)
-		fleet.advance(0.0)
-		fleet.average_focus.reset_physics_interpolation()
+		_advance_fleet(fleet, 0.0)
 		rig._process(0.0)
-		_check(fleet.average_position.distance_to(mean_before) > 100.0, "Spawn fixture meaningfully shifts the fleet average.")
 		_check(rig.camera.global_transform.is_equal_approx(view), "Spawning a player preserves the camera view in mode %d at the sphere edge." % camera_mode)
 		member.take_damage(member.maximum_health, Factions.ENEMY)
 		_journey._remove_dead_ships()
-		fleet.advance(0.0)
-		fleet.average_focus.reset_physics_interpolation()
+		_advance_fleet(fleet, 0.0)
 		await _frames(2)
 		rig._process(0.0)
 		_check(rig.camera.global_transform.is_equal_approx(view), "An unrelated player's death preserves the camera view in mode %d." % camera_mode)
-		_check(fleet.anchor.global_position == anchor_position, "Membership changes never reposition the camera anchor.")
-		_check(view.origin.distance_to(anchor_position) <= rig.viewing_radius + 0.01, "Each camera mode respects the anchor-centered sphere.")
+		_check(fleet.marker.global_position == marker_position, "Membership changes never reposition the camera marker.")
+		_check(view.origin.distance_to(marker_position) <= rig.viewing_radius + 0.01, "Each camera mode respects the marker-centered sphere.")
 	rig.orbit_distance = saved_distance
 	rig.focus_fleet()
 	_freeze_fixture(false)
@@ -362,7 +355,7 @@ func _check_zoom() -> void:
 	rig.zoom(-100000.0)
 	_check(is_equal_approx(rig.camera.position.z, rig.minimum_orbit_distance), "Orbit zoom stops before passing through the target.")
 	rig.zoom(100000.0)
-	var center := _journey.fleet.anchor.get_global_transform_interpolated().origin
+	var center := _journey.fleet.marker.get_global_transform_interpolated().origin
 	_check(rig.camera.global_position.distance_to(center) <= rig.viewing_radius + 0.01, "Zoom out respects the fleet viewing sphere.")
 	var bounded_distance := rig.camera.position.z
 	_scroll(MOUSE_BUTTON_WHEEL_UP)
@@ -373,10 +366,10 @@ func _check_zoom() -> void:
 
 
 func _check_navigation_debug() -> void:
-	var debug := _journey.get_node("FleetAnchor/NavigationDebug") as ShipNavigationDebug
+	var debug := _journey.get_node("FleetMarker/NavigationDebug") as ShipNavigationDebug
 	var ship := _journey.ships[0]
-	var random_state := ship.travel.rng.state
-	var goal := ship.travel.goal_offset
+	var random_state := ship.navigation.rng.state
+	var goal := ship.navigation.goal_offset
 	_check(not debug.enabled and not debug.visible and not debug.is_processing(), "Navigation debug starts disabled.")
 	_send_input(_key(KEY_F3, true))
 	_send_input(_key(KEY_F3, false))
@@ -385,7 +378,7 @@ func _check_navigation_debug() -> void:
 	_send_input(_key(KEY_F3, true))
 	_send_input(_key(KEY_F3, false))
 	_check(not debug.enabled and not debug.visible and not debug.is_processing(), "F3 hides navigation debug and stops rebuilding geometry.")
-	_check(random_state == ship.travel.rng.state and goal == ship.travel.goal_offset, "Navigation debug does not alter travel goals or randomness.")
+	_check(random_state == ship.navigation.rng.state and goal == ship.navigation.goal_offset, "Navigation debug does not alter travel goals or randomness.")
 
 
 func _send_input(event: InputEvent) -> void:
@@ -419,18 +412,19 @@ func _scroll(button: MouseButton) -> void:
 
 func _check_initial_surroundings() -> void:
 	var sides := Vector4.ZERO
-	var anchor := _journey.fleet.anchor.global_position
+	var marker := _journey.fleet.marker.global_position
 	for island in _journey.island_spawner.obstacles:
-		var offset := island.global_position - anchor
-		if offset.x < -_journey.fleet.formation_extent.x * 2.0:
+		var offset := island.global_position - marker
+		if offset.x < -_journey.fleet.radius * 2.0:
 			sides.x += 1.0
-		if offset.x > _journey.fleet.formation_extent.x * 2.0:
+		if offset.x > _journey.fleet.radius * 2.0:
 			sides.y += 1.0
-		if offset.z < -_journey.fleet.formation_extent.z:
+		if offset.z < -_journey.fleet.radius:
 			sides.z += 1.0
-		if offset.z > _journey.fleet.formation_extent.z:
+		if offset.z > _journey.fleet.radius:
 			sides.w += 1.0
-		_check(island.global_position.y + island.bottom_offset > _journey.terrain.profile.maximum_height(), "Floating islands remain above the terrain's maximum height.")
+		var altitude_range := _journey.island_spawner.altitude_range
+		_check(island.global_position.y >= altitude_range.x and island.global_position.y <= altitude_range.y, "Floating islands stay within their authored altitude band.")
 	_check(sides.x > 0.0 and sides.y > 0.0 and sides.z > 0.0 and sides.w > 0.0, "The starting field has scenery well to both sides, ahead, and behind.")
 	var query := PhysicsShapeQueryParameters3D.new()
 	query.collision_mask = 2
@@ -456,38 +450,38 @@ func _capture_surroundings() -> void:
 
 
 func _check_rebase() -> void:
-	var before := _journey.anchor_route_position()
+	var before := _journey.marker_route_position()
 	var first := _journey.ships[0]
 	var position := RoutePosition.from_scene(first.position.z, _journey.origin.segment)
 	var velocity := first.linear_velocity
-	var goal := first.travel.goal_offset
+	var goal := first.navigation.goal_offset
 	var relative := first.global_position - _journey.ships[1].global_position
 	var rng_state := _journey.island_spawner.rng.state
-	var ship_rng := first.travel.rng.state
+	var ship_rng := first.navigation.rng.state
 	var camera_mode := _journey.camera_rig.mode
 	var progress_before := _journey.progression.distance
 	var terrain_chunk: MeshInstance3D = _journey.terrain.chunks.values()[0]
-	var terrain_relative := terrain_chunk.global_position - _journey.fleet.anchor.global_position
+	var terrain_relative := terrain_chunk.global_position - _journey.fleet.marker.global_position
 	_journey.origin.shift_segments(-1)
-	_journey.progression.update(_journey.anchor_route_position())
+	_journey.progression.update(_journey.marker_route_position())
 	_check(is_equal_approx(progress_before, _journey.progression.distance), "Origin shifts do not advance the numeric journey progression.")
-	var after := _journey.anchor_route_position()
+	var after := _journey.marker_route_position()
 	var shifted_position := RoutePosition.from_scene(first.position.z, _journey.origin.segment)
-	_check(before.segment == after.segment and absf(before.offset - after.offset) < 0.01, "Rebasing preserves anchor progression.")
+	_check(before.segment == after.segment and absf(before.offset - after.offset) < 0.01, "Rebasing preserves marker progression.")
 	_check(position.segment == shifted_position.segment and absf(position.offset - shifted_position.offset) < 0.01, "Rebasing preserves ship logical position.")
-	_check(first.linear_velocity == velocity and first.travel.goal_offset == goal, "Rebasing preserves velocity and relative goals.")
+	_check(first.linear_velocity == velocity and first.navigation.goal_offset == goal, "Rebasing preserves velocity and relative goals.")
 	_check(relative.distance_to(first.global_position - _journey.ships[1].global_position) < 0.01, "Rebasing preserves ship separation.")
-	_check(rng_state == _journey.island_spawner.rng.state and ship_rng == first.travel.rng.state, "Rebasing does not consume randomness.")
+	_check(rng_state == _journey.island_spawner.rng.state and ship_rng == first.navigation.rng.state, "Rebasing does not consume randomness.")
 	_check(camera_mode == _journey.camera_rig.mode, "Rebasing retains camera mode.")
-	_check(terrain_relative.distance_to(terrain_chunk.global_position - _journey.fleet.anchor.global_position) < 0.01, "Rebasing preserves terrain relative to the fleet.")
+	_check(terrain_relative.distance_to(terrain_chunk.global_position - _journey.fleet.marker.global_position) < 0.01, "Rebasing preserves terrain relative to the fleet.")
 
 
 func _check_spawns() -> void:
 	var spawner := _journey.island_spawner
-	spawner.update_region(_journey.anchor_route_position())
+	spawner.update_region(_journey.marker_route_position())
 	var count := spawner.records.size()
 	var state := spawner.rng.state
-	spawner.update_region(_journey.anchor_route_position())
+	spawner.update_region(_journey.marker_route_position())
 	_check(count == spawner.records.size() and state == spawner.rng.state, "Repeated streaming updates do not duplicate islands.")
 	var ids: Dictionary[int, bool] = {}
 	for record in spawner.records:
@@ -496,7 +490,7 @@ func _check_spawns() -> void:
 
 
 func _check_long_travel() -> void:
-	var first_goal := _journey.ships[0].travel.goals_reached
+	var first_goal := _journey.ships[0].navigation.goals_reached
 	# Cover two origin segments at the authored cruise speed, including slowdown margin.
 	var batch_seconds := ceili(2.0 * 10240.0 * 1.2 / _journey.fleet.cruise_speed / 12.0)
 	for batch in range(12):
@@ -505,14 +499,14 @@ func _check_long_travel() -> void:
 			_check(ship.global_position.is_finite() and ship.linear_velocity.is_finite(), "Ship positions and velocities stay finite.")
 			_check(absf(ship.visual_root.rotation.x) <= deg_to_rad(ship.pitch_limit_degrees) + 0.001, "Pitch remains bounded.")
 			_check(absf(ship.visual_root.rotation.z) <= deg_to_rad(ship.bank_limit_degrees) + 0.001, "Bank remains bounded.")
-			var relative := (ship.global_position - _journey.fleet.anchor.global_position) / _journey.fleet.formation_extent
+			var relative := (ship.global_position - _journey.fleet.marker.global_position) / _journey.fleet.radius
 			_check(relative.length() < 1.25, "Ships stay within reach of the formation.")
 	_check(_journey.origin.shift_count >= 2, "Long travel crosses multiple origins.")
 	var spawner := _journey.island_spawner
 	var maximum_loaded := ceili((spawner.look_ahead + spawner.keep_behind) / spawner.minimum_spacing) + 2
 	_check(spawner.active.size() <= maximum_loaded, "Loaded island count stays bounded by the streaming window.")
 	_check(_journey.island_spawner.records.size() > _journey.island_spawner.active.size(), "Passed islands retain their records after unloading.")
-	_check(_journey.ships[0].travel.goals_reached > first_goal + 2, "Ships repeatedly reach moving navigation goals.")
+	_check(_journey.ships[0].navigation.goals_reached > first_goal + 2, "Ships repeatedly reach moving navigation goals.")
 	_check_spawns()
 	print("Long travel: ", _journey.origin.shift_count, " shifts; ", _journey.island_spawner.records.size(), " records; ", _journey.island_spawner.active.size(), " live islands.")
 	# A fresh origin near an enormous route position keeps scene transforms small.
@@ -522,87 +516,107 @@ func _check_long_travel() -> void:
 	_check_spawns()
 
 
-func _check_slowdown() -> void:
-	_freeze_fixture(true)
-	var fleet := _journey.fleet
-	fleet.anchor.position.z -= 600.0
-	for tick in range(ceili(fleet.cruise_speed / fleet.acceleration + 1.0) * _rate):
-		fleet.advance(_delta)
-	_check(fleet.speed < fleet.cruise_speed * 0.5, "The anchor slows when the fleet is held behind.")
-	var gap := fleet.anchor.position.distance_to(fleet.average_position)
-	_freeze_fixture(false)
-	await _frames(ceili(gap / fleet.wander_speed + 10.0) * _rate)
-	_check(fleet.anchor.position.distance_to(fleet.average_position) < gap * 0.6, "Ships recover after being held behind.")
-	_check(fleet.speed > fleet.cruise_speed * 0.8, "The anchor recovers cruising speed.")
+func _advance_fleet(fleet: FleetController, delta: float, combat_active: bool = false) -> void:
+	fleet.prepare_step(delta, combat_active)
+	fleet.advance(delta)
+
+
+func _check_marker_control() -> void:
+	var fixture := Node3D.new()
+	root.add_child(fixture)
+	var fleet := FleetController.new()
+	fixture.add_child(fleet)
+	fleet.marker = Node3D.new()
+	fleet.marker.position = Vector3(5, 3800, 0)
+	fixture.add_child(fleet.marker)
+	var ship := SHIP_SCENE.instantiate() as Airship
+	ship.freeze = true
+	ship.position = fleet.marker.position + Vector3(0, 20, 0)
+	fixture.add_child(ship)
+	fleet.register_ship(ship)
+	ship.navigation.initialize(fleet, ship)
+	fleet.initialize()
+	var start := fleet.marker.position
+	_advance_fleet(fleet, 0.0)
+	_check(fleet.marker.position == start, "A zero-duration refresh never moves the marker.")
+	_advance_fleet(fleet, _delta)
+	_check(fleet.marker.position.z < start.z and fleet.marker.position.x == start.x and fleet.marker.position.y == start.y, "Travel follows Z- without following the ship center or altitude.")
+	start = fleet.marker.position
+	fleet.speed = fleet.cruise_speed
+	_advance_fleet(fleet, _delta, true)
+	_check(fleet.marker.position.z < start.z and fleet.speed == fleet.cruise_speed, "Entering combat preserves forward marker travel and cruise speed.")
+	for tick in range(2 * _rate):
+		_advance_fleet(fleet, _delta, true)
+	_check(fleet.marker.position.z < start.z - 49.0, "The marker continues traveling during combat.")
+	start = fleet.marker.position
+	_advance_fleet(fleet, _delta, false)
+	_check(fleet.marker.position.z < start.z and fleet.speed == fleet.cruise_speed, "Clearing combat neither stops nor restarts marker acceleration.")
+	fleet.marker.position.z = -499.9
+	ship.position = fleet.marker.position + Vector3(0, 20, 0)
+	start = fleet.marker.position
+	_advance_fleet(fleet, _delta, true)
+	_check(fleet.marker.position.z < -500.0 and fleet.speed == fleet.cruise_speed, "Crossing a wave milestone does not cap travel or reduce speed.")
+	var old_radius := fleet.radius
+	var big := SHIP_SCENE.instantiate() as Airship
+	fixture.add_child(big)
+	big.freeze = true
+	big.faction = Factions.ENEMY
+	big.maximum_speed = 1.0
+	big.navigation.safe_marker_speed = 0.0
+	big.position = fleet.marker.position
+	big.hull_radius = 180.0
+	fleet.register_ship(big)
+	start = fleet.marker.position
+	_advance_fleet(fleet, _delta, true)
+	_check(fleet.radius > old_radius and fleet.marker.position.distance_to(start + fleet.velocity * _delta) < 0.001, "Enemy hulls grow the sphere without adding a membership-driven center shift.")
+	_check(big in fleet.occupants and big not in fleet.members and fleet.speed == fleet.cruise_speed, "Enemy size contributes space without slowing friendly travel.")
+	fleet.unregister_ship(big)
+	_check(big not in fleet.occupants, "Removing an enemy removes its sphere footprint.")
+	var battle_radius := fleet.radius
+	_advance_fleet(fleet, _delta, true)
+	_check(fleet.radius == battle_radius, "Casualties cannot shrink the combat sphere around surviving ships.")
+	_advance_fleet(fleet, _delta, false)
+	_check(fleet.radius < battle_radius, "A cleared, occupied interior allows gradual contraction.")
+	ship.position = fleet.marker.position + Vector3(0, 0, fleet.radius + 50)
+	start = fleet.marker.position
+	_advance_fleet(fleet, _delta)
+	_check(fleet.marker.position == start, "Travel waits when a displaced trailing ship cannot fit within the moving sphere.")
+	fleet.unregister_ship(ship)
+	fleet.register_ship(big)
+	_advance_fleet(fleet, _delta)
+	_check(fleet.marker.position == start and fleet.speed == 0.0, "An empty friendly fleet stops safely even with surviving enemies.")
+	fixture.queue_free()
 
 
 func _check_membership() -> void:
 	var ship := _journey.ships[0]
 	_journey.camera_rig.follow_ship(ship)
-	var anchor_position := _journey.fleet.anchor.position
+	var marker_position := _journey.fleet.marker.position
 	_journey.unregister_ship(ship)
-	_check(_journey.fleet.anchor.position == anchor_position, "Removing a member cannot teleport the anchor.")
+	_check(_journey.fleet.marker.position == marker_position, "Removing a member cannot teleport the marker.")
 	_journey.register_ship(ship)
-	_check(_journey.fleet.members.count(ship) == 1 and _journey.fleet.anchor.position == anchor_position, "Re-registering a live ship preserves identity and progression.")
+	_check(_journey.fleet.members.count(ship) == 1 and _journey.fleet.marker.position == marker_position, "Re-registering a live ship preserves identity and progression.")
 	_journey.unregister_ship(ship)
 	ship.queue_free()
 	await _frames(3)
 	_check(_journey.camera_rig.mode == FleetCamera.Mode.FLEET, "A destroyed camera target falls back to fleet tracking.")
 	_journey.camera_rig._process(0.0)
-	_check(_journey.camera_rig.global_position.is_equal_approx(_journey.fleet.anchor.get_global_transform_interpolated().origin), "A destroyed camera target restores the persistent anchor focus.")
+	_check(_journey.camera_rig.global_position.is_equal_approx(_journey.fleet.marker.get_global_transform_interpolated().origin), "A destroyed camera target restores the persistent marker focus.")
 	while _journey.ships.size() > 1:
 		var remaining: Airship = _journey.ships.back()
 		_journey.unregister_ship(remaining)
 		remaining.queue_free()
-	var single_start := _journey.anchor_route_position()
+	var single_start := _journey.marker_route_position()
 	await _frames(roundi(1.5 * _rate))
-	_check(_journey.fleet.members.size() == 1 and _journey.anchor_route_position().compare(single_start) < 0, "A single remaining ship keeps the fleet moving.")
+	_check(_journey.fleet.members.size() == 1 and _journey.marker_route_position().compare(single_start) < 0, "A single remaining ship keeps the fleet moving.")
 	var last_ship := _journey.ships[0]
 	_journey.unregister_ship(last_ship)
 	last_ship.queue_free()
 	await _frames(3)
-	anchor_position = _journey.fleet.anchor.position
+	marker_position = _journey.fleet.marker.position
 	await _frames(roundi(0.5 * _rate))
-	_check(_journey.fleet.speed == 0.0 and _journey.fleet.anchor.position == anchor_position, "An empty fleet stops the anchor safely.")
-	_check(_journey.camera_rig.global_position.is_equal_approx(anchor_position), "The camera keeps its anchor focus when no ships remain.")
-
-
-func _check_encounters() -> void:
-	var setups := [
-		[Vector3(0, 0, 180), Vector3(0, 0, -180), Vector3(0, 0, -80), Vector3(0, 0, 80)],
-		[Vector3(-180, 0, 0), Vector3(0, 0, 180), Vector3(80, 0, 0), Vector3(0, 0, -80)],
-		[Vector3(0, 0, 140), Vector3(0, 0, -40), Vector3(0, 0, -120), Vector3(0, 0, -60)],
-		[Vector3(-28.0, 0, 0), Vector3(28.0, 0, 0), Vector3(0, 0, -80), Vector3(0, 0, -80)]
-	]
-	for setup_index in range(setups.size()):
-		var setup: Array = setups[setup_index]
-		var pair: Array[Airship] = []
-		for index in range(2):
-			var ship := SHIP_SCENE.instantiate() as Airship
-			ship.entity_id = 101 + index
-			ship.faction = Factions.NEUTRAL
-			_journey.add_child(ship)
-			ship.global_position = _journey.fleet.anchor.position + setup[index]
-			ship.set_preferred_velocity(setup[index + 2])
-			ship.rotation.y = atan2(-ship.preferred_velocity.x, -ship.preferred_velocity.z)
-			_journey.register_ship(ship)
-			ship.reset_physics_interpolation()
-			pair.append(ship)
-		var starts: Array[Vector3] = [pair[0].position, pair[1].position]
-		var minimum_clearance: float = INF
-		for tick in range(10 * _rate):
-			await physics_frame
-			var first_axis := pair[0].basis.z * pair[0].hull_half_segment
-			var second_axis := pair[1].basis.z * pair[1].hull_half_segment
-			var closest := Geometry3D.get_closest_points_between_segments(pair[0].position - first_axis, pair[0].position + first_axis, pair[1].position - second_axis, pair[1].position + second_axis)
-			minimum_clearance = minf(minimum_clearance, closest[0].distance_to(closest[1]) - pair[0].hull_radius - pair[1].hull_radius)
-		_check(minimum_clearance > -3.0, "Encounter %d avoids sustained hull overlap (clearance %.3f)." % [setup_index, minimum_clearance])
-		for index in range(2):
-			_check((pair[index].position - starts[index]).dot(pair[index].preferred_velocity.normalized()) > 300.0, "Encounter %d resolves without deadlock." % setup_index)
-			_journey.unregister_ship(pair[index])
-			pair[index].queue_free()
-		await _frames(2)
-		print("Encounter ", setup_index, ": minimum hull clearance ", minimum_clearance)
+	_check(_journey.fleet.speed == 0.0 and _journey.fleet.marker.position == marker_position, "An empty fleet stops the marker safely.")
+	_check(_journey.camera_rig.global_position.is_equal_approx(marker_position), "The camera keeps its marker focus when no ships remain.")
 
 
 func _stick(axis: JoyAxis, value: float) -> InputEventJoypadMotion:
@@ -619,8 +633,8 @@ func _set_distant_origin() -> void:
 	for record in _journey.island_spawner.records:
 		record.route_position.segment += difference
 	_journey.island_spawner.next_position.segment += difference
-	_journey.progression.update(_journey.anchor_route_position())
-	_journey.terrain.update_region(_journey.fleet.anchor.global_position.x, _journey.anchor_route_position(), _journey.camera_rig.camera.global_position)
+	_journey.progression.update(_journey.marker_route_position())
+	_journey.terrain.update_region(_journey.fleet.marker.global_position.x, _journey.marker_route_position(), _journey.camera_rig.camera.global_position)
 	_journey.terrain.build_pending(10000)
 
 

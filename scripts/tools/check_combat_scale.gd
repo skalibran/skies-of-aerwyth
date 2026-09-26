@@ -45,11 +45,12 @@ func _run() -> void:
 		RenderingServer.viewport_set_measure_render_time(root.get_viewport_rid(), true)
 		process_frame.connect(_sample_frame)
 	_journey = JOURNEY.instantiate() as Journey
+	_journey.encounters.enabled = false
 	root.add_child(_journey)
 	_journey.set_physics_process(false)
 	_journey.profile_steps = true
 	_build_fleets()
-	var debug := _journey.get_node("FleetAnchor/NavigationDebug") as ShipNavigationDebug
+	var debug := _journey.get_node("FleetMarker/NavigationDebug") as ShipNavigationDebug
 	debug.enabled = false
 	_journey.camera_rig.orbit_distance = 3600
 	_journey.camera_rig.focus_fleet()
@@ -82,7 +83,8 @@ func _run() -> void:
 			await _capture("combat-220")
 		_check(_journey.ships.size() == 220, "Both fleets remain at the benchmark population after replacements.")
 	_finish_phase()
-	_check(_journey.fleet.members.size() == 70, "Only seventy player ships contribute to the fleet average.")
+	_check(_journey.fleet.occupants.size() == 220, "All living combat ships contribute to sphere size.")
+	_check(_journey.fleet.members.size() == 70, "Only seventy player ships contribute to friendly fleet membership and travel pace.")
 	_check(_journey.projectiles.damaging_hits > 0 and _journey.destroyed_count >= 10, "Large-fleet combat and replacement lifecycle are exercised.")
 	# A second phase isolates the documented full-rate miss workload alongside
 	# movement, streaming, and rendering, without adding duplicate weapon fire.
@@ -105,7 +107,10 @@ func _run() -> void:
 	_finish_phase()
 	_journey.projectiles.clear()
 	await process_frame
-	_check(_journey.projectiles.shots.is_empty() and _journey.projectiles.get_child_count() == 0, "Projectile cleanup releases all visual nodes.")
+	var projectiles := _journey.projectiles
+	_check(projectiles.shots.is_empty() and projectiles.get_child_count() == projectiles.smoke_batches.size(), "Projectile cleanup releases shot visuals and retains only reusable smoke batches.")
+	for batch in projectiles.smoke_batches.values():
+		_check(not batch.visible and not batch.is_physics_processing() and batch._expires.is_empty() and batch._pending.is_empty(), "Retained smoke batches are idle and hold no pending bursts after cleanup.")
 	var result := {"cpu": OS.get_processor_name(), "renderer": RenderingServer.get_current_rendering_method(), "gpu": RenderingServer.get_video_adapter_name(), "render_size": [root.get_texture().get_width(), root.get_texture().get_height()], "physics_hz": Engine.physics_ticks_per_second, "friendly": 70, "enemy": 150, "shots_fired": _journey.projectiles.fired_count, "damage_hits": _journey.projectiles.damaging_hits, "ally_hits": _journey.projectiles.friendly_hits, "destroyed": _journey.destroyed_count, "phases": _results}
 	result["configuration"] = _configuration()
 	print("COMBAT_SCALE ", JSON.stringify(result))
@@ -126,12 +131,14 @@ func _run() -> void:
 
 func _build_fleets() -> void:
 	# Preserve the benchmark's large-fleet volume independently of starter tuning.
-	_journey.fleet.formation_extent = Vector3(1800, 1200, 1800)
-	_journey.fleet.wander_step_radius = 160.0
+	_journey.fleet.minimum_radius = 1800.0
+	_journey.fleet.radius = 1800.0
+	_journey.fleet.entry_range = 800.0
+	_journey.fleet.local_step = 160.0
 	for ship in _journey.ships.duplicate():
 		_journey.unregister_ship(ship)
 		ship.queue_free()
-	var center := _journey.fleet.anchor.global_position
+	var center := _journey.fleet.marker.global_position
 	for index in range(70):
 		_spawn(Factions.PLAYER, center + Vector3(-900 + (index % 7) * 120, (index % 3 - 1) * 140, (index / 7 - 4.5) * 150))
 	for index in range(150):
@@ -143,7 +150,7 @@ func _build_fleets() -> void:
 	spawner.obstacles.clear()
 	spawner.active.clear()
 	spawner.records.clear()
-	spawner.initialize(_journey.anchor_route_position())
+	spawner.initialize(_journey.marker_route_position())
 
 
 func _spawn(faction: StringName, position: Vector3) -> void:
@@ -241,8 +248,8 @@ func _configuration() -> Dictionary:
 		"lateral_drag": ship.lateral_drag,
 		"primary_axis": var_to_str(ship.primary_movement_direction),
 		"engagement_distance": ship.engagement_distance,
-		"pass_seconds": ship.combat_pass_seconds, "combat_speed_ratio": ship.combat_speed_ratio,
-		"combat_radii": var_to_str(_journey.fleet.combat_radii),
+		"fleet_radius": _journey.fleet.radius,
+		"entry_range": _journey.fleet.entry_range,
 		"bearings": ship.preferred_combat_positions, "slots": slots,
 		"weapon": {"speed": CANNON.launch_speed, "gravity": CANNON.gravity,
 			"range": CANNON.range_units, "damage": CANNON.damage,
