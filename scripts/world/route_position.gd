@@ -1,7 +1,7 @@
 class_name RoutePosition
 extends RefCounted
 
-const SEGMENT_LENGTH: float = 1024.0
+const SEGMENT_LENGTH: float = 10240.0
 
 var segment: int
 var offset: float

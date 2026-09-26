@@ -1,7 +1,7 @@
 class_name FloatingOrigin
 extends Node
 
-@export_range(512.0, 4096.0, 1.0) var shift_threshold: float = 768.0
+@export_range(5120.0, 40960.0, 10.0) var shift_threshold: float = 7680.0
 
 var segment: int = 0
 var shift_count: int = 0

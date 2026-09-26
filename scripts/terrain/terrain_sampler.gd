@@ -29,8 +29,8 @@ func sample(world_x: float, segment: int, offset_z: float) -> Vector3:
 	var first := _region(region)
 	var second := _region(region + 1)
 	var weight := smoothstep(0.0, NOISE_REGION_LENGTH, local_z)
-	var x := world_x + 317.0
-	var z := local_z + 791.0
+	var x := world_x + 3170.0
+	var z := local_z + 7910.0
 	var next_z := z - NOISE_REGION_LENGTH
 	# Both sides of a boundary use identical noise and matching continuous slopes.
 	return Vector3(

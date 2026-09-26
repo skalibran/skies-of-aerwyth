@@ -1,5 +1,7 @@
 # Combat performance integration
 
+The measurements and spatial values below retain the units used when recorded. The subsequent [meter conversion](world_units.md) scales lengths, linear speeds, and linear accelerations by ten; its before/after measurements are recorded separately.
+
 Measured 2026-09-25 against `main` at `5b26406`. The selective integration reduces early-combat mean script cost by 30.1% at matched 60 Hz. Avoidance and weapon candidate work account for most of the saving. The 30 Hz playtest setting further reduces script work per simulated second, independently of the algorithm changes. These desktop measurements do not establish Steam Deck performance.
 
 ## Implemented changes

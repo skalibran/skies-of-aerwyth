@@ -80,12 +80,12 @@ func _check_perception() -> void:
 	for index in range(48):
 		@warning_ignore("integer_division")
 		var row := index / 4
-		_ship(Vector3((index % 4) * 65 - 100, (index % 3) * 80 - 80, row * 25 - 150), Factions.PLAYER if index % 5 == 0 else Factions.ENEMY)
-	for shift in [Vector3.ZERO, Vector3(0, 0, 1024)]:
+		_ship(Vector3((index % 4) * 650 - 1000, (index % 3) * 800 - 800, row * 250 - 1500), Factions.PLAYER if index % 5 == 0 else Factions.ENEMY)
+	for shift in [Vector3.ZERO, Vector3(0, 0, 10240)]:
 		for ship in _ships:
 			ship.position += shift
 		_perception.rebuild(_ships)
-		for radius in [1.0, 100.0, 230.0]:
+		for radius in [10.0, 1000.0, 2300.0]:
 			var nearby: Array[Airship] = []
 			_perception.nearby_hostiles(player.global_position, radius, player.faction, nearby)
 			var expected: Array[Airship] = []
@@ -96,8 +96,8 @@ func _check_perception() -> void:
 			for other in expected:
 				_check(other in nearby, "Spatial queries do not omit eligible opponents.")
 	var slot := player.mounted_slots[1]
-	slot.position.x = 25.0
-	var edge := _ship(player.global_position + Vector3.RIGHT * 120)
+	slot.position.x = 250.0
+	var edge := _ship(player.global_position + Vector3.RIGHT * 1200)
 	_perception.rebuild(_ships)
 	var queries := _perception.query_count
 	var candidates := _perception.weapon_candidates(player)
@@ -121,8 +121,8 @@ func _check_shortlists() -> void:
 		# Coincident pairs exercise the stable-ID tie break exactly.
 		@warning_ignore("integer_division")
 		var pair := index / 2
-		_ship(Vector3(20 + pair * 5, 0, 0))
-	for shift in [Vector3.ZERO, Vector3(0, 0, -1024)]:
+		_ship(Vector3(200 + pair * 50, 0, 0))
+	for shift in [Vector3.ZERO, Vector3(0, 0, -10240)]:
 		for ship in _ships:
 			ship.position += shift
 		_ships.reverse()
@@ -145,8 +145,8 @@ func _check_shortlists() -> void:
 
 func _check_pending_deletion() -> void:
 	var player := _ship(Vector3.ZERO, Factions.PLAYER)
-	var removed := _ship(Vector3.RIGHT * 30)
-	var alternative := _ship(Vector3.RIGHT * 60)
+	var removed := _ship(Vector3.RIGHT * 300)
+	var alternative := _ship(Vector3.RIGHT * 600)
 	var fleet := FleetController.new()
 	fleet.anchor = Node3D.new()
 	_fixture.add_child(fleet.anchor)
@@ -171,7 +171,7 @@ func _check_search_fairness() -> void:
 	slot.equipment = probe
 	slot.add_child(probe)
 	for index in range(10):
-		_ship(Vector3(15 + index * 5, 0, 0))
+		_ship(Vector3(150 + index * 50, 0, 0))
 	var farthest: Airship = _ships.back()
 	probe.reachable_id = farthest.entity_id
 	for search in range(3):
@@ -181,7 +181,7 @@ func _check_search_fairness() -> void:
 		_check(probe.attempts.size() - before <= MountedWeapon.SOLVE_BUDGET, "Each search keeps the total target-attempt budget.")
 		# Change distance order between searches. A list cursor would repeat work.
 		for index in range(1, _ships.size() - 1):
-			_ships[index].position.x = 15 + ((index + search * 3) % 8) * 5
+			_ships[index].position.x = 150 + ((index + search * 3) % 8) * 50
 	_check(probe.shots_fired == 1 and probe.firing_target == farthest and probe.attempts.size() == 10, "Failed-attempt history reaches a farther target despite reordered distances.")
 	probe.forget(farthest)
 	_perception.forget(farthest)
@@ -190,7 +190,7 @@ func _check_search_fairness() -> void:
 	probe.cooldown = 0
 	probe.attempts.clear()
 	probe.reachable_id = _ships[1].entity_id
-	_ships[1].position.x = 10.0
+	_ships[1].position.x = 100.0
 	for index in range(1, _ships.size() - 1):
 		probe._searched_candidates[_ships[index].get_instance_id()] = true
 	probe.step(0.2, player, _perception, _projectiles)
@@ -206,7 +206,7 @@ func _check_search_fairness() -> void:
 
 func _check_firing() -> void:
 	var player := _ship(Vector3.ZERO, Factions.PLAYER)
-	var target := _ship(Vector3(60, 0, 0))
+	var target := _ship(Vector3(600, 0, 0))
 	var slot := player.mounted_slots[1]
 	var weapon := slot.equipment as MountedWeapon
 	weapon.definition = CANNON.duplicate()
@@ -221,7 +221,7 @@ func _check_firing() -> void:
 		weapon.step(_delta, player, _perception, _projectiles)
 	_check(weapon.shots_fired - shots == 10 and weapon.search_count - searches == 5, "Ten-shot/s firing is independent of five acquisitions/s at the project physics rate.")
 	_projectiles.clear()
-	var closer := _ship(Vector3(40, 0, 0))
+	var closer := _ship(Vector3(400, 0, 0))
 	_perception.rebuild(_ships)
 	weapon.step(1.0, player, _perception, _projectiles)
 	_check(weapon.firing_target == target, "A closer passer alone does not replace a usable firing target.")
@@ -229,7 +229,7 @@ func _check_firing() -> void:
 	weapon.step(1.0, player, _perception, _projectiles)
 	_check(weapon.firing_target == closer and player.combat.target == closer, "A shootable main target takes preference without weapon-side pursuit changes.")
 	shots = weapon.shots_fired
-	closer.linear_velocity = Vector3.RIGHT * 300
+	closer.linear_velocity = Vector3.RIGHT * 3000
 	weapon.cooldown = 0
 	weapon._search_time = 1.0
 	weapon.step(0.1, player, _perception, _projectiles)
@@ -245,7 +245,7 @@ func _check_staggering() -> void:
 	var players: Array[Airship] = []
 	for index in range(12):
 		players.append(_ship(Vector3.ZERO, Factions.PLAYER))
-	var target := _ship(Vector3.RIGHT * 60)
+	var target := _ship(Vector3.RIGHT * 600)
 	var peak_searches: int = 0
 	var total_searches: int = 0
 	for player in players:
@@ -278,7 +278,7 @@ func _check_staggering() -> void:
 
 func _check_conservative_cone() -> void:
 	var player := _ship(Vector3.ZERO, Factions.PLAYER)
-	var target := _ship(Vector3.RIGHT * 50)
+	var target := _ship(Vector3.RIGHT * 500)
 	var slot := player.mounted_slots[1]
 	var weapon := slot.equipment as MountedWeapon
 	weapon.definition = CANNON.duplicate()
@@ -286,11 +286,11 @@ func _check_conservative_cone() -> void:
 	rng.seed = 92017
 	var accepted: int = 0
 	for sample in range(900):
-		weapon.weapon.launch_speed = [20.0, 40.0, 100.0][sample % 3]
-		weapon.weapon.gravity = rng.randf_range(1.0, 12.0)
+		weapon.weapon.launch_speed = [200.0, 400.0, 1000.0][sample % 3]
+		weapon.weapon.gravity = rng.randf_range(10.0, 120.0)
 		slot.rotation = Vector3(rng.randf_range(-0.6, 0.6), rng.randf_range(-PI, PI), 0)
-		target.position = Vector3(rng.randf_range(-90, 90), rng.randf_range(-30, 30), rng.randf_range(-90, 90))
-		target.linear_velocity = Vector3(rng.randf_range(-8, 8), rng.randf_range(-3, 3), rng.randf_range(-8, 8))
+		target.position = Vector3(rng.randf_range(-900, 900), rng.randf_range(-300, 300), rng.randf_range(-900, 900))
+		target.linear_velocity = Vector3(rng.randf_range(-80, 80), rng.randf_range(-30, 30), rng.randf_range(-80, 80))
 		var relative := target.global_position - weapon.global_position
 		var time := Ballistics.intercept_time(relative, target.linear_velocity, weapon.weapon.launch_speed, weapon.weapon.gravity, weapon.weapon.lifetime)
 		if time <= 0 or relative.length() > weapon.weapon.range_units or (relative + target.linear_velocity * time).length() > weapon.weapon.range_units:
@@ -321,7 +321,7 @@ func _check_journey_cleanup() -> void:
 			enemy.faction = Factions.ENEMY
 			enemy.freeze = true
 			journey.add_child(enemy)
-			enemy.global_position = player.global_position + Vector3.RIGHT * 60
+			enemy.global_position = player.global_position + Vector3.RIGHT * 600
 			journey.register_ship(enemy)
 			journey.combat_perception.rebuild(journey.ships)
 			player.combat.target = enemy
@@ -331,7 +331,7 @@ func _check_journey_cleanup() -> void:
 			_check(weapon.firing_target == enemy, "Composed Journey wires registered targets into mounted firing.")
 			journey.combat_perception.weapon_candidates(player)
 			# Removal must use the recorded cell, not a potentially changed position.
-			enemy.global_position += Vector3.RIGHT * 500
+			enemy.global_position += Vector3.RIGHT * 5000
 			if removal == 0:
 				enemy.take_damage(enemy.maximum_health, Factions.PLAYER)
 				_check(not journey.combat_perception.is_hostile(player, enemy), "Lethal damage invalidates perception before deferred unregistering.")

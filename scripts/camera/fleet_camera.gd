@@ -5,14 +5,14 @@ enum Mode { FLEET, SHIP, FREE }
 
 @export var camera: Camera3D
 @export var fleet: FleetController
-@export_range(10.0, 1200.0) var orbit_distance: float = 180.0
-@export_range(5.0, 50.0) var minimum_orbit_distance: float = 10.0
-@export_range(50.0, 2000.0) var maximum_orbit_distance: float = 1200.0
-@export_range(1.0, 100.0) var zoom_step: float = 20.0
-@export_range(1.0, 500.0) var zoom_speed: float = 120.0
+@export_range(100.0, 12000.0) var orbit_distance: float = 1800.0
+@export_range(50.0, 500.0) var minimum_orbit_distance: float = 100.0
+@export_range(500.0, 20000.0) var maximum_orbit_distance: float = 12000.0
+@export_range(10.0, 1000.0) var zoom_step: float = 200.0
+@export_range(10.0, 5000.0) var zoom_speed: float = 1200.0
 @export_range(1.0, 10.0) var sprint_multiplier: float = 3.0
-@export_range(80.0, 2000.0) var viewing_radius: float = 900.0
-@export_range(1.0, 500.0) var pan_speed: float = 100.0
+@export_range(800.0, 20000.0) var viewing_radius: float = 9000.0
+@export_range(10.0, 5000.0) var pan_speed: float = 1000.0
 @export_range(0.001, 0.02, 0.001) var mouse_sensitivity: float = 0.004
 @export_range(0.1, 5.0) var stick_rotation_speed: float = 1.8
 
@@ -140,7 +140,7 @@ func apply_view_bounds() -> void:
 		return
 	_update_rotation()
 	var center := fleet.anchor.get_global_transform_interpolated().origin
-	var radius := maxf(viewing_radius, 10.0)
+	var radius := maxf(viewing_radius, 100.0)
 	if mode == Mode.FREE:
 		var relative_eye := global_position - center
 		if relative_eye.length_squared() > radius * radius:
@@ -148,7 +148,7 @@ func apply_view_bounds() -> void:
 			_free_anchor_offset = global_position - center
 		camera.position = Vector3.ZERO
 		return
-	var relative_focus := (global_position - center).limit_length(radius - 8.0)
+	var relative_focus := (global_position - center).limit_length(radius - 80.0)
 	global_position = center + relative_focus
 	var boom_direction := global_basis.z
 	var projection := relative_focus.dot(boom_direction)

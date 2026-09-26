@@ -4,29 +4,31 @@ Run the project to open [journey.tscn](../../scenes/world/journey.tscn). It star
 
 The endgame combat target is roughly seventy player ships and 150 enemies. The starting nine ships are spaced farther apart; a separate 128-ship movement check exercises the larger fleet without changing the starting roster, including a solid island placed across its path. The separate combat-scale check includes both fleets and projectiles.
 
+One world unit is one meter; see the [unit conversion and measurements](world_units.md).
+
 ## Space and camera scale
 
 | Setting | Prototype value |
 | --- | --- |
-| Formation half-extents, X/Y/Z | 180 / 120 / 180 units (an ellipsoid spanning 360 × 240 × 360) |
-| Maximum nearby destination step | 16 units |
-| Camera viewing sphere radius | 900 units, centered on the persistent fleet anchor |
-| Starting orbit distance | 180 units |
-| Orbit distance setting limits | 10–1200 units, further constrained by the viewing sphere |
-| Free-flight speed | 100 units/second; 300 with sprint |
-| Zoom | 20 units/scroll step; 120 units/second on controller, both boosted by sprint |
-| Camera far plane | 3000 units |
-| Island streaming | 1500 units ahead, 1300 behind the anchor |
-| Island field width | 3200 units, independent of fleet formation width |
-| Island spacing along Z | 8–20 units, with independent X/Y sampling across the field |
-| Island altitude | 200 to 560 units |
-| Fleet starting altitude | 380 units |
-| Voxel ground | 5-unit cubic source grid (trial); adaptive detail over 81 logical 1280-unit regions, Y = -60 to 130 across biomes |
+| Formation half-extents, X/Y/Z | 1800 / 1200 / 1800 meters (an ellipsoid spanning 3600 × 2400 × 3600) |
+| Maximum nearby destination step | 160 meters |
+| Camera viewing sphere radius | 9000 meters, centered on the persistent fleet anchor |
+| Starting orbit distance | 1800 meters |
+| Orbit distance setting limits | 100–12000 meters, further constrained by the viewing sphere |
+| Free-flight speed | 1000 meters/second; 3000 with sprint |
+| Zoom | 200 meters/scroll step; 1200 meters/second on controller, both boosted by sprint |
+| Camera far plane | 30000 meters |
+| Island streaming | 15000 meters ahead, 13000 behind the anchor |
+| Island field width | 32000 meters, independent of fleet formation width |
+| Island spacing along Z | 80–200 meters, with independent X/Y sampling across the field |
+| Island altitude | 2000 to 5600 meters |
+| Fleet starting altitude | 3800 meters |
+| Voxel ground | 50-meter cubic source grid (trial); adaptive detail over 81 logical 12800-meter regions, Y = -600 to 1300 across biomes |
 | Water | Flat scenery at Y = 0; negative terrain forms ponds |
 
-Formation extents and destination step size are exported on FleetController and assigned when each ship joins. The large overall space does not make ships pick destinations across the entire fleet. The starting ships span heights from 340 to 420, centered on Y = 380, and local destination sampling gives X/Y/Z equal weight. Climb speed and attitude limits still keep their motion sluggish. Islands fill a broad surrounding field: X ranges from -1600 to +1600 independently of the formation, and top-reference altitude ranges from 200 to 560. The initial field includes both sides, ahead, and behind the fleet. Width, spacing, and altitude are exported on IslandSpawner. If tuning the camera sphere or formation, keep the streaming distances above their combined Z reach with a margin.
+Formation extents and destination step size are exported on FleetController and assigned when each ship joins. The large overall space does not make ships pick destinations across the entire fleet. The starting ships span heights from 3400 to 4200, centered on Y = 3800, and local destination sampling gives X/Y/Z equal weight. Climb speed and attitude limits still keep their motion sluggish. Islands fill a broad surrounding field: X ranges from -16000 to +16000 independently of the formation, and top-reference altitude ranges from 2000 to 5600. The initial field includes both sides, ahead, and behind the fleet. Width, spacing, and altitude are exported on IslandSpawner. If tuning the camera sphere or formation, keep the streaming distances above their combined Z reach with a margin.
 
-The ground is stepped voxel scenery generated with FastNoiseLite, currently trialing 5-unit cubic voxels. TerrainProfile exposes 1/5/10-unit choices. Each patch stays at its logical world position; travel streams terrain rather than sliding it with the fleet. Nearby patches show individual voxels and distant ones simplify the surface. Grassland ranges from -30 to 70 units, begins blending into broad mountain slopes at 1500 traveled units, and reaches full mountain terrain at 5000. Settings live in a shared profile and separate biome resources. The default region covers the camera sphere plus far range, and maximum terrain height stays below the island field. There is no ground collision or terrain navigation; the free camera retains its existing spherical bounds and can pass through scenery. See [terrain authoring and checks](terrain.md).
+The ground is stepped voxel scenery generated with FastNoiseLite, currently trialing 50-meter cubic voxels. TerrainProfile exposes 10/50/100-meter choices. Each patch stays at its logical world position; travel streams terrain rather than sliding it with the fleet. Nearby patches show individual voxels and distant ones simplify the surface. Grassland ranges from -300 to 700 meters, begins blending into broad mountain slopes at 15000 traveled meters, and reaches full mountain terrain at 50000. Settings live in a shared profile and separate biome resources. The default region covers the camera sphere plus far range, and maximum terrain height stays below the island field. There is no ground collision or terrain navigation; the free camera retains its existing spherical bounds and can pass through scenery. See [terrain authoring and checks](terrain.md).
 
 ## Controls
 
@@ -49,7 +51,7 @@ Free flight is relative to the persistent fleet anchor: without input, the camer
 
 ## Navigation debug
 
-A purple four-unit cube at `FleetAnchor/AnchorMarker` marks the persistent anchor's exact position. It follows anchor movement and origin shifts, has no collision, and remains visible independently of the F3 navigation overlay.
+A purple 40-meter cube at `FleetAnchor/AnchorMarker` marks the persistent anchor's exact position. It follows anchor movement and origin shifts, has no collision, and remains visible independently of the F3 navigation overlay.
 
 Debug geometry starts disabled. Toggle it with F3 or `FleetAnchor/NavigationDebug`'s Enabled Inspector property. Cyan lines link each traveling fleet ship to its current moving destination; crosses and rings mark that destination and its arrival radius. Red goals show combat approach positions or a point three seconds along the current firing pass. Pink lines/crosses show temporary island-detour waypoints. Orange arrows show the intended velocity after island routing but before ship separation, and green arrows show actual velocity. Arrow length represents 0.7 seconds of motion, configurable in the Inspector. Non-fleet ships without a combat target show velocities and any detour.
 
@@ -61,7 +63,7 @@ The geometry is drawn in 3D and remains visible through ship hulls. It reads the
 - FleetController owns friendly membership, anchor motion, and the shared combat radii. It calculates the average before movement and advances the anchor. Journey chooses combat or formation travel intent; FleetController no longer overwrites ship intent during anchor advancement. A separate FleetAverage node stores that calculated center for travel slowdown. Camera focus, combat boundaries, and debug spawn placement use the persistent anchor.
 - Airship is the rigid body; its engine `linear_velocity` and `angular_velocity` are authoritative. ShipFlight computes propulsion and yaw forces without assigning transforms or velocities; visual pitch/bank reflect physical motion. ShipTravel owns its anchor-relative goal and random state. ShipIslandNavigation owns a temporary waypoint relative to its island. ShipAvoidance uses predicted closest approach of capsule hulls and a stable passing side for degenerate approaches.
 - FloatingOrigin owns the logical origin and explicitly registered scene roots. IslandSpawner owns island records, its RNG, the next route coordinate, and loaded island views. Records survive unloading.
-- JourneyProgress exposes `journey.progression.distance`, a number in forward world units derived from the anchor relative to the logical journey start. Journey refreshes it after movement/rebasing. Terrain evaluates the same coordinate-to-distance rule for each sampled location, independently of when its view loads.
+- JourneyProgress exposes `journey.progression.distance`, a number in forward meters derived from the anchor relative to the logical journey start. Journey refreshes it after movement/rebasing. Terrain evaluates the same coordinate-to-distance rule for each sampled location, independently of when its view loads.
 - VoxelTerrain owns adaptive patches and two bounded worker jobs. Journey requests the anchor's region and camera detail focus alongside island streaming. Coarse startup coverage builds synchronously; workers prepare replacement mesh arrays, published on the main thread. Old coverage stays visible until replacements are complete. Each patch is an independent origin root, positioned against the current origin when its job completes. Camera movement changes display detail, not source terrain or progression. Sampling never consumes island or ship RNG.
 - WaterSurface owns a finite scenery plane at Y = 0. Journey registers it for origin shifts and recenters coverage around the anchor. Its world-aligned shader remains stable across shifts; submerged terrain shapes the visible ponds. It does not change navigation or progression.
 - FleetCamera owns tracking, selection, free flight, zoom, and bounds. Its root represents the tracked focus in orbit mode and the camera eye in free mode. Free position is an anchor-relative offset; each rendered frame derives the eye from the interpolated anchor plus that offset. Input and sphere clamping update the offset. Rebasing shifts the rig along with the anchor but leaves the offset unchanged. It reads interpolated target transforms and manages its own rendered transform without another interpolation pass.
@@ -78,7 +80,7 @@ Navigation uses a conservative horizontal footprint and the capsule's vertical b
 
 Ships slow into detour corners, keep their heavy acceleration/yaw limits, and resume their moving travel goal when clear. A travel goal temporarily inside a passing island is bypassed rather than treated as a reachable point inside its solid. Ship separation still applies, and physical collision provides the last contact safeguard. If no local path is available, the ship brakes and retries at a bounded interval. This is lateral routing for the open-air prototype, not a general volumetric maze or cave pathfinder; it does not actively choose an overflight climb to replace a blocked lateral route.
 
-IslandSpawner maintains the loaded obstacle registry alongside its views. Initialization fills the finite streaming window before the first frame, rejecting candidates near the starting ships for hull clearance and approach room. That safety check applies only at startup; it does not carve an empty lane through the continuing field. Later generation extends ahead of the fleet in bounded batches. Detour points store an island reference and local offset, so origin shifts cannot stale their coordinates; unloading removes the obstacle and invalidates its waypoint safely. Navigation clearance is exported on each ship (initially 8 units beyond its conservative hull footprint).
+IslandSpawner maintains the loaded obstacle registry alongside its views. Initialization fills the finite streaming window before the first frame, rejecting candidates near the starting ships for hull clearance and approach room. That safety check applies only at startup; it does not carve an empty lane through the continuing field. Later generation extends ahead of the fleet in bounded batches. Detour points store an island reference and local offset, so origin shifts cannot stale their coordinates; unloading removes the obstacle and invalidates its waypoint safely. Navigation clearance is exported on each ship (initially 80 meters beyond its conservative hull footprint).
 
 The anchor owns progression. Membership changes affect the mean and subsequent speed but never reposition the anchor. An empty friendly fleet stops it without inventing defeat or wipe behavior.
 
@@ -90,15 +92,15 @@ Both combat and formation travel use this controller. Combat supplies an approac
 
 The shared ship scene authors mass 10, friction 0.2, bounce 0, gravity scale 0, and replacement linear/angular damping of 0. ShipFlight owns deliberate drag and lift; engine default damping must not add a second slowdown. Sleeping is disabled for continuously commanded ships. Angular X/Z locks keep the physical hull upright while the visual child retains limited pitch/bank. The current controller assumes that upright constraint. Changing the shape/mass updates the engine inertia; no duplicate inertia value is maintained.
 
-Combat gradually biases courses toward the anchor beyond 180 units and requests regrouping beyond 260 until the ship returns inside 180. FleetController exposes these distances as Combat Radii for both factions. Ships retain their flight response and avoidance during regrouping; see [combat positioning](combat.md#targeting-and-movement).
+Combat gradually biases courses toward the anchor beyond 1800 meters and requests regrouping beyond 2600 until the ship returns inside 1800. FleetController exposes these distances as Combat Radii for both factions. Ships retain their flight response and avoidance during regrouping; see [combat positioning](combat.md#targeting-and-movement).
 
 Tune these exported Airship properties in the Inspector:
 
 | Property | Default | Effect |
 | --- | ---: | --- |
 | `primary_movement_direction` | `(0, 0, -1)` | Local horizontal propulsion axis; normalized, with forward fallback for a zero horizontal vector. |
-| `maximum_speed` / `climb_speed` | 18 / 2 units/s | Combined propulsion target and separate lift target; neither erases contact impulses. |
-| `acceleration` / `braking` | 3 / 4 units/s² | Forward speed response; acceleration also controls lift response. |
+| `maximum_speed` / `climb_speed` | 180 / 20 meters/s | Combined propulsion target and separate lift target; neither erases contact impulses. |
+| `acceleration` / `braking` | 30 / 40 meters/s² | Forward speed response; acceleration also controls lift response. |
 | `yaw_speed_degrees` | 24°/s | Commanded yaw-rate limit; contact-induced spin recovers through bounded torque. |
 | `yaw_acceleration_degrees` | 45°/s² | How quickly turning builds and brakes. |
 | `lateral_drag` | 1.4/s | Higher values reduce sideways momentum sooner; lower values widen drifting turns. |
@@ -111,13 +113,13 @@ Disabling Journey's physics callback stops new control decisions, but a live rig
 
 ## Coordinates and content
 
-RoutePosition stores signed 64-bit segments and offsets in [0, 1024). Negative travel uses floor-based normalization. Only nearby segment differences become scene floats. Progression, generation, and comparisons use the logical segment/offset coordinates.
+RoutePosition stores signed 64-bit segments and offsets in [0, 10240). Negative travel uses floor-based normalization. Only nearby segment differences become scene floats. Progression, generation, and comparisons use the logical segment/offset coordinates.
 
 FloatingOrigin shifts registered roots by an integer number of segments at a physics boundary. The origin index changes by that same number. Registered roots must not contain one another. Velocities, relative goals, stable IDs, and RNG state remain unchanged; interpolation resets after translation. The average-focus node, camera rig, water plane, and terrain chunks shift along with ships and islands.
 
 Islands use stable IDs and a dedicated RNG. The initial surroundings and subsequent generation both use logical Z thresholds; camera movement does not generate content or consume RNG. Islands may occupy the fleet's path and act as solid navigation obstacles; liberation and production remain unimplemented. Geometry and collision unload behind the camera's reachable region, while the logical record remains. Live geometry stays bounded; the record collection grows with travel. Only Z supports long-range travel; X/Y movement is local.
 
-Tune anchor speed/slowdown and formation size on FleetController; ship acceleration, climb, turn, and attitude limits on the ship; camera motion and bounds on OrbitCamera; and spacing/loading distances on IslandSpawner. Keep the loading margins large enough for the viewing sphere and fleet spread. Collision shape size is read from the authored capsule rather than maintained as a second definition. With the current 768-unit rebase threshold and streaming distances, live Z coordinates remain within a few thousand units; enlarging the view does not construct enormous absolute transforms.
+Tune anchor speed/slowdown and formation size on FleetController; ship acceleration, climb, turn, and attitude limits on the ship; camera motion and bounds on OrbitCamera; and spacing/loading distances on IslandSpawner. Keep the loading margins large enough for the viewing sphere and fleet spread. Collision shape size is read from the authored capsule rather than maintained as a second definition. With the current 7680-meter rebase threshold and streaming distances, live Z coordinates remain within a few tens of thousands of meters; enlarging the view does not construct enormous absolute transforms.
 
 ## Validation
 

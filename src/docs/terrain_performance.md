@@ -1,5 +1,7 @@
 # Landscape performance and voxel-size decision
 
+The measurements and spatial values below retain the units used when recorded. The subsequent [meter conversion](world_units.md) scales lengths, linear speeds, and linear accelerations by ten; its before/after measurements are recorded separately.
+
 Measured on 2026-09-25 using the workstation's Ryzen 7 9800X3D and RTX 4090, Godot 4.7.1, D3D12 Forward+, and NVIDIA driver 610.47.
 
 ## Current trial: five-unit voxels

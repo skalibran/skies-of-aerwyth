@@ -1,7 +1,7 @@
 class_name ProjectileController
 extends Node3D
 
-const MAX_CHORD_ERROR: float = 0.01
+const MAX_CHORD_ERROR: float = 0.1
 
 class Shot extends RefCounted:
 	var position: Vector3
@@ -23,8 +23,8 @@ var _query := PhysicsRayQueryParameters3D.new()
 
 
 func _ready() -> void:
-	_mesh.radius = 0.3
-	_mesh.height = 0.6
+	_mesh.radius = 3.0
+	_mesh.height = 6.0
 	_mesh.radial_segments = 8
 	_mesh.rings = 4
 	var material := StandardMaterial3D.new()
@@ -61,7 +61,7 @@ func step(delta: float) -> void:
 		var source := shot.source.get_ref() as Airship
 		_query.exclude = [source.get_rid()] if is_instance_valid(source) else []
 		var remaining_step := minf(delta, shot.remaining)
-		var maximum_step := sqrt(8.0 * MAX_CHORD_ERROR / maxf(shot.gravity, 0.001))
+		var maximum_step := sqrt(8.0 * MAX_CHORD_ERROR / maxf(shot.gravity, 0.01))
 		var impacted := false
 		while remaining_step > 0.0000001:
 			var duration := minf(remaining_step, maximum_step)

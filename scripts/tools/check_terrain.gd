@@ -39,7 +39,7 @@ func _run() -> void:
 	_check_layout(terrain)
 	var visible_before := _visible_count(terrain)
 	var distance_before := journey.progression.distance
-	terrain.update_region(0.0, journey.anchor_route_position(), Vector3(700.0, -350.0, 1024.0))
+	terrain.update_region(0.0, journey.anchor_route_position(), Vector3(7000.0, -3500.0, 10240.0))
 	terrain.build_pending(1)
 	_check(_visible_count(terrain) == visible_before, "Old coverage remains visible while replacement detail is incomplete.")
 	_check(journey.progression.distance == distance_before, "Changing terrain detail or camera position does not advance progression.")
@@ -55,7 +55,7 @@ func _run() -> void:
 			_check(absf(chunk.global_position.z) <= (terrain.chunk_radius + 2) * terrain.profile.root_size(), "Huge route indices produce small local transforms.")
 		await process_frame
 	# Cancellation must not publish an obsolete region.
-	terrain.update_region(0.0, RoutePosition.new(journey.origin.segment - 10, 0.0), Vector3(0.0, 0.0, -10240.0))
+	terrain.update_region(0.0, RoutePosition.new(journey.origin.segment - 10, 0.0), Vector3(0.0, 0.0, -102400.0))
 	terrain.build_pending(1)
 	terrain.update_region(0.0, RoutePosition.new(journey.origin.segment, 0.0), Vector3.ZERO)
 	terrain.build_pending(10000)
@@ -68,18 +68,18 @@ func _run() -> void:
 	for failure in _failures:
 		printerr("FAIL: ", failure)
 	if _failures.is_empty():
-		print("PASS: 1/5/10-unit grids, progression biomes, water, meshes, background streaming, cancellation, and rebasing.")
+		print("PASS: 10/50/100-meter grids, progression biomes, water, meshes, background streaming, cancellation, and rebasing.")
 	quit(0 if _failures.is_empty() else 1)
 
 
 func _check_progression() -> void:
 	var progress := JourneyProgress.new()
-	var start := RoutePosition.new(-9007199254740995, 13.0)
+	var start := RoutePosition.new(-9007199254740995, 130.0)
 	progress.initialize(start)
 	_check(progress.distance == 0.0, "Progression starts at zero even at huge coordinates.")
-	progress.update(start.advanced(-2137.25))
-	_check(progress.distance == 2137.25, "Progression counts forward world units across signed segment boundaries.")
-	progress.update(start.advanced(4.0))
+	progress.update(start.advanced(-21372.5))
+	_check(progress.distance == 21372.5, "Progression counts forward world units across signed segment boundaries.")
+	progress.update(start.advanced(40.0))
 	_check(progress.distance == 0.0, "Positions behind the journey start do not give negative progression.")
 	progress.free()
 
@@ -89,13 +89,13 @@ func _check_sampling() -> void:
 	var second := TerrainSampler.new(PROFILE, RoutePosition.new())
 	var seed := PROFILE.grassland.height_noise.seed
 	for segment: int in [-9, -8, -3, 0, 5, 7, -9007199254740995]:
-		for x in range(-1000, 1000, 80):
-			var boundary := sampler.sample(float(x), segment, 1024.0)
+		for x in range(-10000, 10000, 800):
+			var boundary := sampler.sample(float(x), segment, 10240.0)
 			_check(boundary == sampler.sample(float(x), segment + 1, 0.0), "Noise matches exactly at segment boundaries.")
-			_check(boundary.distance_to(sampler.sample(float(x), segment, 1023.999)) < 0.001, "Continuous noise has no segment seam.")
-			var noise := sampler.sample(float(x), segment, 512.0)
-			_check(noise == second.sample(float(x), segment, 512.0), "Sampling is deterministic.")
-			var blend := sampler.mountain_weight(segment, 512.0)
+			_check(boundary.distance_to(sampler.sample(float(x), segment, 10239.99)) < 0.001, "Continuous noise has no segment seam.")
+			var noise := sampler.sample(float(x), segment, 5120.0)
+			_check(noise == second.sample(float(x), segment, 5120.0), "Sampling is deterministic.")
+			var blend := sampler.mountain_weight(segment, 5120.0)
 			var height := sampler.height_from_noise(noise, blend)
 			_check(height >= PROFILE.minimum_height() and height <= PROFILE.maximum_height(), "Blended terrain stays in the authored altitude range.")
 			_check(is_zero_approx(fmod(height, PROFILE.voxel_size)), "Terrain surfaces align with the selected vertical grid.")
@@ -105,37 +105,37 @@ func _check_sampling() -> void:
 			elif blend == 1.0:
 				_check(color in PROFILE.mountains.palette.colors, "Mountains keep discrete authored bands.")
 	_check(PROFILE.grassland.height_noise.seed == seed, "Sampling leaves shared resources unchanged.")
-	for entry: Vector2 in [Vector2(0.0, 0.0), Vector2(1500.0, 0.0), Vector2(3250.0, 0.5), Vector2(5000.0, 1.0), Vector2(8000.0, 1.0)]:
+	for entry: Vector2 in [Vector2(0.0, 0.0), Vector2(15000.0, 0.0), Vector2(32500.0, 0.5), Vector2(50000.0, 1.0), Vector2(80000.0, 1.0)]:
 		var route := RoutePosition.new(0, -entry.x)
 		_check(is_equal_approx(sampler.mountain_weight(route.segment, route.offset), entry.y), "Progression smoothly controls the authored biome transition.")
 	var grass_relief := Vector2(INF, -INF)
 	var mountain_relief := Vector2(INF, -INF)
-	for x in range(-1500, 1500, 25):
+	for x in range(-15000, 15000, 250):
 		var grass := sampler.surface_height(float(x), RoutePosition.new())
-		var mountain := sampler.surface_height(float(x), RoutePosition.new(0, -6000.0))
+		var mountain := sampler.surface_height(float(x), RoutePosition.new(0, -60000.0))
 		grass_relief = Vector2(minf(grass_relief.x, grass), maxf(grass_relief.y, grass))
 		mountain_relief = Vector2(minf(mountain_relief.x, mountain), maxf(mountain_relief.y, mountain))
 	_check(mountain_relief.y - mountain_relief.x > (grass_relief.y - grass_relief.x) * 1.5, "Later mountain ranges have substantially stronger relief.")
-	_check(sampler.surface_height(12.1, RoutePosition.new(0, 25.1)) == sampler.surface_height(12.9, RoutePosition.new(0, 25.9)), "Points within one voxel column share the exact same top.")
-	_check(sampler.sample(300.0, -9007199254740995, 500.0) != sampler.sample(300.0, -9007199254740994, 500.0), "Huge adjacent segments stay distinct.")
+	_check(sampler.surface_height(121.0, RoutePosition.new(0, 251.0)) == sampler.surface_height(129.0, RoutePosition.new(0, 259.0)), "Points within one voxel column share the exact same top.")
+	_check(sampler.sample(3000.0, -9007199254740995, 5000.0) != sampler.sample(3000.0, -9007199254740994, 5000.0), "Huge adjacent segments stay distinct.")
 	var grass_levels: Dictionary[float, bool] = {}
-	for z in range(-1000, 1001, 20):
-		for x in range(-1000, 1001, 20):
+	for z in range(-10000, 10010, 200):
+		for x in range(-10000, 10010, 200):
 			grass_levels[sampler.surface_height(x, RoutePosition.new(0, z))] = true
 	var available_levels := int((PROFILE.grassland.height_range.y - PROFILE.grassland.height_range.x) / PROFILE.voxel_size) + 1
 	_check(grass_levels.size() >= available_levels / 2, "Grassland uses a substantial part of its expanded height range.")
-	_check(grass_levels.keys().max() > 20.0 and grass_levels.keys().min() < 0.0, "Grasslands rise above the previous plateau limit while retaining ponds.")
+	_check(grass_levels.keys().max() > 200.0 and grass_levels.keys().min() < 0.0, "Grasslands rise above the previous plateau limit while retaining ponds.")
 	print("Grassland levels: ", grass_levels.keys(), "; sampled relief: grass ", grass_relief, ", mountains ", mountain_relief)
 
 
 func _check_grid() -> void:
-	for voxel: int in [1, 5, 10]:
+	for voxel: int in [10, 50, 100]:
 		var settings := PROFILE.duplicate() as TerrainProfile
 		settings.voxel_size = voxel
 		var width := settings.root_size()
 		var sampler := TerrainSampler.new(settings, RoutePosition.new())
 		for segment: int in [-9007199254740995, -17, -1, 0, 1, 17, 9007199254740995]:
-			for offset: float in [0.0, 0.1, 319.9, 1023.9]:
+			for offset: float in [0.0, 1.0, 3199.0, 10239.0]:
 				var route := RoutePosition.new(segment, offset)
 				var tile := TerrainGrid.tile_at(route, width)
 				var start := TerrainGrid.tile_start(tile, width)
@@ -145,7 +145,7 @@ func _check_grid() -> void:
 				var center := TerrainGrid.cell_center(route, voxel)
 				_check(TerrainGrid.cell_center(center, voxel).compare(center) == 0, "Voxel center lookup is idempotent at huge coordinates.")
 				_check(center.advanced(-voxel * 0.5).compare(route) <= 0 and center.advanced(voxel * 0.5).compare(route) > 0, "Source cells enclose the queried coordinate across origin segments.")
-				_check(sampler.surface_height(12.1, center.advanced(-0.4)) == sampler.surface_height(12.1, center.advanced(0.4)), "A source cell has one height even across a 1024-unit route boundary.")
+				_check(sampler.surface_height(121.0, center.advanced(-4.0)) == sampler.surface_height(121.0, center.advanced(4.0)), "A source cell has one height even across a 10240-meter route boundary.")
 
 
 func _check_biome_contrast() -> void:
@@ -154,13 +154,13 @@ func _check_biome_contrast() -> void:
 	var midpoint := (biome.height_range.x + biome.height_range.y) * 0.5
 	_check(biome.elevation(-1.0) == midpoint and biome.elevation(1.0) == midpoint, "Zero contrast produces a flat biome.")
 	biome.height_contrast = 0.0001
-	_check(absf(biome.elevation(1.0) - midpoint) < 0.01, "Near-zero contrast approaches flat continuously rather than jumping to full relief.")
+	_check(absf(biome.elevation(1.0) - midpoint) < 0.1, "Near-zero contrast approaches flat continuously rather than jumping to full relief.")
 	for settings: TerrainBiome in [PROFILE.grassland, PROFILE.mountains]:
 		_check(settings.elevation(0.75) > settings.elevation(0.65), "High noise values retain distinct summit heights instead of clipping into plateaus.")
 
 
 func _check_meshes() -> void:
-	for voxel: int in [1, 5, 10]:
+	for voxel: int in [10, 50, 100]:
 		_check_mesh_scale(voxel)
 
 
@@ -169,7 +169,7 @@ func _check_mesh_scale(voxel: int) -> void:
 	settings.voxel_size = voxel
 	var size := 32 * voxel
 	var sampler := TerrainSampler.new(settings, RoutePosition.new())
-	var route := TerrainGrid.tile_start(TerrainGrid.tile_at(RoutePosition.new(-6, 1000.0), size), size)
+	var route := TerrainGrid.tile_start(TerrainGrid.tile_at(RoutePosition.new(-6, 10000.0), size), size)
 	var next := route.advanced(size)
 	var started := Time.get_ticks_usec()
 	var first := TerrainMeshBuilder.new().build(sampler, 0, route.segment, int(route.offset), size, false)
@@ -232,7 +232,7 @@ func _check_layout(terrain: VoxelTerrain) -> void:
 func _check_background_jobs(journey: Journey) -> void:
 	var terrain := journey.terrain
 	var route := RoutePosition.new(journey.origin.segment, 0.0)
-	terrain.update_region(0.0, route, Vector3(720.0, 20.0, 0.0))
+	terrain.update_region(0.0, route, Vector3(7200.0, 200.0, 0.0))
 	terrain._process(0.0)
 	_check(not terrain._jobs.is_empty() and terrain._jobs.size() <= terrain.build_workers, "Background work is bounded and actually dispatched.")
 	journey.origin.shift_segments(-1)
@@ -245,7 +245,7 @@ func _check_background_jobs(journey: Journey) -> void:
 	for patch in terrain.desired.values():
 		var chunk := terrain.chunks[patch.key()]
 		_check(RoutePosition.from_scene(chunk.global_position.z, journey.origin.segment).compare(RoutePosition.new(patch.segment, patch.offset_z)) == 0, "Jobs finishing after rebasing publish against the current origin.")
-	terrain.update_region(0.0, route.advanced(-20000.0), Vector3(0.0, 20.0, -20000.0))
+	terrain.update_region(0.0, route.advanced(-200000.0), Vector3(0.0, 200.0, -200000.0))
 	terrain._process(0.0)
 	var obsolete := terrain._jobs.keys()
 	terrain.update_region(0.0, route, Vector3.ZERO)
@@ -291,16 +291,16 @@ func _check_water(journey: Journey) -> void:
 	_check(minf(plane.size.x, plane.size.y) * 0.5 - RoutePosition.SEGMENT_LENGTH >= reach, "Water covers the complete viewing sphere and far range after recentering.")
 	var wet := 0
 	var dry := 0
-	for z in range(-640, 641, 16):
-		for x in range(-640, 641, 16):
+	for z in range(-6400, 6410, 160):
+		for x in range(-6400, 6410, 160):
 			var height := journey.terrain.sampler.surface_height(x, RoutePosition.new(0, z))
 			wet += int(height < 0.0)
 			dry += int(height >= 0.0)
 	_check(wet > 0 and dry > wet, "Starting grassland contains submerged basins surrounded by predominantly dry land.")
 	var original := water.global_position
-	for offset: float in [-3500.0, -1024.0, 0.0, 1700.0]:
-		water.recenter(Vector3(400.0, 380.0, offset))
-		_check(water.global_position.y == 0.0 and absf(water.global_position.z - offset) <= 512.0, "Recentered water stays at Y = 0 with bounded local coverage.")
+	for offset: float in [-35000.0, -10240.0, 0.0, 17000.0]:
+		water.recenter(Vector3(4000.0, 3800.0, offset))
+		_check(water.global_position.y == 0.0 and absf(water.global_position.z - offset) <= 5120.0, "Recentered water stays at Y = 0 with bounded local coverage.")
 	water.global_position = original
 	var relative := water.global_position - journey.fleet.anchor.global_position
 	var progress := journey.progression.distance
@@ -320,19 +320,20 @@ func _capture_water(journey: Journey) -> void:
 	# Find a shallow basin near the fleet using the real terrain definition.
 	var pond := Vector3.ZERO
 	var best_distance := INF
-	for z in range(-640, 641, 8):
-		for x in range(-640, 641, 8):
+	for z in range(-6400, 6410, 80):
+		for x in range(-6400, 6410, 80):
 			var height := journey.terrain.sampler.surface_height(x, RoutePosition.new(0, z))
 			var distance := Vector2(x, z).length_squared()
-			if height <= -3.0 and distance < best_distance:
+			if height <= -30.0 and distance < best_distance:
 				pond = Vector3(x, 0.0, z)
 				best_distance = distance
 	_check(best_distance < INF, "A starting pond is available for rendering checks.")
 	var eye := Camera3D.new()
 	journey.add_child(eye)
 	journey.origin.register_root(eye)
+	eye.near = 0.5
 	eye.far = journey.camera_rig.camera.far
-	eye.global_position = pond + Vector3(50.0, 55.0, 70.0)
+	eye.global_position = pond + Vector3(500.0, 550.0, 700.0)
 	eye.look_at(pond)
 	eye.make_current()
 	journey.terrain.update_region(0.0, journey.anchor_route_position(), eye.global_position)
@@ -365,7 +366,7 @@ func _capture_water(journey: Journey) -> void:
 	print("Pond at ", pond, "; mean rendered rebase difference: ", difference / samples)
 	journey.origin.shift_segments(1)
 	material.set_shader_parameter("animation_speed", 0.4)
-	eye.global_position = pond + Vector3(8.0, 7.0, 10.0)
+	eye.global_position = pond + Vector3(80.0, 70.0, 100.0)
 	eye.look_at(pond)
 	await process_frame
 	await RenderingServer.frame_post_draw
@@ -394,7 +395,7 @@ func _capture_stages(journey: Journey) -> void:
 	_check(not directory.is_empty(), "Visual checks need an external capture directory.")
 	if directory.is_empty():
 		return
-	for distance: float in [0.0, 3250.0, 6000.0]:
+	for distance: float in [0.0, 32500.0, 60000.0]:
 		# Place the whole test scene at a new logical location without changing local transforms.
 		var route := RoutePosition.new(0, -distance)
 		journey.origin.segment = route.segment
@@ -405,12 +406,12 @@ func _capture_stages(journey: Journey) -> void:
 		var rig := journey.camera_rig
 		rig.focus_fleet()
 		rig.pan(Vector3.ZERO)
-		var eye_route := route.advanced(22.0)
+		var eye_route := route.advanced(220.0)
 		var surface := journey.terrain.sampler.surface_height(0.0, eye_route)
 		var blend := journey.terrain.sampler.mountain_weight(eye_route.segment, eye_route.offset)
 		var highest := lerpf(PROFILE.grassland.height_range.y, PROFILE.mountains.height_range.y, blend)
-		var eye_height := maxf(surface + 18.0, highest + 12.0)
-		rig.pan(Vector3(0.0, eye_height, route.offset + 22.0) - rig.global_position)
+		var eye_height := maxf(surface + 180.0, highest + 120.0)
+		rig.pan(Vector3(0.0, eye_height, route.offset + 220.0) - rig.global_position)
 		rig.yaw = 0.25
 		rig.pitch = -0.32
 		rig.apply_view_bounds()
@@ -424,7 +425,7 @@ func _capture_stages(journey: Journey) -> void:
 			await process_frame
 		await RenderingServer.frame_post_draw
 		_check(root.get_texture().get_image().save_png(directory.path_join("terrain-%d.png" % int(distance))) == OK, "Terrain stage capture saved.")
-		rig.pan(Vector3(0.0, 240.0, 170.0))
+		rig.pan(Vector3(0.0, 2400.0, 1700.0))
 		rig.pitch = -0.7
 		rig.apply_view_bounds()
 		journey.terrain.update_region(0.0, route, rig.camera.global_position)

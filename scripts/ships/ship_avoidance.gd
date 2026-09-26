@@ -2,11 +2,11 @@ class_name ShipAvoidance
 extends RefCounted
 
 const HORIZON: float = 2.0
-const COMFORT_MARGIN: float = 0.8
-const MAX_CORRECTION: float = 5.0
+const COMFORT_MARGIN: float = 8.0
+const MAX_CORRECTION: float = 50.0
 
 var _cells: Dictionary[Vector3i, PackedInt32Array] = {}
-var _cell_size: float = 1.0
+var _cell_size: float = 10.0
 var _candidates := PackedInt32Array()
 
 
@@ -28,7 +28,7 @@ func calculate(ships: Array[Airship], positions: PackedVector3Array, velocities:
 			if relative_position.length() > reach + relative_velocity.length() * HORIZON:
 				continue
 			var approach_time: float = 0.0
-			if relative_velocity.length_squared() > 0.001:
+			if relative_velocity.length_squared() > 0.1:
 				approach_time = clampf(-relative_position.dot(relative_velocity) / relative_velocity.length_squared(), 0.0, HORIZON)
 			var first := positions[first_index] + velocities[first_index] * approach_time
 			var second := positions[second_index] + velocities[second_index] * approach_time
@@ -44,9 +44,9 @@ func calculate(ships: Array[Airship], positions: PackedVector3Array, velocities:
 			var distance := separation.length()
 			if distance >= clearance:
 				continue
-			var direction := separation / distance if distance > 0.05 else _passing_side(ship.entity_id, other.entity_id)
+			var direction := separation / distance if distance > 0.5 else _passing_side(ship.entity_id, other.entity_id)
 			# Exact head-on approaches need lateral steering rather than mutual braking.
-			if relative_velocity.length_squared() > 0.1 and absf(direction.dot(relative_velocity.normalized())) > 0.85:
+			if relative_velocity.length_squared() > 10.0 and absf(direction.dot(relative_velocity.normalized())) > 0.85:
 				direction = _passing_side(ship.entity_id, other.entity_id)
 			var urgency := (1.0 - distance / clearance) * (1.0 - 0.5 * approach_time / HORIZON)
 			var correction := direction * urgency * MAX_CORRECTION
@@ -68,7 +68,7 @@ func _prepare_neighbors(ships: Array[Airship], positions: PackedVector3Array, ve
 		maximum_speed = maxf(maximum_speed, velocities[index].length())
 	# Any pair that could interact within the existing horizon must be in this
 	# cell or an adjacent one. Rebuild from the common snapshot after any rebase.
-	_cell_size = maxf(1.0, 2.0 * maximum_extent + 2.0 * maximum_speed * HORIZON + COMFORT_MARGIN)
+	_cell_size = maxf(10.0, 2.0 * maximum_extent + 2.0 * maximum_speed * HORIZON + COMFORT_MARGIN)
 	for index in range(positions.size()):
 		var cell := Vector3i((positions[index] / _cell_size).floor())
 		var indices: PackedInt32Array = _cells.get(cell, PackedInt32Array())

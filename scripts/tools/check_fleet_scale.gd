@@ -47,7 +47,7 @@ func _run() -> void:
 	_rebuild_starting_scenery()
 	_add_route_obstacle()
 	var rig := _journey.camera_rig
-	rig.orbit_distance = 480.0
+	rig.orbit_distance = 4800.0
 	rig.focus_fleet()
 	var navigation_debug := _journey.get_node("FleetAnchor/NavigationDebug") as ShipNavigationDebug
 	if _profile:
@@ -65,7 +65,7 @@ func _run() -> void:
 				_profile_phase = "debug_off"
 				_previous_frame = Time.get_ticks_usec()
 			# Pan at fleet altitude to exercise streaming alongside actual ship simulation.
-			rig.pan(Vector3(cos(tick * _delta / 3.0), 0.0, sin(tick * _delta / 3.0)) * (180.0 * _delta))
+			rig.pan(Vector3(cos(tick * _delta / 3.0), 0.0, sin(tick * _delta / 3.0)) * (1800.0 * _delta))
 		if tick % (2 * _rate) == 0:
 			_check_formation()
 		if tick == 15 * _rate:
@@ -76,9 +76,9 @@ func _run() -> void:
 			var before := _journey.anchor_route_position()
 			_journey.origin.shift_segments(-1)
 			var after := _journey.anchor_route_position()
-			_check(absf(after.to_scene(before.segment) - before.offset) < 0.001, "Rebasing the large fleet preserves progression within local float precision.")
+			_check(absf(after.to_scene(before.segment) - before.offset) < 0.01, "Rebasing the large fleet preserves progression within local float precision.")
 	_check(_journey.ships.size() == SHIP_COUNT, "All 128 ships remain registered.")
-	_check(_journey.anchor_route_position().compare(starting_route.advanced(-180.0)) < 0, "The large fleet sustains forward progress.")
+	_check(_journey.anchor_route_position().compare(starting_route.advanced(-1800.0)) < 0, "The large fleet sustains forward progress.")
 	var total_goals: int = 0
 	for ship in _journey.ships:
 		total_goals += ship.travel.goals_reached
@@ -98,10 +98,10 @@ func _run() -> void:
 	if _visual:
 		rig.focus_fleet()
 		await _capture("fleet-128")
-		rig.zoom(10000.0)
+		rig.zoom(100000.0)
 		await _capture("fleet-128-wide")
 		rig.follow_ship(_journey.ships.back())
-		rig.zoom(35.0 - rig.camera.position.z)
+		rig.zoom(350.0 - rig.camera.position.z)
 		await _capture("fleet-128-ship")
 	timings.sort()
 	print("128 ships, scripted simulation step: median %.3f ms, p95 %.3f ms; %d goals reached; %d ships detoured." % [timings[timings.size() / 2], timings[int(timings.size() * 0.95)], total_goals, _detoured_ships.size()])
@@ -122,7 +122,7 @@ func _build_fleet() -> void:
 	for index in range(SHIP_COUNT):
 		var ship := SHIP_SCENE.instantiate() as Airship
 		ship.entity_id = 1000 + index
-		var offset := Vector3((index % 8 - 3.5) * 32.0, ((index / 8) % 4 - 1.5) * 42.0, (index / 32 - 1.5) * 42.0)
+		var offset := Vector3((index % 8 - 3.5) * 320.0, ((index / 8) % 4 - 1.5) * 420.0, (index / 32 - 1.5) * 420.0)
 		_journey.add_child(ship)
 		ship.global_position = _journey.fleet.anchor.global_position + offset
 		_journey.register_ship(ship)
@@ -177,11 +177,11 @@ func _rebuild_starting_scenery() -> void:
 func _add_route_obstacle() -> void:
 	var record := IslandRecord.new()
 	record.entity_id = ROUTE_OBSTACLE_ID
-	record.route_position = _journey.anchor_route_position().advanced(-160.0)
+	record.route_position = _journey.anchor_route_position().advanced(-1600.0)
 	record.lateral_position = 0.0
-	record.altitude = _journey.fleet.anchor.global_position.y + 15.0
-	record.radius = 30.0
-	record.depth = 30.0
+	record.altitude = _journey.fleet.anchor.global_position.y + 150.0
+	record.radius = 300.0
+	record.depth = 300.0
 	_journey.island_spawner.records.insert(0, record)
 	_journey.island_spawner._load_record(record)
 
@@ -190,8 +190,8 @@ func _check_formation() -> void:
 	var extent := _journey.fleet.formation_extent
 	var query := PhysicsShapeQueryParameters3D.new()
 	var probe := CapsuleShape3D.new()
-	probe.radius = 2.05
-	probe.height = 9.7
+	probe.radius = 20.5
+	probe.height = 97.0
 	query.shape = probe
 	query.collision_mask = 2
 	for ship in _journey.ships:
@@ -205,7 +205,7 @@ func _check_formation() -> void:
 		_check(ship.get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty(), "Large-fleet hulls do not penetrate island solids.")
 	var rig := _journey.camera_rig
 	var center := _journey.fleet.anchor.get_global_transform_interpolated().origin
-	_check(rig.camera.global_position.distance_to(center) <= rig.viewing_radius + 1.0, "The large-fleet camera stays inside its viewing sphere.")
+	_check(rig.camera.global_position.distance_to(center) <= rig.viewing_radius + 10.0, "The large-fleet camera stays inside its viewing sphere.")
 
 
 func _check_scenery() -> void:

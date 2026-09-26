@@ -16,7 +16,7 @@ var bearing: String = ""
 var goal_offset := Vector3.ZERO
 var passing: bool = false
 var returning_to_anchor: bool = false
-var stand_off_distance: float = 60.0
+var stand_off_distance: float = 600.0
 var _search_time: float = 0.0
 var _approach_axis := Vector3.RIGHT
 var _reconsider_time: float = 2.0
@@ -79,8 +79,8 @@ func prepare(delta: float, ship: Airship, ships: Array[Airship], fleet: FleetCon
 	_reconsider_time -= delta
 	if _reconsider_time <= 0.0:
 		_reconsider_time = 2.0
-		if ship.global_position.distance_to(target.global_position) <= ship.engagement_distance + 5.0 and not _can_reach_target(ship):
-			stand_off_distance = maxf(12.0, stand_off_distance * 0.7)
+		if ship.global_position.distance_to(target.global_position) <= ship.engagement_distance + 50.0 and not _can_reach_target(ship):
+			stand_off_distance = maxf(120.0, stand_off_distance * 0.7)
 	_prepare_course(delta, ship, fleet)
 	var weight := smoothstep(fleet.combat_radii.x, fleet.combat_radii.y, distance)
 	if weight > 0.0:
@@ -97,9 +97,9 @@ func _prepare_course(delta: float, ship: Airship, fleet: FleetController) -> voi
 	var radius := stand_off_distance * Vector2(preferred.x, preferred.z).length()
 	var height_error := relative.y - preferred.y * stand_off_distance
 	_pass_time = maxf(0.0, _pass_time - delta)
-	if horizontal.length() > radius * 1.75 + 15.0 or absf(height_error) > 15.0:
+	if horizontal.length() > radius * 1.75 + 150.0 or absf(height_error) > 150.0:
 		_pass_time = 0.0
-	if _pass_time <= 0.0 and horizontal.length() <= radius * 1.35 + 8.0 and absf(height_error) <= 10.0:
+	if _pass_time <= 0.0 and horizontal.length() <= radius * 1.35 + 80.0 and absf(height_error) <= 100.0:
 		if ship.global_position.distance_squared_to(fleet.anchor.global_position) > fleet.combat_radii.x * fleet.combat_radii.x:
 			_choose_bearing(ship, fleet)
 			preferred = direction(bearing)
@@ -116,7 +116,7 @@ func _prepare_course(delta: float, ship: Airship, fleet: FleetController) -> voi
 		cruise.y = clampf(height_error * 0.45, -ship.climb_speed, ship.climb_speed)
 		ship.set_preferred_velocity(target.linear_velocity + cruise)
 	else:
-		if horizontal.length_squared() > 0.001:
+		if horizontal.length_squared() > 0.1:
 			_approach_axis = -horizontal.normalized()
 		goal_offset = _approach_axis * radius
 		goal_offset.y = -preferred.y * stand_off_distance
@@ -170,7 +170,7 @@ func _choose_bearing(ship: Airship, fleet: FleetController) -> void:
 
 func _pass_course(ship: Airship, relative: Vector3, preferred: Vector3) -> Vector3:
 	var heading := ship.rotation.y
-	if Vector2(preferred.x, preferred.z).length_squared() > 0.001 and Vector2(relative.x, relative.z).length_squared() > 0.001:
+	if Vector2(preferred.x, preferred.z).length_squared() > 0.001 and Vector2(relative.x, relative.z).length_squared() > 0.1:
 		heading = atan2(-relative.x, -relative.z) - atan2(-preferred.x, -preferred.z)
 	return Basis(Vector3.UP, heading) * ShipFlight.primary_axis(ship)
 

@@ -8,8 +8,8 @@ const FACTIONS: Array[StringName] = [Factions.PLAYER, Factions.ENEMY]
 @export_range(1.0, 60.0) var interval: float = 1.0
 @export_range(1, 30) var batch_size: int = 2
 @export_range(1, 300) var faction_limit: int = 100
-@export var spawn_radius := Vector2(100.0, 150.0)
-@export_range(0.0, 500.0) var altitude_spread: float = 150.0
+@export var spawn_radius := Vector2(1000.0, 1500.0)
+@export_range(0.0, 5000.0) var altitude_spread: float = 1500.0
 @export var random_seed: int = 148931
 
 var remaining: float = 1.0
@@ -23,8 +23,8 @@ var _query := PhysicsShapeQueryParameters3D.new()
 func _ready() -> void:
 	remaining = interval
 	rng.seed = random_seed
-	# A conservative sphere covers the ten-unit hull in any initial orientation.
-	_probe.radius = 9.0
+	# A conservative sphere covers the 100-meter hull in any initial orientation.
+	_probe.radius = 90.0
 	_query.shape = _probe
 	_query.collision_mask = 3
 
@@ -58,7 +58,7 @@ func _spawn_one(journey: Journey, faction: StringName) -> void:
 			continue
 		var clear := true
 		for other in journey.ships:
-			if position.distance_squared_to(other.global_position) < 18.0 * 18.0:
+			if position.distance_squared_to(other.global_position) < 180.0 * 180.0:
 				clear = false
 				break
 		if not clear:

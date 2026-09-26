@@ -7,7 +7,7 @@
 shader = ExtResource("2")
 
 [sub_resource type="PlaneMesh" id="WaterMesh"]
-size = Vector2(12288, 12288)
+size = Vector2(122880, 122880)
 
 [node name="Water" type="MeshInstance3D"]
 physics_interpolation_mode = 2

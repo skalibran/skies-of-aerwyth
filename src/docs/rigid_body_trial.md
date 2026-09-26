@@ -1,5 +1,7 @@
 # Rigid-body integration and comparison
 
+The measurements and spatial values below retain the units used when recorded. The subsequent [meter conversion](world_units.md) scales lengths, linear speeds, and linear accelerations by ten; its before/after measurements are recorded separately.
+
 Implemented on `combat-rigid-body-3d`, compared with CharacterBody3D commit `644e50a`. The [scripted-flight review](combat_review.md) retains its original measurements. This trial changes motion/contact ownership while preserving the authored flight response, combat rules, ships, equipment, spawn layout, terrain, and camera/anchor behavior. Active acceptance work lives in [movement tasks](todo/todo-movement.txt) and [combat gates](todo/todo-combat.txt).
 
 **Accepted on 2026-09-25:** the user chose rigid-body movement after playtesting because it feels much better. RigidBody3D is the maintained controller. The historical comparison below does not imply a runtime controller toggle or a retained CharacterBody implementation. Performance acceptance remains separate.

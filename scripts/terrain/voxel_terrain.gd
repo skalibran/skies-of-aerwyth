@@ -31,7 +31,7 @@ class BuildJob:
 @export var material: Material
 @export var origin: FloatingOrigin
 @export var progression: JourneyProgress
-## Root coverage includes the 900-unit camera sphere and 3000-unit far plane.
+## Root coverage includes the 9000-meter camera sphere and 30000-meter far plane.
 @export_range(1, 8, 1) var chunk_radius: int = 4
 ## Larger values retain source voxels farther from the camera.
 @export_range(1.0, 4.0, 0.25) var detail_distance: float = 2.0
@@ -98,7 +98,7 @@ func update_region(world_x: float, route: RoutePosition, camera_position: Vector
 	var root_z := TerrainGrid.tile_at(route, root_size)
 	var view_route := RoutePosition.from_scene(camera_position.z, origin.segment)
 	# Quantizing the LOD focus avoids new layouts for every tiny camera move.
-	var focus_step := maxi(32, profile.voxel_size * 8)
+	var focus_step := maxi(320, profile.voxel_size * 8)
 	var view_x := floori(camera_position.x / focus_step) * focus_step
 	view_route = TerrainGrid.cell_center(view_route, focus_step).advanced(-focus_step * 0.5)
 	var view_y := floori(maxf(0.0, camera_position.y - profile.maximum_height()) / focus_step) * focus_step

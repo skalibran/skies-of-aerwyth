@@ -55,28 +55,28 @@ func _run() -> void:
 
 
 func _check_ballistics() -> void:
-	for distance in [60.0, 100.0]:
+	for distance in [600.0, 1000.0]:
 		var relative := Vector3(distance, 0, 0)
-		var time := Ballistics.intercept_time(relative, Vector3.ZERO, 20, 3, 8)
-		var expected := 3.083597 if distance == 60.0 else 5.485838
+		var time := Ballistics.intercept_time(relative, Vector3.ZERO, 200, 30, 8)
+		var expected := 3.083597 if distance == 600.0 else 5.485838
 		_check(absf(time - expected) < 0.0001, "Stationary low arcs have the expected flight time at %s units." % distance)
-		var launch := Ballistics.launch_velocity(relative, Vector3.ZERO, 3, time)
-		_check(absf(launch.length() - 20) < 0.001, "Launch speed remains 20.")
-		_check(Ballistics.displacement(launch, 3, time).distance_to(relative) < 0.001, "Aiming and flight agree.")
-	for relative in [Vector3(60, 20, 0), Vector3(60, -20, 0), Vector3(0, 30, 0), Vector3(0, -30, 0), Vector3(0.01, 0, 0)]:
-		for movement in [Vector3.ZERO, Vector3(1, 0.2, -2)]:
-			var time := Ballistics.intercept_time(relative, movement, 20, 3, 8)
+		var launch := Ballistics.launch_velocity(relative, Vector3.ZERO, 30, time)
+		_check(absf(launch.length() - 200) < 0.01, "Launch speed remains 200 m/s.")
+		_check(Ballistics.displacement(launch, 30, time).distance_to(relative) < 0.01, "Aiming and flight agree.")
+	for relative in [Vector3(600, 200, 0), Vector3(600, -200, 0), Vector3(0, 300, 0), Vector3(0, -300, 0), Vector3(0.1, 0, 0)]:
+		for movement in [Vector3.ZERO, Vector3(10, 2.0, -20)]:
+			var time := Ballistics.intercept_time(relative, movement, 200, 30, 8)
 			_check(time > 0.0, "Reachable elevated, vertical, close, and moving targets have solutions.")
 			if time > 0.0:
-				var launch := Ballistics.launch_velocity(relative, movement, 3, time)
-				_check(Ballistics.displacement(launch, 3, time).distance_to(relative + movement * time) < 0.002, "Moving-target lead intercepts predicted motion.")
-	_check(Ballistics.intercept_time(Vector3(60, 0, 0), Vector3(30, 0, 0), 20, 3, 8) < 0, "A faster receding target is unreachable.")
-	_check(Ballistics.intercept_time(Vector3(0, 80, 0), Vector3.ZERO, 20, 3, 8) < 0, "In-range targets can exceed maximum ballistic height.")
-	_check(Ballistics.intercept_time(Vector3(100, 0, 0), Vector3.ZERO, 20, 3, 5) < 0, "A short lifetime cannot support the 100-unit shot.")
-	_check(Ballistics.intercept_time(Vector3(0, 200.0 / 3.0, 0), Vector3.ZERO, 20, 3, 8) > 0, "A tangent root at maximum height is found.")
-	_check(Ballistics.intercept_time(Vector3.ZERO, Vector3.ZERO, 20, 3, 8) < 0, "Coincident targets do not produce invalid division.")
-	_check(Ballistics.intercept_time(Vector3.INF, Vector3.ZERO, 20, 3, 8) < 0, "Invalid inputs are rejected.")
-	_check(Ballistics.intercept_time(Vector3.ONE, Vector3.ZERO, 0, 3, 8) < 0, "Invalid speed is rejected.")
+				var launch := Ballistics.launch_velocity(relative, movement, 30, time)
+				_check(Ballistics.displacement(launch, 30, time).distance_to(relative + movement * time) < 0.02, "Moving-target lead intercepts predicted motion.")
+	_check(Ballistics.intercept_time(Vector3(600, 0, 0), Vector3(300, 0, 0), 200, 30, 8) < 0, "A faster receding target is unreachable.")
+	_check(Ballistics.intercept_time(Vector3(0, 800, 0), Vector3.ZERO, 200, 30, 8) < 0, "In-range targets can exceed maximum ballistic height.")
+	_check(Ballistics.intercept_time(Vector3(1000, 0, 0), Vector3.ZERO, 200, 30, 5) < 0, "A short lifetime cannot support the 1000-meter shot.")
+	_check(Ballistics.intercept_time(Vector3(0, 2000.0 / 3.0, 0), Vector3.ZERO, 200, 30, 8) > 0, "A tangent root at maximum height is found.")
+	_check(Ballistics.intercept_time(Vector3.ZERO, Vector3.ZERO, 200, 30, 8) < 0, "Coincident targets do not produce invalid division.")
+	_check(Ballistics.intercept_time(Vector3.INF, Vector3.ZERO, 200, 30, 8) < 0, "Invalid inputs are rejected.")
+	_check(Ballistics.intercept_time(Vector3.ONE, Vector3.ZERO, 0, 30, 8) < 0, "Invalid speed is rejected.")
 	_check(ShipCombat.DIRECTIONS.size() == 14, "All fourteen authorable bearings exist.")
 	for name in ShipCombat.DIRECTIONS:
 		_check(is_equal_approx(ShipCombat.direction(name).length(), 1.0), "Combat directions are normalized.")
@@ -106,8 +106,8 @@ func _check_neighbor_filter() -> void:
 	rng.seed = 651
 	for index in range(24):
 		var ship := _add_ship(Factions.NEUTRAL, Vector3.ZERO)
-		ship.hull_radius = rng.randf_range(1.0, 4.0)
-		ship.hull_half_segment = rng.randf_range(0.0, 6.0)
+		ship.hull_radius = rng.randf_range(10.0, 40.0)
+		ship.hull_half_segment = rng.randf_range(0.0, 60.0)
 		ships.append(ship)
 	var avoidance := ShipAvoidance.new()
 	for layout in range(5):
@@ -116,19 +116,19 @@ func _check_neighbor_filter() -> void:
 		axes.clear()
 		for index in range(ships.size()):
 			@warning_ignore("integer_division")
-			var position := Vector3((index / 2 - 6) * 35, (index % 3) * 2, 0) + Vector3.RIGHT * (index % 2) * 4
-			var velocity := Vector3(rng.randf_range(-18, 18), rng.randf_range(-2, 2), rng.randf_range(-18, 18))
+			var position := Vector3((index / 2 - 6) * 350, (index % 3) * 20, 0) + Vector3.RIGHT * (index % 2) * 40
+			var velocity := Vector3(rng.randf_range(-180, 180), rng.randf_range(-20, 20), rng.randf_range(-180, 180))
 			if layout == 1:
-				position = Vector3(rng.randf_range(-8, 8), rng.randf_range(-3, 3), rng.randf_range(-8, 8))
+				position = Vector3(rng.randf_range(-80, 80), rng.randf_range(-30, 30), rng.randf_range(-80, 80))
 			elif layout == 2:
 				position = Vector3.ZERO
 				velocity = Vector3.ZERO
 			elif layout == 3:
-				position = Vector3(index * 2 - 24, 0, 0)
-				velocity = -position.normalized() * 18
+				position = Vector3(index * 20 - 240, 0, 0)
+				velocity = -position.normalized() * 180
 			elif layout == 4:
 				position *= 10
-				velocity = Vector3.FORWARD * 12
+				velocity = Vector3.FORWARD * 120
 			positions.append(position)
 			velocities.append(velocity)
 			axes.append(Vector3.FORWARD.rotated(Vector3.UP, rng.randf_range(-PI, PI)))
@@ -138,13 +138,13 @@ func _check_neighbor_filter() -> void:
 				positions.reverse()
 				velocities.reverse()
 				axes.reverse()
-			for shift in [Vector3.ZERO, Vector3(0, 0, -1024)]:
+			for shift in [Vector3.ZERO, Vector3(0, 0, -10240)]:
 				for index in range(positions.size()):
 					positions[index] += shift
 				avoidance.calculate(ships, positions, velocities, axes, corrections)
 				for index in range(ships.size()):
 					var expected := _reference_avoidance(index, ships, positions, velocities, axes)
-					_check(expected.distance_to(corrections[index]) < 0.0001, "Shared avoidance pairs preserve the directed reference across hulls, overlaps, order changes, and rebases.")
+					_check(expected.distance_to(corrections[index]) < 0.001, "Shared avoidance pairs preserve the directed reference across hulls, overlaps, order changes, and rebases.")
 	avoidance.calculate([ships[0]], PackedVector3Array([Vector3.ZERO]), PackedVector3Array([Vector3.ZERO]), PackedVector3Array([Vector3.FORWARD]), corrections)
 	_check(corrections.size() == 1 and corrections[0] == Vector3.ZERO, "A resized singleton snapshot has no stale correction.")
 	avoidance.calculate([], PackedVector3Array(), PackedVector3Array(), PackedVector3Array(), corrections)
@@ -156,12 +156,12 @@ func _check_neighbor_filter() -> void:
 
 func _check_mounts_and_health() -> void:
 	var player := _add_ship(Factions.PLAYER, Vector3.ZERO)
-	var enemy := _add_ship(Factions.ENEMY, Vector3(60, 0, 0))
-	var far_enemy := _add_ship(Factions.ENEMY, Vector3(1000, 0, 0))
+	var enemy := _add_ship(Factions.ENEMY, Vector3(600, 0, 0))
+	var far_enemy := _add_ship(Factions.ENEMY, Vector3(10000, 0, 0))
 	_check(player.maximum_health == 500 and player.current_health == 500 and enemy.current_health == 500, "Both factions start with tenfold ship health.")
 	await physics_frame
 	_check(Factions.are_hostile(player.faction, enemy.faction) and not Factions.are_hostile(player.faction, &"visitors"), "String factions share one hostility rule.")
-	_check(player.mounted_slots.size() == 2 and player.maximum_speed == 18 and is_equal_approx(player.hull_radius, 2.2), "Inherited Kestrel preserves the primitive ship and adds two mounts.")
+	_check(player.mounted_slots.size() == 2 and player.maximum_speed == 180 and is_equal_approx(player.hull_radius, 22.0), "Inherited Kestrel preserves the primitive ship and adds two mounts.")
 	_check(player.preferred_combat_positions == PackedStringArray(["front_left", "left_back", "back", "back_right", "right", "front_right"]), "Kestrel preserves the specified enabled bearings.")
 	var left := player.mounted_slots[0]
 	var right := player.mounted_slots[1]
@@ -175,9 +175,9 @@ func _check_mounts_and_health() -> void:
 	var axis := -right.global_basis.z
 	_check(right.accepts_direction(axis.rotated(Vector3.UP, deg_to_rad(right.cone_half_angle))) and not right.accepts_direction(axis.rotated(Vector3.UP, deg_to_rad(right.cone_half_angle + 1))), "Authored cone boundaries are respected.")
 	_check(right_weapon.launch_for(enemy) != Vector3.ZERO and left_weapon.launch_for(enemy) == Vector3.ZERO, "Only the eligible broadside fires toward a target.")
-	enemy.global_position.x = -60
+	enemy.global_position.x = -600
 	_check(left_weapon.launch_for(enemy) != Vector3.ZERO and right_weapon.launch_for(enemy) == Vector3.ZERO, "The opposite broadside can fire independently.")
-	enemy.global_position.x = 60
+	enemy.global_position.x = 600
 	enemy.linear_velocity = Vector3(0, 0, right_weapon.weapon.launch_speed * 1.5)
 	player.combat.prepare(2.1, player, [player, enemy], _fleet)
 	player.combat.prepare(0.0, player, [player, enemy], _fleet)
@@ -221,10 +221,10 @@ func _check_search_budget() -> void:
 	# Five nearer targets pass the cheap cone bound but cannot be intercepted.
 	# Failed attempts must not starve the sixth, reachable target.
 	for index in range(5):
-		var fleeing := _add_ship(Factions.ENEMY, Vector3(10 + index * 8, 0, 0))
-		fleeing.linear_velocity = Vector3.RIGHT * 300
+		var fleeing := _add_ship(Factions.ENEMY, Vector3(100 + index * 80, 0, 0))
+		fleeing.linear_velocity = Vector3.RIGHT * 3000
 		ships.append(fleeing)
-	var eligible := _add_ship(Factions.ENEMY, Vector3(60, 0, 0))
+	var eligible := _add_ship(Factions.ENEMY, Vector3(600, 0, 0))
 	ships.append(eligible)
 	var slot := player.mounted_slots[1]
 	var weapon := slot.equipment as MountedWeapon
@@ -243,7 +243,7 @@ func _check_search_budget() -> void:
 
 func _check_equipment_assignment() -> void:
 	var player := _add_ship(Factions.PLAYER, Vector3.ZERO)
-	var enemy := _add_ship(Factions.ENEMY, Vector3(60, 0, 0))
+	var enemy := _add_ship(Factions.ENEMY, Vector3(600, 0, 0))
 	var slot := player.mounted_slots[1]
 	var original := slot.equipment as MountedWeapon
 	var original_transform := slot.transform
@@ -297,16 +297,16 @@ func _check_equipment_assignment() -> void:
 
 func _check_impacts() -> void:
 	var player := _add_ship(Factions.PLAYER, Vector3.ZERO)
-	var enemy := _add_ship(Factions.ENEMY, Vector3(60, 0, 0))
+	var enemy := _add_ship(Factions.ENEMY, Vector3(600, 0, 0))
 	await physics_frame
 	enemy.current_health = enemy.maximum_health
 	_fire_at(player, Vector3.ZERO, enemy.global_position)
 	await _advance_projectiles(8.1)
 	_check(enemy.current_health == enemy.maximum_health - 5, "Swept ballistic hit deals exactly five damage at the project physics rate.")
 	# The collision target moves independently after launch; prediction must lead it.
-	enemy.linear_velocity = Vector3(0, 0, 5)
-	var moving_time := Ballistics.intercept_time(enemy.global_position, enemy.linear_velocity, 20, 3, 8)
-	_projectiles.fire(player, Vector3.ZERO, Ballistics.launch_velocity(enemy.global_position, enemy.linear_velocity, 3, moving_time), CANNON)
+	enemy.linear_velocity = Vector3(0, 0, 50)
+	var moving_time := Ballistics.intercept_time(enemy.global_position, enemy.linear_velocity, 200, 30, 8)
+	_projectiles.fire(player, Vector3.ZERO, Ballistics.launch_velocity(enemy.global_position, enemy.linear_velocity, 30, moving_time), CANNON)
 	var moving_health := enemy.current_health
 	for tick in range(8 * _rate):
 		await physics_frame
@@ -316,11 +316,11 @@ func _check_impacts() -> void:
 			break
 	_check(enemy.current_health == moving_health - 5, "Lead fire hits a moving crossing target.")
 	enemy.linear_velocity = Vector3.ZERO
-	enemy.global_position = Vector3(60, 0, 0)
+	enemy.global_position = Vector3(600, 0, 0)
 	await physics_frame
-	var time := Ballistics.intercept_time(Vector3(60, 0, 0), Vector3.ZERO, 20, 3, 8)
-	var launch := Ballistics.launch_velocity(Vector3(60, 0, 0), Vector3.ZERO, 3, time)
-	var blocker_position := Ballistics.displacement(launch, 3, time * 0.5)
+	var time := Ballistics.intercept_time(Vector3(600, 0, 0), Vector3.ZERO, 200, 30, 8)
+	var launch := Ballistics.launch_velocity(Vector3(600, 0, 0), Vector3.ZERO, 30, time)
+	var blocker_position := Ballistics.displacement(launch, 30, time * 0.5)
 	var ally := _add_ship(Factions.PLAYER, blocker_position)
 	await physics_frame
 	var health_before := enemy.current_health
@@ -334,7 +334,7 @@ func _check_impacts() -> void:
 	island.collision_layer = 2
 	var collider := CollisionShape3D.new()
 	var sphere := SphereShape3D.new()
-	sphere.radius = 1.0
+	sphere.radius = 10.0
 	collider.shape = sphere
 	island.add_child(collider)
 	_fixture.add_child(island)
@@ -345,13 +345,13 @@ func _check_impacts() -> void:
 	_check(enemy.current_health == health_before, "Collidable scenery intercepts the curve.")
 	island.queue_free()
 	await process_frame
-	enemy.global_position = Vector3(100, 0, 0)
+	enemy.global_position = Vector3(1000, 0, 0)
 	await physics_frame
 	_fire_at(player, Vector3.ZERO, enemy.global_position)
 	for tick in range(5 * _rate):
 		await physics_frame
 		_projectiles.step(_delta)
-	_check(_projectiles.shots.size() == 1, "A 100-unit arc remains in flight beyond five seconds.")
+	_check(_projectiles.shots.size() == 1, "A 1000-meter arc remains in flight beyond five seconds.")
 	if not _projectiles.shots.is_empty():
 		var shot := _projectiles.shots[0]
 		var velocity_before := shot.velocity
@@ -359,7 +359,7 @@ func _check_impacts() -> void:
 		var relative_before := _projectiles.to_global(shot.position) - enemy.global_position
 		_origin.shift_segments(1)
 		_check(shot.velocity == velocity_before and shot.remaining == lifetime_before, "Rebasing preserves ballistic velocity and lifetime.")
-		_check((_projectiles.to_global(shot.position) - enemy.global_position).distance_to(relative_before) < 0.001, "Rebasing preserves the shot's relative position.")
+		_check((_projectiles.to_global(shot.position) - enemy.global_position).distance_to(relative_before) < 0.01, "Rebasing preserves the shot's relative position.")
 	player.queue_free()
 	await process_frame
 	await _advance_projectiles(3.1)
@@ -367,7 +367,7 @@ func _check_impacts() -> void:
 	var expiry_before := _projectiles.expired_count
 	var short_weapon := CANNON.duplicate() as WeaponDefinition
 	short_weapon.lifetime = 0.15
-	_projectiles.fire(enemy, enemy.global_position, Vector3.UP * 20, short_weapon)
+	_projectiles.fire(enemy, enemy.global_position, Vector3.UP * 200, short_weapon)
 	await _advance_projectiles(0.3)
 	_check(_projectiles.shots.is_empty() and _projectiles.expired_count == expiry_before + 1, "Misses expire with a clipped final step.")
 	enemy.queue_free()
@@ -375,10 +375,10 @@ func _check_impacts() -> void:
 
 
 func _fire_at(shooter: Airship, muzzle: Vector3, target: Vector3) -> void:
-	var time := Ballistics.intercept_time(target - muzzle, Vector3.ZERO, 20, 3, 8)
+	var time := Ballistics.intercept_time(target - muzzle, Vector3.ZERO, 200, 30, 8)
 	_check(time > 0, "Test shot has a valid intercept.")
 	if time > 0:
-		_projectiles.fire(shooter, muzzle, Ballistics.launch_velocity(target - muzzle, Vector3.ZERO, 3, time), CANNON)
+		_projectiles.fire(shooter, muzzle, Ballistics.launch_velocity(target - muzzle, Vector3.ZERO, 30, time), CANNON)
 
 
 func _advance_projectiles(seconds: float) -> void:
@@ -394,7 +394,7 @@ func _check_journey() -> void:
 	root.add_child(journey)
 	journey.set_physics_process(false)
 	var stationary := journey.ships[0]
-	stationary.linear_velocity = Vector3.FORWARD * 10.0
+	stationary.linear_velocity = Vector3.FORWARD * 100.0
 	var initial_position := stationary.global_position
 	var initial_anchor := journey.fleet.anchor.global_position
 	journey.step_simulation(0.0)
@@ -447,17 +447,17 @@ func _check_journey() -> void:
 			journey.origin.shift_segments(-1)
 		if tick == 35 * _rate and _visual and not journey.ships.is_empty():
 			journey.camera_rig.follow_ship(journey.ships[0])
-			journey.camera_rig.zoom(27.0 - journey.camera_rig.camera.position.z)
+			journey.camera_rig.zoom(270.0 - journey.camera_rig.camera.position.z)
 			await _capture("combat-kestrel")
 			journey.camera_rig.focus_fleet()
-			journey.camera_rig.zoom(220.0 - journey.camera_rig.camera.position.z)
+			journey.camera_rig.zoom(2200.0 - journey.camera_rig.camera.position.z)
 	_check(journey.projectiles.damaging_hits > 0 and journey.destroyed_count > 0, "Combat causes damage and despawns destroyed ships.")
 	_check(journey.combat_spawner.batches == 180, "Spawner continues on one-second cadence.")
 	_check(maximum_players == 100 and maximum_enemies == 100, "Both live combat populations reach their debug cap.")
-	_check(maximum_anchor_distance < 450.0 and maximum_mean_distance < 180.0, "Three minutes of full-fleet combat stay near the anchor with room for turns and island detours.")
+	_check(maximum_anchor_distance < 4500.0 and maximum_mean_distance < 1800.0, "Three minutes of full-fleet combat stay near the anchor with room for turns and island detours.")
 	if _visual:
 		journey.camera_rig.focus_fleet()
-		journey.camera_rig.zoom(450.0 - journey.camera_rig.camera.position.z)
+		journey.camera_rig.zoom(4500.0 - journey.camera_rig.camera.position.z)
 		await _capture("combat-cohesion")
 	for ship in journey.fleet.members:
 		_check(ship.faction == Factions.PLAYER and ship.alive, "Enemies and dead ships never enter the friendly fleet average.")
@@ -472,8 +472,8 @@ func _check_journey() -> void:
 	journey.projectiles.clear()
 	await process_frame
 	journey.combat_spawner.enabled = true
-	journey.combat_spawner.spawn_radius = Vector2(150, 280)
-	journey.fleet.average_focus.global_position = journey.fleet.anchor.global_position + Vector3(1000, 100, 1000)
+	journey.combat_spawner.spawn_radius = Vector2(1500, 2800)
+	journey.fleet.average_focus.global_position = journey.fleet.anchor.global_position + Vector3(10000, 1000, 10000)
 	for batch in range(50):
 		await physics_frame
 		if batch == 25:
@@ -483,7 +483,7 @@ func _check_journey() -> void:
 	for ship in journey.ships:
 		var offset := ship.global_position - journey.fleet.anchor.global_position
 		var radius := Vector2(offset.x, offset.z).length()
-		_check(radius >= 149.99 and radius <= 280.01 and absf(offset.y) <= journey.combat_spawner.altitude_spread + 0.01, "Both factions respect the authored anchor-relative spawn region despite a displaced fleet average and rebasing.")
+		_check(radius >= 1499.9 and radius <= 2800.1 and absf(offset.y) <= journey.combat_spawner.altitude_spread + 0.1, "Both factions respect the authored anchor-relative spawn region despite a displaced fleet average and rebasing.")
 	var spawned := journey.combat_spawner.spawned_count
 	journey.combat_spawner.step(10, journey)
 	_check(journey.combat_spawner.spawned_count == spawned, "Capped batches do not accumulate spawns.")
@@ -513,7 +513,7 @@ func _check_journey() -> void:
 	var blocker := StaticBody3D.new()
 	blocker.collision_layer = 2
 	var shape := SphereShape3D.new()
-	shape.radius = 500
+	shape.radius = 5000
 	var collider := CollisionShape3D.new()
 	collider.shape = shape
 	blocker.add_child(collider)
@@ -589,11 +589,11 @@ static func _reference_avoidance(index: int, ships: Array[Airship], positions: P
 		var other := ships[other_index]
 		var relative_position := positions[index] - positions[other_index]
 		var relative_velocity := velocities[index] - velocities[other_index]
-		var reach := ship.hull_half_segment + other.hull_half_segment + ship.hull_radius + other.hull_radius + 0.8
+		var reach := ship.hull_half_segment + other.hull_half_segment + ship.hull_radius + other.hull_radius + 8.0
 		if relative_position.length() > reach + relative_velocity.length() * 2.0:
 			continue
 		var approach_time: float = 0.0
-		if relative_velocity.length_squared() > 0.001:
+		if relative_velocity.length_squared() > 0.1:
 			approach_time = clampf(-relative_position.dot(relative_velocity) / relative_velocity.length_squared(), 0.0, 2.0)
 		var first := positions[index] + velocities[index] * approach_time
 		var second := positions[other_index] + velocities[other_index] * approach_time
@@ -605,17 +605,17 @@ static func _reference_avoidance(index: int, ships: Array[Airship], positions: P
 		var second_axis := axes[other_index] * other.hull_half_segment
 		var closest := Geometry3D.get_closest_points_between_segments(first - first_axis, first + first_axis, second - second_axis, second + second_axis)
 		var separation: Vector3 = closest[0] - closest[1]
-		var clearance := ship.hull_radius + other.hull_radius + 0.8
+		var clearance := ship.hull_radius + other.hull_radius + 8.0
 		var distance := separation.length()
 		if distance >= clearance:
 			continue
-		var direction := separation / distance if distance > 0.05 else (Vector3.RIGHT if ship.entity_id < other.entity_id else Vector3.LEFT)
+		var direction := separation / distance if distance > 0.5 else (Vector3.RIGHT if ship.entity_id < other.entity_id else Vector3.LEFT)
 		# Exact head-on approaches need lateral steering rather than mutual braking.
-		if relative_velocity.length_squared() > 0.1 and absf(direction.dot(relative_velocity.normalized())) > 0.85:
+		if relative_velocity.length_squared() > 10.0 and absf(direction.dot(relative_velocity.normalized())) > 0.85:
 			direction = (Vector3.RIGHT if ship.entity_id < other.entity_id else Vector3.LEFT)
 		var urgency := (1.0 - distance / clearance) * (1.0 - 0.5 * approach_time / 2.0)
-		result += direction * urgency * 5.0
-	return result.limit_length(5.0)
+		result += direction * urgency * 50.0
+	return result.limit_length(50.0)
 
 
 func _observe(ships: Array[Airship]) -> CombatPerception:

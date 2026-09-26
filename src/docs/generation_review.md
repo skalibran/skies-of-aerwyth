@@ -1,5 +1,7 @@
 # Generation production review
 
+The measurements and spatial values below retain the units used when recorded. The subsequent [meter conversion](world_units.md) scales lengths, linear speeds, and linear accelerations by ten; its before/after measurements are recorded separately.
+
 Reviewed 2026-09-25 against the current five-unit terrain, water, progression, island streaming, and fleet integration. **The architecture is coherent and suitable for the current scenery prototype. This review does not establish production readiness.** Active blockers and completion criteria live in the [generation task list](todo/blockers-terrain.txt). A terrain rewrite is not justified by this pass.
 
 Subsequent combat work added spatial filtering for ship avoidance and loaded-island navigation. The measurements below preserve the pre-combat review baseline; see [combat runtime notes](combat.md#recorded-validation-and-limits) for the 220-ship workload and its measured CPU limits.

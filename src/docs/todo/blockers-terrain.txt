@@ -6,7 +6,7 @@ Review and factual limitations: src/docs/generation_review.md.
 Supporting measurements: src/docs/terrain_performance.md.
 This file owns GEN-01 through GEN-05 and their active completion criteria.
 
-The current five-unit scenery prototype passes its measured workload. These
+The current 50-meter scenery prototype passes its measured workload. These
 items block the associated production features or final shipping sign-off;
 they do not imply that the existing terrain needs a wholesale rewrite.
 
@@ -83,9 +83,9 @@ src/docs/terrain_performance.md under Collision construction estimate.
 Required before: Visual production sign-off.
 
 Problem:
-- Islands load 1500 units ahead, remain 1300 behind, and occupy a field with
-  1600-unit half-width. The camera can move 900 units from the fleet and see
-  another 3000 units, so islands can appear/disappear within a permitted view.
+- Islands load 15000 meters ahead, remain 13000 behind, and occupy a field with
+  16000-meter half-width. The camera can move 9000 meters from the fleet and see
+  another 30000 meters, so islands can appear/disappear within a permitted view.
 - Current fog does not guarantee that streaming edges are hidden.
 - Simply loading more solid islands also increases navigation-query work.
 

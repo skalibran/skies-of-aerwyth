@@ -1,5 +1,7 @@
 # Combat and movement production review
 
+The measurements and spatial values below retain the units used when recorded. The subsequent [meter conversion](world_units.md) scales lengths, linear speeds, and linear accelerations by ten; its before/after measurements are recorded separately.
+
 Historical CharacterBody3D baseline at commit `644e50a`. The measurements and ownership descriptions below describe that revision; the [rigid-body trial](rigid_body_trial.md) records the subsequent refactor and comparison.
 
 Reviewed 2026-09-25 after the forward-flight, anchor-cohesion, 500-health, and vertical-spawn changes. **The current Kestrel slice is coherent and understandable as a scripted-flight baseline. It is not signed off for production or endgame performance.** Active blockers and acceptance criteria live under COMBAT-01–04 in the [combat task list](todo/todo-combat.txt). The [movement task list](todo/todo-movement.txt) owns the rigid-body comparison.
