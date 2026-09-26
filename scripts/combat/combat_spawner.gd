@@ -6,7 +6,7 @@ const FACTIONS: Array[StringName] = [Factions.PLAYER, Factions.ENEMY]
 @export var ship_scene: PackedScene
 @export var enabled: bool = true
 @export_range(1.0, 60.0) var interval: float = 1.0
-@export_range(1, 30) var batch_size: int = 2
+@export_range(1, 30) var batch_size: int = 10
 @export_range(1, 300) var faction_limit: int = 100
 @export var spawn_radius := Vector2(1000.0, 1500.0)
 @export_range(0.0, 5000.0) var altitude_spread: float = 1500.0

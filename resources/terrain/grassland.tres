@@ -5,7 +5,7 @@
 [sub_resource type="FastNoiseLite" id="Noise"]
 noise_type = 0
 seed = 84317
-frequency = 0.000075
+frequency = 7.5e-05
 fractal_lacunarity = 2.15
 fractal_gain = 0.45
 domain_warp_enabled = true

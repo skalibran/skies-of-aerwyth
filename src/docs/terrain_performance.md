@@ -10,7 +10,7 @@ The current visual trial uses **5 × 5 × 5 world-unit source voxels**, with 1/5
 
 Merged surfaces, adaptive detail, and background generation are retained from the ten-unit trial. Two bounded worker jobs generate mesh arrays with owned sampler/noise state. The main thread publishes meshes, retains visible coverage until replacements are ready, and discards obsolete results. Initial coarse coverage remains synchronous; fine detail loads afterward. LOD accounts for camera altitude, and exact integer terrain-grid conversions keep five-unit cells aligned across 1024-unit origin shifts.
 
-The measurements below cover the current configuration and retain the previous ten-unit and one-unit baselines. Terrain collision is not implemented.
+The historical measurements below predate terrain collision and retain the previous ten-unit and one-unit baselines. Current collider measurements are recorded separately below.
 
 The subsequent [generation production review](generation_review.md#measured-performance) adds the transition biome, a close-camera stress pass, and combined rendered 128-ship measurements. It records fixes and limitations; active work lives in the [generation task list](todo/blockers-terrain.txt). The earlier trial tables below remain historical measurements.
 
@@ -100,9 +100,45 @@ Rendered comparisons show substantially flatter grassland, enlarged shoreline st
 
 ## Collision construction estimate
 
-In the original one-unit experiment, converting already-built 32-unit fine meshes into trimesh shape resources averaged about 0.48 ms per grass tile and 1.96 ms per mountain tile. Across the whole 320-unit square that was 48 / 196 ms. This measures shape-resource creation only, including render color subdivisions. It does **not** measure world insertion, contact solving, many simultaneous wrecks, CCD, or sleeping. Terrain collision remains unimplemented. The collision proposal, water-contact decision, and follow-up measurements are tracked under GEN-02 in the [generation task list](todo/blockers-terrain.txt).
+In the original one-unit experiment, converting already-built 32-unit fine meshes into trimesh shape resources averaged about 0.48 ms per grass tile and 1.96 ms per mountain tile. Across the whole 320-unit square that was 48 / 196 ms. This measures shape-resource creation only, including render color subdivisions. It does **not** measure world insertion, contact solving, many simultaneous wrecks, CCD, or sleeping. This historical experiment did not implement runtime collision. Full-detail native colliders are now implemented; ground props, water behavior, and hardware coverage remain under GEN-02/GEN-05 in the [generation task list](todo/blockers-terrain.txt).
 
-The original investigation changed only tools and notes. The ten-unit trial introduced background streaming; the current five-unit trial tunes scale and landforms while preserving that implementation. Collision is still unimplemented.
+The original investigation changed only tools and notes. The ten-unit trial introduced background streaming; the current five-unit trial tunes scale and landforms while preserving that implementation. Those historical runs did not include collision.
+
+## Full-detail terrain colliders (2026-09-26)
+
+The current 50-meter grid adds one native static trimesh collider to each source-detail
+patch using its existing mesh. Coarse patches have no collision. The table below
+comes from a fresh D3D12 Forward+ landscape run at 1920 ? 1080, uncapped rendering,
+and the project's 30 Hz physics baseline on the development workstation (Ryzen 7
+9800X3D / RTX 4090). It covers stationary views, travel, camera movement, and close
+camera movement through grassland, transition, and mountain regions.
+
+| Region | Source colliders at sampled phase ends | Worst collider creation + insertion | Worst terrain process | Worst measured wall frame |
+| --- | ---: | ---: | ---: | ---: |
+| Grassland | 64?92 | 2.592 ms | 4.564 ms | 5.046 ms |
+| Transition | 64?84 | 3.982 ms | 5.983 ms | 6.422 ms |
+| Mountains | 64?92 | 4.760 ms | 6.340 ms | 6.761 ms |
+
+No sampled measurement-phase frame exceeded 16.67 ms. Startup/refinement is reported
+separately by the profiler and is not included in those frame maxima. Collider
+creation is paid when a new source patch is published, not every simulation tick.
+It can exceed the existing soft three-millisecond publication budget. The profiler's
+mesh-publication timer includes collider construction/insertion; its collider timer
+isolates that portion. This run has no combat ships and is not an on/off comparison
+or a whole-game frame-rate guarantee.
+
+A separate accelerated headless check dropped 32 Kestrel wrecks onto flat source
+terrain before the later reduced-gravity and death-smoke changes. All landed,
+froze while supported, hid/reappeared with terrain detail,
+rebased, and expired. It retained 72 source colliders and reported 0.425 ms p95
+between physics frames, including engine work in that isolated fixture. Flat test
+terrain understates collider complexity; use the landscape measurements for actual
+terrain publication cost. A rendered six-wreck check confirmed the visibility and
+settling result. Terrain streaming/cancellation, composed targeting/lifecycle, and
+native flight/contact checks passed as well.
+
+Logs, JSON, and captures are under the external task directory
+`aerwyth-wrecks-d729a05d`; the landscape run writes `landscape/landscape.json`.
 
 ## Reproduce
 

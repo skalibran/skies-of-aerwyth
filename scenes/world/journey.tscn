@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/journey.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/ships/kestrel.tscn" id="2"]
@@ -13,6 +13,8 @@
 [ext_resource type="Script" path="res://scripts/combat/projectile_controller.gd" id="12"]
 [ext_resource type="Script" path="res://scripts/combat/combat_spawner.gd" id="13"]
 [ext_resource type="PackedScene" path="res://scenes/water/water.tscn" id="11"]
+[ext_resource type="Script" path="res://scripts/ships/wreck_controller.gd" id="14"]
+[ext_resource type="PackedScene" path="res://scenes/ui/performance_overlay.tscn" id="15"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial"]
 sky_top_color = Color(0.10, 0.24, 0.34, 1)
@@ -41,7 +43,7 @@ roughness = 1.0
 material = SubResource("AnchorMaterial")
 size = Vector3(40, 40, 40)
 
-[node name="Journey" type="Node3D" node_paths=PackedStringArray("initial_ships", "fleet", "origin", "island_spawner", "camera_rig", "terrain", "water", "progression", "projectiles", "combat_spawner")]
+[node name="Journey" type="Node3D" node_paths=PackedStringArray("initial_ships", "fleet", "origin", "island_spawner", "camera_rig", "terrain", "water", "progression", "projectiles", "combat_spawner", "wreck_controller")]
 script = ExtResource("1")
 initial_ships = Array[NodePath]([NodePath("Ships/Ship1"), NodePath("Ships/Ship2"), NodePath("Ships/Ship3"), NodePath("Ships/Ship4"), NodePath("Ships/Ship5"), NodePath("Ships/Ship6"), NodePath("Ships/Ship7"), NodePath("Ships/Ship8"), NodePath("Ships/Ship9")])
 fleet = NodePath("FleetController")
@@ -53,9 +55,15 @@ water = NodePath("Water")
 progression = NodePath("Progression")
 projectiles = NodePath("Projectiles")
 combat_spawner = NodePath("CombatSpawner")
+wreck_controller = NodePath("WreckController")
 
 [node name="Projectiles" type="Node3D" parent="."]
 script = ExtResource("12")
+
+[node name="WreckController" type="Node" parent="." node_paths=PackedStringArray("terrain", "origin")]
+script = ExtResource("14")
+terrain = NodePath("../VoxelTerrain")
+origin = NodePath("../FloatingOrigin")
 
 [node name="CombatSpawner" type="Node" parent="."]
 script = ExtResource("13")
@@ -154,3 +162,6 @@ fleet = NodePath("../FleetController")
 
 [node name="OrbitCamera" parent="." node_paths=PackedStringArray("fleet") instance=ExtResource("5")]
 fleet = NodePath("../FleetController")
+
+[node name="PerformanceOverlay" parent="." node_paths=PackedStringArray("journey") instance=ExtResource("15")]
+journey = NodePath("..")

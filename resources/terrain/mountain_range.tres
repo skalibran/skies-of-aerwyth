@@ -10,7 +10,7 @@ fractal_octaves = 4
 fractal_gain = 0.35
 domain_warp_enabled = true
 domain_warp_amplitude = 1000.0
-domain_warp_frequency = 0.00009
+domain_warp_frequency = 9e-05
 domain_warp_fractal_octaves = 2
 domain_warp_fractal_lacunarity = 2.0
 

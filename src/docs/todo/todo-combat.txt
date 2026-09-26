@@ -39,14 +39,15 @@ Reference: src/docs/game_design_document.md, src/docs/movement.md, and
 src/docs/combat.md for implemented ownership, checks, and measurements.
 
 Deliverable
-- Automatic combat between player and enemy Kestrels using the current primitive
+- Automatic combat between player and enemy Kestrels using the authored voxel
   ship model, two broadside Rusty cannons, health, and visible cannonballs following
   gravity-driven arcs. Weapons calculate elevation and lead before firing.
-- Spawn up to two ships per faction every simulation second, continuously, with
-  at most 100 living ships per faction. Destroyed ships simply despawn.
-- No effects, audio, wrecks, difficulty curve, rewards, combat progression, ship
+- Spawn up to ten ships per faction every simulation second, continuously, with
+  at most 100 living ships per faction. Destroyed ships settle, freeze, and expire 25 seconds after landing.
+- Death and cannon muzzle smoke use authored camera-facing square particles; no impact effects,
+  audio, water-specific wreck behavior, difficulty curve, rewards, combat progression, ship
   editor, purchased reinforcements, or new UI. Existing journey/terrain progression remains.
-- Ignore the added Kestrel model and preserve its authoring/import files.
+- Use the authored Kestrel model and balanced palette at one meter per voxel.
 - Endgame measurement target: roughly 70 friendly ships and 150 enemies together.
   Keep implementation readable; measure before adding low-level optimization.
 
@@ -54,7 +55,7 @@ Original slice tuning choices (authorable, not final balance)
 Current authored trials use 500 health, launch speed 1000 m/s, 65-degree cone half-angles, and
 muzzles at X = +/-3 meters on the authored voxel model. The converted 200 m/s ballistic references below remain
 solver fixtures. See src/docs/combat.md for current tuning and measurements.
-- Kestrel maximum health: 50; Rusty cannon reload: 2 seconds per mounted weapon.
+- Kestrel maximum health: 500; Rusty cannon reload: 2 seconds per mounted weapon.
 - Rusty cannon launch speed: 200 meters/second. Apply constant downward
   acceleration of 30 meters/second squared, authored on its weapon definition.
   This is stylized projectile gravity, independent of Godot's global gravity.
@@ -244,16 +245,23 @@ solver fixtures. See src/docs/combat.md for current tuning and measurements.
 9. HEALTH AND DESTRUCTION
 [x] Give ships an authored maximum health, per-instance current health, a single
     damage entry point, and typed health/death signals. Clamp health at zero.
-[x] Increase all ships' default maximum health from 50 to 500 for the debug trial.
+[x] Reduce all ships' default maximum health from the 500-health trial to 50.
 [x] On lethal damage, immediately mark the ship dead and make it ineligible for
     targeting/firing. Emit death once; duplicate impacts must not repeat cleanup.
 [x] Remove dead ships safely through Journey's registration lifecycle, including
-    fleet membership, avoidance snapshots, targeting references, origin roots,
-    debug views, and the spawner's living count. Defer list mutation/freeing until
-    active simulation loops finish. Handle external removal and scene exit too.
-[x] Despawn both destroyed enemies and player ships. Preserve camera fallback when
-    its selected ship disappears, and stop anchor motion for an empty player fleet.
-    No wreck physics, sinking, explosion effect, health bars, or death animation.
+    fleet membership, avoidance snapshots, targeting references, debug views,
+    and the spawner's living count. Defer registry mutation until active loops
+    finish; retain origin registration until wreck expiry. Handle scene exit too.
+[x] On death, stop all flight-control forces, preserve linear/angular momentum,
+    enable 0.2-times project gravity and native damping, unlock pitch/roll, and allow sleep.
+    Start the authored smoke emitters; retain trails through origin shifts and
+    hide them with the wreck on LOD terrain. See combat.md for smoke authoring.
+    Use native full-detail terrain collision, settle for three seconds, then
+    freeze while supported and disable collision. Clean up 25 seconds after
+    first ground contact, with a 45-second airborne fallback. Keep rebasing.
+    Hide wrecks over coarse terrain without requesting or pinning extra detail.
+    Return the camera to fleet focus and exclude wrecks from selection.
+    Water behavior and ground props remain under GEN-02; no explosions or health UI.
 
 10. PROJECTILES, HIT DETECTION, AND PERFORMANCE DESIGN
 Chosen starting approach to implement in item 11:
@@ -365,7 +373,7 @@ https://docs.godotengine.org/en/stable/classes/class_physicsrayqueryparameters3d
     captures as required by AGENTS.md; inspect logs as well as exit status.
 [x] Inspect a rendered mixed-fleet fight: tint, primitive Kestrels, broad cone
     boundaries, elevated muzzle clearance, believable cannonball rise/fall, barrel
-    aim matching launch direction, broadside maneuvers, despawns, camera fallback,
+    aim matching launch direction, broadside maneuvers, deaths, camera fallback,
     and continued spawning through rebases. Confirm the visual follows hit detection.
 [x] Provide a separate scale scenario overriding the demo cap for 70 friendlies
     versus 150 enemies. Sustain firing long enough to reach projectile steady
@@ -384,7 +392,7 @@ https://docs.godotengine.org/en/stable/classes/class_physicsrayqueryparameters3d
 Done when
 - The ordinary journey visibly runs the specified repeating capped encounter,
   both sides maneuver and calculate arcing shots through their mounts, allies
-  intercept along those arcs without damage, destroyed ships despawn, and surviving
+  intercept along those arcs without damage, destroyed ships fall as passive wrecks, and surviving
   player ships resume travel when no enemies remain. The Rusty cannon can reach a
   stationary level target at its authored 1000-meter range. No effects or escalation
   systems are necessary.
@@ -429,6 +437,14 @@ src/docs/combat_review.md. Measurements: src/docs/combat_performance.md.
     content while retaining actual transformed cones for final shot validation.
 
 [ ] COMBAT-03 — Release reliability and acceptance coverage (blocks shipping).
+    Wreck review regressions resolved (2026-09-26): camera picking skips dead
+    hulls while retaining island occlusion and physical wreck collision. Hidden
+    smoke suspends emission/source updates and clears its GPU particles on reveal,
+    restarting at the current source position. check_wrecks.gd covers multiple
+    intervening wrecks, an island, no living hit, and smoke hidden for seven seconds
+    while its source moves 200 meters. Its rendered mode checks actual GPU bounds
+    and captures before/after; headless and rendered checks pass without orphans.
+    Fix validation logs/captures: external directory aerwyth-wreck-fixes-999fdf6e.
     Weapon reload emits at most one shot per tick and discards overshoot. Ten-shot/s
     firing is checked at the accepted 30 Hz baseline; arbitrary faster weapon
     cadences remain quantized. Cover new reload intervals at 30 Hz before
@@ -444,7 +460,7 @@ src/docs/combat_review.md. Measurements: src/docs/combat_performance.md.
     200 m/s reference; direct duplicate damage tests do not cover every projectile
     ordering. Configure and verify a release export; no export preset is present yet.
     Steam Deck deployment and on-device testing are deferred at the user's request.
-    Whole-game workloads with production assets, vegetation, and wrecks remain under GEN-05
+    Whole-game workloads with production assets, vegetation, wrecks, and smoke remain under GEN-05
     in src/docs/todo/blockers-terrain.txt.
 
 [ ] COMBAT-04 — Confirm combat feel/tuning (design acceptance, not a wiring failure).

@@ -18,6 +18,7 @@ var fired_count: int = 0
 var damaging_hits: int = 0
 var friendly_hits: int = 0
 var expired_count: int = 0
+var smoke_batches: Dictionary[PackedScene, CannonShotSmoke] = {}
 var _mesh := SphereMesh.new()
 var _query := PhysicsRayQueryParameters3D.new()
 
@@ -35,7 +36,7 @@ func _ready() -> void:
 	_query.hit_from_inside = true
 
 
-func fire(shooter: Airship, muzzle: Vector3, velocity: Vector3, weapon: WeaponDefinition) -> void:
+func fire(shooter: Airship, muzzle: Vector3, velocity: Vector3, weapon: WeaponDefinition, smoke_scene: PackedScene = null) -> void:
 	var shot := Shot.new()
 	shot.position = to_local(muzzle)
 	shot.velocity = velocity
@@ -52,6 +53,22 @@ func fire(shooter: Airship, muzzle: Vector3, velocity: Vector3, weapon: WeaponDe
 	shot.visual.reset_physics_interpolation()
 	shots.append(shot)
 	fired_count += 1
+	if smoke_scene != null:
+		_emit_smoke(smoke_scene, muzzle, velocity.normalized())
+
+
+func _emit_smoke(scene: PackedScene, muzzle: Vector3, direction: Vector3) -> void:
+	if not smoke_batches.has(scene):
+		var instance := scene.instantiate()
+		var batch := instance as CannonShotSmoke
+		if batch == null:
+			instance.free()
+			push_error("Shot smoke scenes must have a CannonShotSmoke root.")
+			return
+		# Local particles inherit this root's origin shifts and outlive the gun.
+		add_child(batch)
+		smoke_batches[scene] = batch
+	smoke_batches[scene].burst(muzzle, direction)
 
 
 func step(delta: float) -> void:
@@ -90,6 +107,8 @@ func clear() -> void:
 	for shot in shots:
 		shot.visual.queue_free()
 	shots.clear()
+	for batch in smoke_batches.values():
+		batch.clear()
 
 
 func _resolve_hit(shot: Shot, collider: Object) -> void:

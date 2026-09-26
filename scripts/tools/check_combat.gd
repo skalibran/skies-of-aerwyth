@@ -158,7 +158,7 @@ func _check_mounts_and_health() -> void:
 	var player := _add_ship(Factions.PLAYER, Vector3.ZERO)
 	var enemy := _add_ship(Factions.ENEMY, Vector3(600, 0, 0))
 	var far_enemy := _add_ship(Factions.ENEMY, Vector3(10000, 0, 0))
-	_check(player.maximum_health == 500 and player.current_health == 500 and enemy.current_health == 500, "Both factions start with tenfold ship health.")
+	_check(player.maximum_health == 500 and player.current_health == 500 and enemy.current_health == 500, "Both factions start with 500 health.")
 	await physics_frame
 	_check(Factions.are_hostile(player.faction, enemy.faction) and not Factions.are_hostile(player.faction, &"visitors"), "String factions share one hostility rule.")
 	_check(player.mounted_slots.size() == 2 and player.maximum_speed == 180 and is_equal_approx(player.hull_radius, 10.5), "Kestrel retains flight tuning and two mounts with its fitted model collider.")
@@ -438,7 +438,7 @@ func _check_journey() -> void:
 		if tick == _rate - 2:
 			_check(enemies == 0 and players == 9, "First batch waits one second and retains the nine starting player ships.")
 		if tick == _rate:
-			_check(enemies == 2 and players == 11, "Each scheduled batch adds two ships to each faction.")
+			_check(enemies == 10 and players == 19, "Each scheduled batch adds ten ships to each faction.")
 		if tick == 20 * _rate:
 			_check(journey.projectiles.fired_count > 0, "Both fleets close and begin firing.")
 		if tick == 30 * _rate:
@@ -451,9 +451,9 @@ func _check_journey() -> void:
 			await _capture("combat-kestrel")
 			journey.camera_rig.focus_fleet()
 			journey.camera_rig.zoom(2200.0 - journey.camera_rig.camera.position.z)
-	_check(journey.projectiles.damaging_hits > 0 and journey.destroyed_count > 0, "Combat causes damage and despawns destroyed ships.")
+	_check(journey.projectiles.damaging_hits > 0 and journey.destroyed_count > 0, "Combat causes damage and retires destroyed ships into falling wrecks.")
 	_check(journey.combat_spawner.batches == 180, "Spawner continues on one-second cadence.")
-	_check(maximum_players == 100 and maximum_enemies == 100, "Both live combat populations reach their debug cap.")
+	_check(maximum_players > 9 and maximum_enemies > 0, "Both combat populations receive reinforcements despite ongoing casualties; controlled batches below verify the caps.")
 	_check(maximum_anchor_distance < 4500.0 and maximum_mean_distance < 1800.0, "Three minutes of full-fleet combat stay near the anchor with room for turns and island detours.")
 	if _visual:
 		journey.camera_rig.focus_fleet()
@@ -474,12 +474,12 @@ func _check_journey() -> void:
 	journey.combat_spawner.enabled = true
 	journey.combat_spawner.spawn_radius = Vector2(1500, 2800)
 	journey.fleet.average_focus.global_position = journey.fleet.anchor.global_position + Vector3(10000, 1000, 10000)
-	for batch in range(50):
+	for batch in range(10):
 		await physics_frame
-		if batch == 25:
+		if batch == 5:
 			journey.origin.shift_segments(-1)
 		journey.combat_spawner.step(1, journey)
-	_check(_faction_count(journey, Factions.PLAYER) == 100 and _faction_count(journey, Factions.ENEMY) == 100, "Fifty unobstructed batches fill both faction caps.")
+	_check(_faction_count(journey, Factions.PLAYER) == 100 and _faction_count(journey, Factions.ENEMY) == 100, "Ten unobstructed batches fill both faction caps.")
 	for ship in journey.ships:
 		var offset := ship.global_position - journey.fleet.anchor.global_position
 		var radius := Vector2(offset.x, offset.z).length()
@@ -494,18 +494,18 @@ func _check_journey() -> void:
 			journey.camera_rig.follow_ship(ship)
 			ship.take_damage(ship.maximum_health, Factions.ENEMY)
 			removed_players += 1
-		elif ship.faction == Factions.ENEMY and removed_enemies < 3:
+		elif ship.faction == Factions.ENEMY and removed_enemies < 11:
 			ship.take_damage(ship.maximum_health, Factions.PLAYER)
 			removed_enemies += 1
 	journey.step_simulation(0)
 	await process_frame
-	_check(journey.ships.size() == 196 and journey.camera_rig.mode == FleetCamera.Mode.FLEET, "Death removes membership and restores camera focus without immediate replenishment.")
+	_check(journey.ships.size() == 188 and journey.camera_rig.mode == FleetCamera.Mode.FLEET, "Death removes membership and restores camera focus without immediate replenishment.")
 	await physics_frame
 	journey.combat_spawner.step(1, journey)
-	_check(_faction_count(journey, Factions.PLAYER) == 100 and _faction_count(journey, Factions.ENEMY) == 99 and journey.combat_spawner.spawned_count == spawned + 3, "Each faction refills at most two ships without exceeding its own capacity.")
+	_check(_faction_count(journey, Factions.PLAYER) == 100 and _faction_count(journey, Factions.ENEMY) == 99 and journey.combat_spawner.spawned_count == spawned + 11, "Each faction refills at most ten ships without exceeding its own capacity.")
 	await physics_frame
 	journey.combat_spawner.step(1, journey)
-	_check(journey.ships.size() == 200 and journey.combat_spawner.spawned_count == spawned + 4, "The following second restores the remaining enemy vacancy.")
+	_check(journey.ships.size() == 200 and journey.combat_spawner.spawned_count == spawned + 12, "The following second restores the remaining enemy vacancy.")
 	var ids: Dictionary[int, bool] = {}
 	for ship in journey.ships:
 		_check(not ids.has(ship.entity_id), "Spawned ships have unique IDs.")

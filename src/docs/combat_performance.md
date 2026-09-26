@@ -98,3 +98,36 @@ The measurements above preserve the historical rate comparison. Current checks u
 `combat-220.json` records the effective configuration, phase timings, counters, and resource samples at the project physics rate. Do not use fixed render FPS for performance runs. Functional fixtures also use the project rate; alternate-rate comparisons are no longer part of validation.
 
 Local evidence for this pass is under `C:/Users/lukas/AppData/Local/Temp/aerwyth-clean-combat-13b851f876214525a2cead4cd18e302c/`: `baseline60/`, `final60/`, and `optimized30/` contain the reported JSON/logs. `optimized60/` retains the intermediate scheduling regression. Temporary captures/logs are not repository artifacts; the measurements above preserve the findings if those files are removed.
+
+## Death-smoke optimization (2026-09-26)
+
+The ordinary fleet view was CPU-limited by accumulated death effects. Smoke now stops and hides permanently on first ground contact. Kestrel's two authored points feed one GPU system, preserving 48 particles per point and the five-second lifetime. Systems share an immutable process material; physics-clock manual emission replaces per-render-frame material updates. Culling bounds discard expired trail positions using one-second buckets. See [smoke authoring](combat.md#death-smoke-authoring).
+
+Compared the earlier FPS investigation with one fresh 90-second encounter after the final changes: Godot 4.7.1 development executable, Ryzen 7 9800X3D / RTX 4090, D3D12 Forward+, actual 1280 x 800 rendering, uncapped FPS, 30 Hz project physics, normal fleet camera, ten spawns per faction per second and 100 living ships per faction cap. Physics, combat, terrain, and wreck retention remained active. External scripts instantiate Journey, submit its step once per native physics frame, and collect wall-frame/render timings; launches ran serially with isolated APPDATA. No fixed render FPS was used for profiling.
+
+| Encounter window | Before FPS | After FPS | Living, before / after | Wrecks, before / after | Active GPU smoke systems, before / after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 30-40 s | 64.8 | 109.2 | 194 / 195 | 460 / 459 | 920 / 379 |
+| 40-50 s | 41.8 | 95.0 | 189 / 191 | 579 / 577 | 1158 / 358 |
+| 50-60 s | 38.7 | 97.4 | 200 / 191 | 647 / 648 | 1294 / 314 |
+| 80-90 s | 52.2 | 117.5 | 196 / 200 | 497 / 502 | 994 / 227 |
+
+In the 50-60 second window, mean wall-frame time fell from 25.83 to 10.26 ms (2.52 times the FPS), and p95 fell from 34.93 to 19.41 ms. Render CPU mean fell from 4.70 to 2.24 ms. The unchanged WreckController visibility callback still cost about 2.13 ms per rendered frame. These are separate evolving encounters with close wreck populations, not identical-state trials or a guaranteed minimum FPS. They do not establish Steam Deck performance.
+
+The final headless editor import, ship-flight check, and rendered wreck check passed. The wreck check verifies first-contact shutdown, no revival on LOD reveal, shared materials, multiple emission points in one GPU system, bounded trails, native settling, rebasing, expiry, and orphan-free teardown. Captures were inspected for falling trails, smoke-free settled wrecks, both source points, and fresh smoke after hiding/revealing an airborne source.
+
+Baseline evidence: `C:/Users/lukas/AppData/Local/Temp/aerwyth-fps-audit-qxzz0f57/current.json`. Final evidence: `C:/Users/lukas/AppData/Local/Temp/aerwyth-smoke-opt-c3o096_v/`, including `profile_batched.gd`, `batched.json`, `batched.log`, `wrecks-batched-visual.log`, `flight.log`, and captures. To repeat while the external harness is available, prepare isolated APPDATA and a unique external log as required by AGENTS.md, then run the console binary with `--path <absolute-project-path> --script <external-profile_batched.gd> --log-file <external-log>`; update the harness's output directory for each run. The prior pass with separate systems is retained as `first-pass-optimized.json`; the table reports the final batched implementation.
+
+## Cannon smoke and 500 health (2026-09-26)
+
+A new 90-second ordinary encounter used the same workstation, renderer, resolution, physics rate, camera, and spawn limits above, with health increased from 50 to 500 and reusable Rusty cannon muzzle smoke enabled. Each shot emits six 0.75-second puffs into one shared GPU batch, capped at 2048 particles. Native physics, terrain, projectiles, and death effects remained active.
+
+| Encounter window | Mean FPS | Wall-frame p95 | Living ships | Wrecks | Active death-smoke systems |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 30-40 s | 492.3 | 9.66 ms | 200 | 1 | 1 |
+| 50-60 s | 481.2 | 9.26 ms | 199 | 10 | 10 |
+| 80-90 s | 386.8 | 10.38 ms | 198 | 53 | 41 |
+
+All 15,482 shots emitted muzzle smoke through one shared batch, with no bursts dropped by its cosmetic budget. At 80-90 seconds, render CPU mean was 0.76 ms, GPU mean 0.35 ms, and Journey script mean 7.96 ms per physics tick. The much smaller wreck population accompanies higher health; this combined gameplay/presentation change does not isolate the cost of muzzle smoke or establish Steam Deck FPS.
+
+The editor import, default combat fixtures, and focused headless/rendered cannon-smoke checks passed. Inspected captures show the plume and preservation across rebasing. The focused check also covers opt-in, successful-shot triggering, opposite muzzle directions, shared batching, cosmetic overload without lost projectiles, expiry, shooter removal, and teardown. Local evidence is under `C:/Users/lukas/AppData/Local/Temp/aerwyth-cannon-smoke-75phphyu/`, including `profile_cannon_smoke.gd`, `cannon-smoke.json`, `profile.log`, and `cannon-smoke-final.log`. The external harness uses the same invocation procedure as above.

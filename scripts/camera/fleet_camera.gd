@@ -97,9 +97,12 @@ func focus_fleet() -> void:
 
 
 func follow_ship(ship: Airship) -> void:
+	if not ship.alive:
+		return
 	_clear_followed_ship()
 	followed_ship = ship
 	followed_ship.tree_exiting.connect(focus_fleet, CONNECT_ONE_SHOT)
+	followed_ship.died.connect(_on_followed_ship_died, CONNECT_ONE_SHOT)
 	mode = Mode.SHIP
 	global_position = ship.global_position
 	apply_view_bounds()
@@ -109,9 +112,19 @@ func pick_ship(screen_position: Vector2) -> void:
 	var start := camera.project_ray_origin(screen_position)
 	var end := start + camera.project_ray_normal(screen_position) * camera.far
 	var query := PhysicsRayQueryParameters3D.create(start, end, 3)
-	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	if not hit.is_empty() and hit.collider is Airship:
-		follow_ship(hit.collider as Airship)
+	var space := get_world_3d().direct_space_state
+	var excluded: Array[RID] = []
+	while true:
+		var hit := space.intersect_ray(query)
+		if hit.is_empty() or not hit.collider is Airship:
+			return
+		var ship := hit.collider as Airship
+		if ship.alive:
+			follow_ship(ship)
+			return
+		# Wrecks keep physical contacts, but cannot occlude a selectable ship.
+		excluded.append(ship.get_rid())
+		query.exclude = excluded
 
 
 func pan(displacement: Vector3) -> void:
@@ -202,9 +215,16 @@ func _speed_multiplier() -> float:
 
 
 func _clear_followed_ship() -> void:
-	if is_instance_valid(followed_ship) and followed_ship.tree_exiting.is_connected(focus_fleet):
-		followed_ship.tree_exiting.disconnect(focus_fleet)
+	if is_instance_valid(followed_ship):
+		if followed_ship.tree_exiting.is_connected(focus_fleet):
+			followed_ship.tree_exiting.disconnect(focus_fleet)
+		if followed_ship.died.is_connected(_on_followed_ship_died):
+			followed_ship.died.disconnect(_on_followed_ship_died)
 	followed_ship = null
+
+
+func _on_followed_ship_died(_ship: Airship) -> void:
+	focus_fleet()
 
 
 func _end_rotation(restore_cursor: bool = true) -> void:

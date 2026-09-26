@@ -1,6 +1,8 @@
 class_name FloatingOrigin
 extends Node
 
+signal shifted(displacement: Vector3)
+
 @export_range(5120.0, 40960.0, 10.0) var shift_threshold: float = 7680.0
 
 var segment: int = 0
@@ -38,3 +40,4 @@ func shift_segments(count: int) -> void:
 		root.global_position -= displacement
 		root.reset_physics_interpolation()
 	shift_count += 1
+	shifted.emit(displacement)

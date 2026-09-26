@@ -29,13 +29,14 @@ func _run() -> void:
 	await _check_cohesion()
 	await _check_contacts()
 	await _check_impulse_recovery()
+	await _check_death()
 	await _check_pass()
 	_fixture.queue_free()
 	await process_frame
 	for failure in _failures:
 		printerr("FAIL: ", failure)
 	if _failures.is_empty():
-		print("PASS: forward thrust, braking, authored axes, physical contacts, impulse recovery, rebasing, and broadside passes.")
+		print("PASS: forward thrust, braking, authored axes, physical contacts, impulse recovery, passive wreck physics, rebasing, and broadside passes.")
 	quit(0 if _failures.is_empty() else 1)
 
 
@@ -288,6 +289,51 @@ func _check_impulse_recovery() -> void:
 		await physics_frame
 	_check(ship.linear_velocity.distance_to(Vector3.UP * 10.0) < 0.1, "Lift demand also respects a maximum speed authored below the climb speed.")
 	ship.free()
+
+
+func _check_death() -> void:
+	var ship := _ship(KESTREL)
+	# An ordinary body is the independent reference for gravity and native damping.
+	var passive := RigidBody3D.new()
+	passive.mass = ship.mass
+	passive.gravity_scale = 0.2
+	passive.add_child(ship.hull_collider.duplicate())
+	_fixture.add_child(passive)
+	passive.position = Vector3.RIGHT * 5000.0
+	await physics_frame
+	await physics_frame
+	var momentum := Vector3(50, 0, -100)
+	var spin := Vector3(0, 0.5, 0)
+	ship.linear_velocity = momentum
+	ship.angular_velocity = spin
+	passive.linear_velocity = momentum
+	passive.angular_velocity = spin
+	ship.take_damage(ship.maximum_health - 5, Factions.ENEMY)
+	_check(ship.alive and ship.gravity_scale == 0.0, "Nonlethal damage retains powered flight.")
+	_check(ship.death_smoke == null, "Living ships do not create death smoke after nonlethal damage.")
+	ship.take_damage(5, Factions.ENEMY)
+	_check(is_equal_approx(ship.gravity_scale, 0.2), "Wrecks default to one fifth of project gravity without changing global gravity.")
+	_check(is_instance_valid(ship.death_smoke) and ship.death_smoke.is_emitting(), "Lethal damage creates the ship-owned smoke effect at its markers.")
+	_check(ship.linear_velocity == momentum and ship.angular_velocity == spin, "Death preserves existing linear and angular momentum.")
+	var start := ship.position
+	var passive_start := passive.position
+	for tick in range(_rate):
+		# Exercise both control entry points with demands that would change every axis.
+		ship.set_preferred_velocity(Vector3(180, 20, 0))
+		ship.apply_movement_forces(_delta, Vector3.RIGHT * 100, [])
+		ShipFlight.apply_forces(ship, Vector3(180, 20, 0), _delta)
+		await physics_frame
+	_check(ship.linear_velocity.distance_to(passive.linear_velocity) < 0.001 and ship.angular_velocity.distance_to(passive.angular_velocity) < 0.001, "Dead ships ignore flight control, matching native damping and reduced gravity on an ordinary rigid body.")
+	var fallen := start.y - ship.position.y
+	_check((ship.position - start).distance_to(passive.position - passive_start) < 0.02 and fallen > 5.0 and fallen < 15.0, "A wreck follows the slower passive falling trajectory (about ten meters in its first second).")
+	_check(ship.linear_velocity.x > 0.0 and ship.linear_velocity.x < momentum.x and ship.angular_velocity.y > 0.0 and ship.angular_velocity.y < spin.y, "Native damping gradually reduces retained horizontal momentum and spin.")
+	ship.apply_torque_impulse(Vector3(1000, 0, 1000))
+	passive.apply_torque_impulse(Vector3(1000, 0, 1000))
+	await physics_frame
+	await physics_frame
+	_check(ship.angular_velocity.distance_to(passive.angular_velocity) < 0.001 and absf(ship.angular_velocity.x) > 0.01 and absf(ship.angular_velocity.z) > 0.01, "A wreck can tumble under physical impulses without upright control locks.")
+	ship.free()
+	passive.free()
 
 
 func _setup_view() -> void:

@@ -28,55 +28,30 @@ Completion criteria:
 - Restore a passed island and its terrain after restart without duplicate
   entities or changed layout. Define how generator changes affect old saves.
 
-[ ] GEN-02 - Stable terrain support for wrecks and placed models
+[ ] GEN-02 - Stable terrain support for placed models and water landings
 
-Required before: Downed-ship contact, resting wrecks, and ground props.
+Implemented wreck baseline:
+- Full-detail terrain patches own a native StaticBody3D trimesh collider made
+  from their existing mesh. Coarse patches have no collision. Publication,
+  activation, rebasing, and unloading follow the terrain chunk lifecycle.
+- Wrecks use capsule CCD, settle for three seconds after ground contact, freeze
+  while supported, and disable hull collision. Cleanup is 25 seconds after first
+  ground contact, with a 45-second airborne fallback.
+- Wrecks and their death smoke are hidden over coarse/unloaded terrain. They do not pin chunks or force
+  extra detail. Ground props and persistent support are separate requirements.
+- See src/docs/terrain.md for ownership and checks, and the collider measurements
+  in src/docs/terrain_performance.md.
 
-Problem:
-- Terrain currently has no colliders.
-- Source height queries are stable, but distant display patches approximate
-  the source. Changing camera detail can change their visible surface height.
-- Using the current display mesh for collision or placement would make ground
-  support depend on camera position and streaming state.
-
-Completion criteria:
-- Provide bounded collision and placement coverage from the source voxel grid.
-- Pin matching visible detail while occupied and release it after cleanup.
-- Test fast falls, resting contact, origin shifts, and streaming boundaries
-  with several simultaneous wrecks; measure physics construction and runtime.
-- Resolve water landing/sinking behavior separately with the user.
+Remaining completion criteria:
+- Resolve water landing/sinking behavior with the user. Water currently has no
+  collider or buoyancy; a wreck can land on full-detail submerged terrain.
 - For scenery-model placement, use source height/biome samples, stable cell
   identities, and a dedicated placement seed. Reject underwater samples for
   vegetation that belongs on dry land; never consume island or ship RNG.
-- Preserve nearby shoreline and occupied contact-area accuracy while camera
-  detail changes. Entire-layout replacement can postpone fine detail during
-  continuous rapid camera travel.
-
-Proposed wreck collision implementation (not implemented):
-1. Generate static collision tiles around a falling wreck's predicted landing
-   corridor, including neighboring coverage for its hull and lateral motion.
-   Request them before contact; avoid per-voxel colliders or collision across
-   all 81 visible root regions.
-2. Use merged source-grid top/cliff triangles independent of render LOD. Exclude
-   visual skirts and material/color subdivisions. Pin collision tiles and matching
-   visual detail while occupied, then release references after wreck cleanup.
-3. Give falling wrecks simple convex/capsule bodies. Use continuous collision
-   detection or swept movement for fast falls; allow settled wrecks to sleep or
-   freeze during their short lifetime. Test tunneling explicitly.
-4. Register collision roots for the same floating-origin shifts as wrecks. Bound
-   resource generation and publish live physics/tree changes on the main thread.
-
-Shape alternatives:
-- HeightMapShape3D triangulates between samples and can be cheaper when approximate
-  slope contact is acceptable; it does not reproduce vertical voxel steps exactly.
-  https://docs.godotengine.org/en/stable/classes/class_heightmapshape3d.html
-- ConcavePolygonShape3D preserves steps as static geometry. Use a convex shape on
-  the moving wreck, not a moving concave terrain shape.
-  https://docs.godotengine.org/en/stable/classes/class_concavepolygonshape3d.html
-
-Measure world insertion, contact solving, simultaneous wrecks, CCD, and sleeping,
-not just shape-resource creation. The existing estimate is documented in
-src/docs/terrain_performance.md under Collision construction estimate.
+- Define support and display rules for persistent ground props independently of
+  the temporary wreck visibility rule. Source queries must remain authoritative.
+- Validate combined combat/terrain/wreck costs on target low-end hardware under
+  GEN-05; finite workstation checks do not establish an endgame frame budget.
 
 [ ] GEN-03 - Island visibility does not cover the full camera view
 

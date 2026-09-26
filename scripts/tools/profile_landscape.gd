@@ -228,6 +228,7 @@ func _measure(label: String, seconds: float, speed: float = 0.0) -> void:
 	_terrain.process_ms.clear()
 	_terrain.updates_ms.clear()
 	_terrain.commits = 0
+	_terrain.maximum_collider_build_usec = 0
 	var frames_ms: Array[float] = []
 	var gpu_ms: Array[float] = []
 	var render_cpu_ms: Array[float] = []
@@ -273,6 +274,7 @@ func _measure(label: String, seconds: float, speed: float = 0.0) -> void:
 		"wall_frame_ms": _summary(frames_ms), "gpu_ms": _summary(gpu_ms), "render_cpu_ms": _summary(render_cpu_ms),
 		"terrain_process_ms": _summary(_terrain.process_ms), "region_update_ms": _summary(_terrain.updates_ms),
 		"mesh_upload_ms": _summary(_terrain.uploads_ms),
+		"collider_build_max_ms": _terrain.maximum_collider_build_usec / 1000.0,
 		"patch_build_ms": _build_summary(), "built_patches": _terrain.builds.size(),
 		"backlog_peak": backlog_peak, "backlog_end": _terrain._pending.size() + _terrain._jobs.size(), "committed_layouts": _terrain.commits,
 		"draw_calls": _summary(draws), "rendered_primitives": _summary(primitives), "geometry": _geometry(),
@@ -305,7 +307,7 @@ func _geometry() -> Dictionary:
 		vertices += chunk.mesh.surface_get_array_len(0)
 		triangles += chunk.mesh.surface_get_array_index_len(0) / 3
 		visible += int(chunk.visible)
-	return {"patches": _terrain.chunks.size(), "visible_patches": visible, "vertices": vertices, "triangles": triangles}
+	return {"patches": _terrain.chunks.size(), "visible_patches": visible, "source_colliders": _terrain.colliders.size(), "vertices": vertices, "triangles": triangles}
 
 
 func _summary(values: Array[float]) -> Dictionary:

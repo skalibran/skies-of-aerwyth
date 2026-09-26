@@ -320,6 +320,7 @@ func _check_journey_cleanup() -> void:
 			enemy.entity_id = journey.allocate_ship_id()
 			enemy.faction = Factions.ENEMY
 			enemy.freeze = true
+			enemy.wreck_airborne_lifetime = 0.25
 			journey.add_child(enemy)
 			enemy.global_position = player.global_position + Vector3.RIGHT * 600
 			journey.register_ship(enemy)
@@ -333,9 +334,22 @@ func _check_journey_cleanup() -> void:
 			# Removal must use the recorded cell, not a potentially changed position.
 			enemy.global_position += Vector3.RIGHT * 5000
 			if removal == 0:
+				journey.camera_rig.follow_ship(enemy)
 				enemy.take_damage(enemy.maximum_health, Factions.PLAYER)
 				_check(not journey.combat_perception.is_hostile(player, enemy), "Lethal damage invalidates perception before deferred unregistering.")
 				journey.step_simulation(0.0)
+				_check(not enemy.is_queued_for_deletion() and enemy.collision_layer == 1 and enemy.collision_mask == (3 | VoxelTerrain.COLLISION_LAYER), "Death retains the wreck's physical hull after unregistering combat membership.")
+				journey.camera_rig.follow_ship(enemy)
+				_check(journey.camera_rig.mode == FleetCamera.Mode.FLEET, "Death restores fleet focus immediately and wrecks cannot be selected again.")
+				var relative_position := enemy.global_position - journey.fleet.anchor.global_position
+				journey.origin.shift_segments(-1)
+				_check((enemy.global_position - journey.fleet.anchor.global_position).distance_to(relative_position) < 0.001, "Unregistered wrecks still move with the floating origin.")
+				journey.origin.shift_segments(1)
+				var roots_with_wreck := journey.origin._roots.size()
+				for tick in range(ceili(0.4 * _rate)):
+					await physics_frame
+				await process_frame
+				_check(not is_instance_valid(enemy) and journey.origin._roots.size() == roots_with_wreck - 1, "Wreck expiry frees its body and origin subscription.")
 			elif removal == 1:
 				journey.unregister_ship(enemy)
 				_check(not journey.combat_perception.is_hostile(player, enemy), "Explicit unregistering invalidates an otherwise living target.")

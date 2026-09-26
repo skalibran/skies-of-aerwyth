@@ -8,7 +8,7 @@ static func primary_axis(ship: Airship) -> Vector3:
 
 
 static func apply_forces(ship: Airship, desired: Vector3, delta: float) -> void:
-	if delta <= 0.0 or ship.freeze:
+	if not ship.alive or delta <= 0.0 or ship.freeze:
 		return
 	ship.apply_central_force(_acceleration(ship, desired, delta) * ship.mass)
 	# Upright hulls rotate only about world Y. Use the body's actual inertia so
