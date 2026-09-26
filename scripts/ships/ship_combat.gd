@@ -135,7 +135,7 @@ func _select_target(ship: Airship, ships: Array[Airship], fleet: FleetController
 	target = null
 	var nearest := INF
 	for other in ships:
-		if not other.alive or not Factions.are_hostile(ship.faction, other.faction):
+		if not other.alive or other.is_queued_for_deletion() or not Factions.are_hostile(ship.faction, other.faction):
 			continue
 		if other.global_position.distance_squared_to(fleet.anchor.global_position) > fleet.combat_radii.y * fleet.combat_radii.y:
 			continue

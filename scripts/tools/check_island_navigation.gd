@@ -9,6 +9,8 @@ var _visual: bool = false
 
 
 func _initialize() -> void:
+	# These fixtures use a fixed 60 Hz reference timeline.
+	Engine.physics_ticks_per_second = 60
 	_visual = "--visual" in OS.get_cmdline_user_args()
 	_run.call_deferred()
 

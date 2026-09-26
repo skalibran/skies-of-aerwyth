@@ -16,16 +16,26 @@ var _physics_ms: Array[float] = []
 var _steps: Array[float] = []
 var _results: Array[Dictionary] = []
 var _previous_frame: int = 0
+var _phase_started_usec: int = 0
 var _peak_shots: int = 0
 var _peak_nodes: int = 0
 var _peak_memory: int = 0
-var _component_totals := PackedInt64Array([0, 0, 0, 0, 0, 0])
+var _component_totals := PackedInt64Array()
 var _component_samples: int = 0
 
 
 func _initialize() -> void:
+	_component_totals.resize(Journey.StepPhase.size())
 	_profile = "--profile" in OS.get_cmdline_user_args()
 	_visual = "--visual" in OS.get_cmdline_user_args()
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--physics-hz="):
+			var value := argument.trim_prefix("--physics-hz=")
+			if not value.is_valid_int() or int(value) < 1 or int(value) > 240:
+				printerr("--physics-hz must be an integer from 1 to 240.")
+				quit(1)
+				return
+			Engine.physics_ticks_per_second = int(value)
 	_run.call_deferred()
 
 
@@ -52,29 +62,32 @@ func _run() -> void:
 	debug.enabled = false
 	_journey.camera_rig.orbit_distance = 360
 	_journey.camera_rig.focus_fleet()
-	for tick in range(3600):
+	# Keep native and scripted time aligned, with the same durations at each rate.
+	var rate := Engine.physics_ticks_per_second
+	var delta := 1.0 / rate
+	for tick in range(60 * rate):
 		await physics_frame
-		if tick == 120:
+		if tick == 2 * rate:
 			_begin_phase("combat_debug_off")
-		if tick == 1800:
+		if tick == 30 * rate:
 			_finish_phase()
 			debug.enabled = true
 			_begin_phase("combat_debug_on")
 		var start := Time.get_ticks_usec()
-		_journey.step_simulation(1.0 / 60.0)
+		_journey.step_simulation(delta)
 		if not _phase.is_empty():
 			_steps.append(float(Time.get_ticks_usec() - start) / 1000.0)
-			for component in range(6):
+			for component in range(Journey.StepPhase.size()):
 				_component_totals[component] += _journey.step_timings_usec[component]
 			_component_samples += 1
 		_sample_counts()
-		if tick > 0 and tick % 600 == 0:
+		if tick > 0 and tick % (10 * rate) == 0:
 			_replace_casualty(Factions.PLAYER)
 			_replace_casualty(Factions.ENEMY)
-		if tick == 900 or tick == 2700:
+		if tick == 15 * rate or tick == 45 * rate:
 			_journey.origin.shift_segments(-1)
-		_journey.camera_rig.pan(Vector3(cos(tick / 180.0), 0, sin(tick / 180.0)) * 0.35)
-		if _visual and tick == 1500:
+		_journey.camera_rig.pan(Vector3(cos(tick * delta / 3.0), 0, sin(tick * delta / 3.0)) * (21.0 * delta))
+		if _visual and tick == 25 * rate:
 			await _capture("combat-220")
 		_check(_journey.ships.size() == 220, "Both fleets remain at the benchmark population after replacements.")
 	_finish_phase()
@@ -86,12 +99,12 @@ func _run() -> void:
 	_journey.combat_enabled = false
 	_journey.projectiles.clear()
 	_begin_phase("miss_volleys_debug_off")
-	for tick in range(720):
+	for tick in range(12 * rate):
 		await physics_frame
 		var start := Time.get_ticks_usec()
-		_journey.step_simulation(1.0 / 60.0)
-		_journey.projectiles.step(1.0 / 60.0)
-		if tick % 120 == 0:
+		_journey.step_simulation(delta)
+		_journey.projectiles.step(delta)
+		if tick % (2 * rate) == 0:
 			for ship in _journey.ships:
 				for side in [-1, 1]:
 					_journey.projectiles.fire(ship, ship.global_position + Vector3.UP * MISS_HEIGHT, Vector3(side * CANNON.launch_speed, 0, 0), CANNON)
@@ -164,6 +177,7 @@ func _replace_casualty(faction: StringName) -> void:
 func _begin_phase(name: String) -> void:
 	_phase = name
 	_previous_frame = Time.get_ticks_usec()
+	_phase_started_usec = _previous_frame
 
 
 func _sample_frame() -> void:
@@ -186,15 +200,18 @@ func _finish_phase() -> void:
 	var result := {"name": _phase, "step_ms": _summary(_steps), "frame_ms": _summary(_frames), "gpu_ms": _summary(_gpu), "peak_shots": _peak_shots, "peak_nodes": _peak_nodes, "peak_memory_bytes": _peak_memory, "end_nodes": Performance.get_monitor(Performance.OBJECT_NODE_COUNT), "end_memory_bytes": Performance.get_monitor(Performance.MEMORY_STATIC)}
 	result["engine_physics_ms"] = _summary(_physics_ms)
 	result["step_scope"] = "Journey GDScript work; excludes subsequent native rigid-body integration/contact solving"
+	result["simulated_seconds"] = float(_steps.size()) / Engine.physics_ticks_per_second
+	result["elapsed_seconds"] = float(Time.get_ticks_usec() - _phase_started_usec) / 1000000.0
+	result["script_ms_per_simulated_second"] = result.step_ms.mean * Engine.physics_ticks_per_second
 	var budget_ms := 1000.0 / Engine.physics_ticks_per_second
 	result["physics_budget_ms"] = budget_ms
 	result["step_p95_within_budget"] = result.step_ms.p95 <= budget_ms
 	print("PERFORMANCE %s: script step p95 %.3f ms / %.3f ms budget (%s); assess engine physics and wall frames too." % [_phase, result.step_ms.p95, budget_ms, "within" if result.step_p95_within_budget else "EXCEEDED"])
 	if _component_samples > 0:
 		var components := {}
-		var names := ["decisions", "avoidance", "island_navigation", "force_submission", "projectiles_weapons", "cleanup_streaming"]
-		for index in range(6):
-			components[names[index]] = float(_component_totals[index]) / (1000.0 * _component_samples)
+		var names := Journey.StepPhase.keys()
+		for index in range(Journey.StepPhase.size()):
+			components[String(names[index]).to_lower()] = float(_component_totals[index]) / (1000.0 * _component_samples)
 		result["component_mean_ms"] = components
 	_results.append(result)
 	print("COMBAT_PHASE ", JSON.stringify(result))
@@ -246,7 +263,10 @@ func _summary(values: Array[float]) -> Dictionary:
 		return {}
 	var sorted := values.duplicate()
 	sorted.sort()
-	return {"n": sorted.size(), "p50": sorted[sorted.size() / 2], "p95": sorted[int((sorted.size() - 1) * 0.95)], "max": sorted.back()}
+	var total: float = 0.0
+	for value in values:
+		total += value
+	return {"mean": total / values.size(), "n": sorted.size(), "p50": sorted[sorted.size() / 2], "p95": sorted[int((sorted.size() - 1) * 0.95)], "max": sorted.back()}
 
 
 func _capture(label: String) -> void:

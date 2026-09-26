@@ -87,9 +87,9 @@ func accepts_direction(direction: Vector3) -> bool:
 	return direction.length_squared() > 0.000001 and (-global_basis.z).normalized().dot(direction.normalized()) >= _cone_cosine - 0.000001
 
 
-func step(delta: float, ship: Airship, ships: Array[Airship], projectiles: ProjectileController) -> void:
+func step(delta: float, ship: Airship, perception: CombatPerception, projectiles: ProjectileController) -> void:
 	if equipment != null:
-		equipment.step(delta, ship, ships, projectiles)
+		equipment.step(delta, ship, perception, projectiles)
 
 
 func _get_configuration_warnings() -> PackedStringArray:

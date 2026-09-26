@@ -1,6 +1,8 @@
 class_name Journey
 extends Node3D
 
+enum StepPhase { DECISIONS, AVOIDANCE, ISLAND_NAVIGATION, FORCE_SUBMISSION, PROJECTILES, WEAPONS, CLEANUP_STREAMING }
+
 @export var initial_ships: Array[Airship] = []
 @export var fleet: FleetController
 @export var origin: FloatingOrigin
@@ -23,11 +25,13 @@ var _next_ship_id: int = 1
 var _dead_ships: Array[Airship] = []
 var destroyed_count: int = 0
 var profile_steps: bool = false
-var step_timings_usec := PackedInt64Array([0, 0, 0, 0, 0, 0])
+var step_timings_usec := PackedInt64Array()
 var _avoidance := ShipAvoidance.new()
+var combat_perception := CombatPerception.new()
 
 
 func _ready() -> void:
+	step_timings_usec.resize(StepPhase.size())
 	for ship in initial_ships:
 		register_ship(ship)
 	fleet.initialize_anchor()
@@ -64,9 +68,14 @@ func register_ship(ship: Airship) -> void:
 
 func unregister_ship(ship: Airship) -> void:
 	ships.erase(ship)
+	combat_perception.forget(ship)
 	_dead_ships.erase(ship)
 	for other in ships:
 		other.combat.forget(ship)
+		for slot in other.mounted_slots:
+			var mounted := slot.equipment as MountedWeapon
+			if mounted != null:
+				mounted.forget(ship)
 	if ship.died.is_connected(_on_ship_died):
 		ship.died.disconnect(_on_ship_died)
 	var callback := unregister_ship.bind(ship)
@@ -88,6 +97,8 @@ func step_simulation(delta: float) -> void:
 		combat_spawner.step(delta, self)
 	_snapshot_ships()
 	fleet.advance(delta)
+	if combat_enabled:
+		combat_perception.rebuild(ships)
 	for ship in ships:
 		ship.combat_engaged = combat_enabled and ship.combat.prepare(delta, ship, ships, fleet)
 		if not ship.combat_engaged:
@@ -96,32 +107,34 @@ func step_simulation(delta: float) -> void:
 			elif ship.faction == Factions.ENEMY:
 				ship.set_preferred_velocity(Vector3.ZERO)
 	if profile_steps:
-		step_timings_usec[0] = Time.get_ticks_usec() - measured_at
+		step_timings_usec[StepPhase.DECISIONS] = Time.get_ticks_usec() - measured_at
 		measured_at = Time.get_ticks_usec()
-	_avoidance.prepare_neighbors(ships, _positions, _velocities)
-	for index in range(ships.size()):
-		_corrections[index] = ShipAvoidance.correction(index, ships, _positions, _velocities, _axes, _avoidance.neighbors(_positions[index]))
+	_avoidance.calculate(ships, _positions, _velocities, _axes, _corrections)
 	if profile_steps:
-		step_timings_usec[1] = Time.get_ticks_usec() - measured_at
+		step_timings_usec[StepPhase.AVOIDANCE] = Time.get_ticks_usec() - measured_at
 		measured_at = Time.get_ticks_usec()
-		step_timings_usec[2] = 0
+		step_timings_usec[StepPhase.ISLAND_NAVIGATION] = 0
 	# Submit control once per engine tick. Hull motion/contact solving happens in
 	# native physics; queries below still use the latest completed body state.
 	for index in range(ships.size()):
 		ships[index].apply_movement_forces(delta, _corrections[index], island_spawner.navigation_candidates(ships[index]), profile_steps)
 		if profile_steps:
-			step_timings_usec[2] += ships[index].navigation_time_usec
+			step_timings_usec[StepPhase.ISLAND_NAVIGATION] += ships[index].navigation_time_usec
 	if profile_steps:
-		step_timings_usec[3] = Time.get_ticks_usec() - measured_at - step_timings_usec[2]
+		step_timings_usec[StepPhase.FORCE_SUBMISSION] = Time.get_ticks_usec() - measured_at - step_timings_usec[StepPhase.ISLAND_NAVIGATION]
 		measured_at = Time.get_ticks_usec()
 	if combat_enabled:
 		projectiles.step(delta)
+	if profile_steps:
+		step_timings_usec[StepPhase.PROJECTILES] = Time.get_ticks_usec() - measured_at
+		measured_at = Time.get_ticks_usec()
+	if combat_enabled:
 		for ship in ships:
 			if ship.alive:
 				for slot in ship.mounted_slots:
-					slot.step(delta, ship, ships, projectiles)
+					slot.step(delta, ship, combat_perception, projectiles)
 	if profile_steps:
-		step_timings_usec[4] = Time.get_ticks_usec() - measured_at
+		step_timings_usec[StepPhase.WEAPONS] = Time.get_ticks_usec() - measured_at
 		measured_at = Time.get_ticks_usec()
 	_remove_dead_ships()
 	origin.recenter_if_needed(fleet.anchor.global_position.z)
@@ -133,7 +146,7 @@ func step_simulation(delta: float) -> void:
 		island_spawner.update_region(anchor_route_position())
 		terrain.update_region(fleet.anchor.global_position.x, anchor_route_position(), camera_rig.camera.global_position)
 	if profile_steps:
-		step_timings_usec[5] = Time.get_ticks_usec() - measured_at
+		step_timings_usec[StepPhase.CLEANUP_STREAMING] = Time.get_ticks_usec() - measured_at
 
 
 func allocate_ship_id() -> int:

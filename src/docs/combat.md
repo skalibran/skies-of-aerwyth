@@ -46,7 +46,7 @@ At the original 20-unit/s reference speed, a stationary equal-height 60-unit tar
 
 [`ProjectileController`](../../scripts/combat/projectile_controller.gd) advances all shots in one physics step using the constant-acceleration equation. Each shot owns local position, velocity, gravity, lifetime, captured source faction, a weak shooter reference for collision exclusion, and one shared-mesh visual. No rigid bodies, projectile areas, or per-shot timers are used.
 
-Each physics step sweeps its short arc chord through Godot's physics space. A curvature bound of `gravity * dt² / 8` subdivides unusually long steps to keep chord error below 0.01 units. At the normal 60 Hz rate, one ray per shot suffices. The first collision consumes the shot. An opposing ship takes five damage; allied ships and island colliders consume it without damage. Only the firing ship is excluded. A shot remains independent after its shooter or target disappears.
+Each physics step sweeps its short arc chord through Godot's physics space. A curvature bound of `gravity * dt² / 8` subdivides unusually long steps to keep chord error below 0.01 units. At the current 30 Hz rate and authored gravity, one ray per shot suffices. The first collision consumes the shot. An opposing ship takes five damage; allied ships and island colliders consume it without damage. Only the firing ship is excluded. A shot remains independent after its shooter or target disappears.
 
 Range is targeting distance, not arc length. Misses continue falling until impact or the eight-second lifetime, and can hit another ship beyond targeting range. Terrain and water have no colliders. The visible ball uses point collision, and chords test against the current physics snapshot; this is not continuous collision between arbitrary-speed moving shapes. Supported ship speeds and crossing targets are covered by the focused check.
 
@@ -64,21 +64,23 @@ Combat supplies only preferred movement. [`ShipFlight`](../../scripts/ships/ship
 
 Near engagement range, a ballistic reachability check can reduce stand-off distance every two seconds, down to twelve units; that reduced distance remains until the target changes. Relative-height goals shrink with it. This makes ships try to close when a nominally in-range target cannot be intercepted; it cannot guarantee catching a faster fleeing target. Without an eligible opponent, players resume anchor-relative travel and enemies brake; any active regrouping finishes first. The capped spawner continues. The player fleet alone controls the average and anchor slowdown. See [flight tuning and checks](movement.md#forward-flight-and-momentum).
 
-Mounted weapons first try the main target. With pass-by fire enabled, they then examine nearby hostile candidates in distance order. Searches are staggered at 0.2-second intervals, with at most four ballistic solves per search and a rotating fallback cursor to prevent starvation. Each search fires using current transforms and velocity. Pass-by shots do not change pursuit. Cooldowns are per mount, with no catch-up burst after a stall.
+Mounted weapons own a firing target independently of ship pursuit. Pursuit changes and target removal preserve each weapon's staggered search deadline, avoiding fleet-wide search bursts. At a staggered 0.2-second acquisition check they prefer a shootable main target, then a retained passer, then nearby alternatives. Reload runs independently: a ready weapon can keep firing at its retained target between acquisition checks. Every shot validates current range, target velocity, and the actual mount cone with a fresh ballistic solution. A closer passer alone does not replace a usable retained target. Disabling pass-by fire permits only the main target. Cooldowns remain per weapon, with no catch-up burst after a stall.
+
+Fallback searches reject out-of-range candidates and those outside a conservative cone expanded for gravity and target lead before ranking. They keep only the nearest untried candidates needed by the remaining four-attempt budget, including main/retained attempts in that budget. Equal distances use stable ship IDs. Failed-attempt IDs persist across searches so moving, unreachable nearby targets cannot starve farther candidates; exhaustion, successful shots, main-target changes, and removals clear the appropriate state. The search may rescan once if its remaining candidates disappeared or left range/cone. It never sorts the full candidate set. The cone filter can only reject impossible shots; exact firing permission still belongs to the ballistic solution and MountedSlot.
 
 ## Ownership and cleanup
 
 [`Journey`](../../scripts/world/journey.gd) orchestrates each physics step:
 
 1. Remove previously queued deaths, spawn the scheduled batch, snapshot ships, and advance the player anchor.
-2. Choose combat or travel intent; calculate ship separation from the common snapshot.
+2. Rebuild the derived combat-query snapshot, choose combat or travel intent, and calculate ship separation from the common movement snapshot.
 3. Route around islands and submit each ship's thrust/lift/drag forces and yaw torque once.
 4. Advance existing projectiles, resolve damage, and let surviving weapons fire. New shots begin traveling on the following tick.
 5. Unregister and free destroyed ships, then rebase and update scenery/progression.
 
 Force submission does not immediately move the hull. Godot/Jolt integrates rigid-body motion and resolves contacts for the next physics snapshot. Avoidance, aiming, and projectile queries read the latest completed body state; aiming and debug velocity use the body's `linear_velocity`. Hull X/Z rotation is locked while the visual child banks/pitches. Ship control does not overwrite physical transforms or velocities each frame, and projectiles remain scripted point sweeps.
 
-Airship owns health and emits one death signal. Death immediately prevents targeting/firing; Journey removes list entries after active loops, updates all registries, invalidates pursuit references, disables collision, and queues deletion. The existing camera falls back to fleet focus when its selected ship exits. IDs are allocated monotonically through Journey. Spawning uses a dedicated RNG and bounded attempts against ship/island clearance.
+Airship owns health and emits one death signal. Death immediately prevents targeting/firing; Journey removes list entries after active loops, updates all registries, invalidates pursuit, firing-target, and query references, disables collision, and queues deletion. The existing camera falls back to fleet focus when its selected ship exits. IDs are allocated monotonically through Journey. Spawning uses a dedicated RNG and bounded attempts against ship/island clearance.
 
 `health_changed` is the health owner's notification contract, including for later presentation; the slice has no health UI. Synchronous damage from a listener cannot repeat the death notification. `ShipCombat.clear_target()` clears pursuit/pass state while preserving anchor regrouping. A zero-duration Journey step only drains queued deaths and refreshes the fleet average/speed; it does not submit forces, fire weapons, spawn, or stream. It does not pause native physics. Disabling Journey callbacks also leaves inertia active; stationary test fixtures freeze their bodies explicitly.
 
@@ -88,11 +90,15 @@ The projectile root is registered once with FloatingOrigin. Shots store position
 
 ## Spatial filtering and measurement
 
+[`CombatPerception`](../../scripts/combat/combat_perception.gd) is a Journey-owned, derived spatial view of living registered ships. It supplies nearby-hostile queries and validity checks; it neither owns ships nor selects pursuit or firing targets. Its 100-unit cells are rebuilt each combat tick. Each searching ship lazily shares one nearby-candidate query among its mounts, with a radius covering the longest equipped range plus muzzle offsets. Individual mounts still filter exact range/cone. Death is checked immediately; unregistering removes membership, the stored cell entry, and cached queries before deletion. The snapshot records each ship's cell so removal remains correct if its position changes afterward. Subsequent rebuilding incorporates spawns, loadout changes, and origin shifts. Snapshot reuse is limited to one combat tick.
+
+ShipAvoidance evaluates each unordered candidate pair once and adds opposite corrections to the two ships. Sorted index traversal preserves accumulation order, and clamping happens after all contributions. The predictive capsule math stays inside the traversal loop because the measured per-pair helper overhead erased the first trial's saving. The old directed calculation exists only as an independent regression oracle in check_combat.gd.
+
 Profiling the 220-ship scene justified two ordinary spatial filters. ShipAvoidance builds a three-dimensional cell map from each physics snapshot. Cell size conservatively covers the largest hull and relative speed over the existing two-second avoidance horizon. Neighbor indices are sorted to preserve the original accumulation order. Before calculating the closest capsule segments, an enclosing-sphere check rejects pairs that cannot interact at the predicted instant. The full-scan calculation remains available as a regression oracle for neighbor filtering.
 
 IslandSpawner owns a two-dimensional cell map of loaded island centers. Its conservative search radius comes from ShipIslandNavigation's existing look-ahead and hull/island clearance. It rebuilds after loading, unloading, or rebasing; the navigation algorithm still performs its exact height and segment tests. Neither filter changes the steering rules or creates another authoritative ship/island registry.
 
-In a short headless 220-ship component sample on the development workstation, ship avoidance decreased from 7.74 to 4.67 ms and island navigation from 8.57 to 1.17 ms per step. These historical scripted-flight samples explain the optimization, not an endgame frame-rate guarantee. `Journey.profile_steps` enables separate decision, avoidance, island-navigation, force-submission/candidate-query, weapon/projectile, and cleanup/streaming timings. Native rigid-body integration/contact solving happens outside this script timer. Normal play does not enable these timers.
+In a short headless 220-ship component sample on the development workstation, ship avoidance decreased from 7.74 to 4.67 ms and island navigation from 8.57 to 1.17 ms per step. These historical scripted-flight samples explain the optimization, not an endgame frame-rate guarantee. `Journey.profile_steps` enables separate decision/query, avoidance, island-navigation, force-submission/candidate-query, projectile, weapon, and cleanup/streaming timings. The `Journey.StepPhase` enum defines the timing slots shared by runtime and benchmark. The [combat performance integration](combat_performance.md) records the current comparison. Native rigid-body integration/contact solving happens outside this script timer. Normal play does not enable these timers.
 
 ## Validation
 
@@ -101,6 +107,8 @@ Follow [AGENTS.md](../../AGENTS.md) for serial launches, process-local APPDATA i
 ```text
 --headless --path <absolute-project-path> --fixed-fps 60 --script res://scripts/tools/check_combat.gd --log-file <external-log-file>
 ```
+
+The legacy combat, movement, island-navigation, and fleet-scale checks explicitly select their 60 Hz reference physics rate, independently of the 30 Hz playtest default. `check_ship_flight.gd` selects its own 30/60/120 Hz turning rates. `check_combat_targeting.gd` checks spatial queries against full scans, shortlist ordering/fairness, removed targets, independent firing/acquisition clocks, and conservative cone rejection against the full solver. It also exercises the composed Journey through death, unregistering, external deletion, equipment replacement, and repeated teardown with live shots. Run it headless with the same isolated environment. Append `-- --fixtures-only` to `check_combat.gd` to skip its timed Journey encounter.
 
 For rendered inspection, omit `--headless`, append `-- --visual`, and set `AERWYTH_CAPTURE_DIR` to an existing external directory. The check captures a mixed-fleet fight, a close Kestrel view, and `combat-cohesion.png` after three simulated minutes. It covers ballistic reference trajectories, moving/elevated/unreachable targets, tangent roots, cone boundaries, independent instance state, empty and utility-only slots, tier validation, equipment replacement/cleanup, rearming, pass-by fire, ally/scenery interception, shooter removal, expiry, rebasing, capped waves, deaths, camera fallback, and spatial-filter coverage. It also measures ship/mean distances from the anchor and verifies anchor-relative spawns with a displaced average and an origin shift. Existing movement, island-navigation, and 128-ship checks remain relevant.
 
@@ -112,7 +120,25 @@ For combined rendering/simulation measurements, omit `--headless` and `--fixed-f
 --path <absolute-project-path> --script res://scripts/tools/check_combat_scale.gd --log-file <external-log-file> -- --profile
 ```
 
+Append `--physics-hz=60` or `--physics-hz=30` after `--` to compare rates without changing project settings. Without it, the benchmark uses the project rate. Both native physics and scripted deltas follow the selected rate; phase duration, event times, and camera speed stay constant. Mean script cost per simulated second and elapsed versus simulated durations are recorded alongside percentiles.
+
 This writes `combat-220.json` with hardware, renderer, frame/script-step/GPU percentiles, the sampled engine physics-time monitor, component timings, shot counts, memory/node counts, and effective flight/weapon/rigid-body settings for comparison. It reports the p95 script-step budget separately from functional assertions: a correctness PASS does not mean performance passed. `engine_physics_ms` samples Godot's `Performance.TIME_PHYSICS_PROCESS` monitor, whose reporting is coarser than the per-step script timer; it is not an isolated solver timer and must not be added to script time. Whole-frame measurements include the native integration cost. Debug-off/on phases occur at different stages of the battle, so their difference does not isolate debug drawing cost. Append `--visual` with an external capture directory for a fleet image. Measurements on the development machine do not establish low-end hardware performance.
+
+## Integration audit (2026-09-26)
+
+The audit retained the existing ownership boundaries: Journey registers and sequences ships, ShipCombat chooses pursuit/course, CombatPerception supplies derived queries, mounted equipment owns firing state, and Godot/Jolt owns physical integration. The current Kestrel composition connects those owners correctly. There is no active CharacterBody3D declaration, legacy movement call, alternate integration path, or duplicate linear/angular velocity state. Avoidance, island detours, and desired velocities are still necessary inputs to force control; physical contact response does not replace them.
+
+The audit reproduced and corrected three lifecycle issues:
+
+- Unregistering cleared perception membership but left the object in its spatial cell. A query after deletion could fail while assigning a freed object to the typed iteration variable, before reaching its validity check. The snapshot now records each ship's cell and removes that entry before deletion, even if the ship moved after the snapshot.
+- Losing a retained firing target reset its search timer, allowing many ready weapons to search together. Removal now preserves the acquisition phase, as pursuit changes already do.
+- Pursuit selection and direct launch validation could still consider a live target queued for deletion. Both now exclude it consistently with perception and retained-target validation.
+
+The regression uses the composed Journey for lethal damage, explicit unregistering, and external deletion; it queries afterward without hiding cleanup errors behind a new snapshot. It also replaces equipped weapons and tears down/recreates Journey with live projectiles, checking for orphan Nodes. These checks, headless import, the existing flight/contact check, and the full three-minute combat/lifecycle check passed. The ordinary encounter reached both 100-ship caps and completed 194 destructions with 28,379 shots. This finite run does not establish session-length stability.
+
+Static reference and UID checks found no missing runtime resource paths, orphan script/shader sidecars, or unreferenced runtime scripts/scenes/resources. The health notification signal, equipment base hooks, and diagnostic counters have deliberate API/test consumers; they are not abandoned controller remnants. The unused Kestrel model remains an intentionally excluded authoring source. Runtime files retain their feature folders, checks stay under `scripts/tools`, and active plans/gates remain under `src/docs/todo`. The benchmark reproduction instructions now name the required `AERWYTH_PROFILE_DIR` correctly.
+
+This is an integration audit of the current slice, not release sign-off. Current measurements are in [combat performance](combat_performance.md); hardware validation, broader loadout planning, release/reliability coverage, and tuning remain tracked in [COMBAT-01–04](todo/todo-combat.txt). The following sections preserve earlier measurements.
 
 ## Anchor cohesion validation
 

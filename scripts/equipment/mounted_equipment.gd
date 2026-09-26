@@ -15,5 +15,5 @@ func initialize_phase(_entity_id: int, _slot_index: int) -> void:
 	pass
 
 
-func step(_delta: float, _ship: Airship, _ships: Array[Airship], _projectiles: ProjectileController) -> void:
+func step(_delta: float, _ship: Airship, _perception: CombatPerception, _projectiles: ProjectileController) -> void:
 	pass

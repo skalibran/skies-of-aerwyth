@@ -125,11 +125,11 @@ For the combat slice, author the enabled set within the ship scene. A later visu
 
 Each weapon slot has a configurable **fire at targets in range** option, enabled by default. With this option enabled, the mounted weapon can fire on opposing targets within its range while the vessel moves toward its main target. This allows pass-by fire against other ships encountered en route.
 
-The weapon's firing target can differ from the vessel's main target. Pass-by fire does not itself change which ship the vessel pursues. Disabling the option makes that slot focus on the vessel's main target and wait until it can fire at that target within range.
+Weapons retain a usable firing target and reacquire at bounded intervals independently of reload. Acquisition prefers a shootable main target, then the retained passer, then nearby alternatives. Each shot uses current target motion and the actual slot cone. The weapon's firing target can differ from the vessel's main target. Pass-by fire does not itself change which ship the vessel pursues. Disabling the option makes that slot focus on the vessel's main target and wait until it can fire at that target within range.
 
 Weapon range and the slot's authored firing cone still apply. The cone governs angular firing permission; the weapon governs distance. The ship's own hull and balloon do not impose an additional obstruction test. The option permits opportunistic attacks; it does not make every opposing ship simultaneously attackable. Friendly and enemy weapon slots follow the same rules and default.
 
-**TBD:** Selection among multiple targets in range, preference when the main target is also in range, and detailed targeting rules for specialized weapons such as anti-projectile systems.
+**TBD:** Final acquisition cadence and detailed targeting rules for specialized weapons such as anti-projectile systems. Current fallback searches rank a bounded shortlist of nearest untried candidates and remember failures across searches.
 
 ## Floating islands and production
 

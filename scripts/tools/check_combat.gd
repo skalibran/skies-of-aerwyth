@@ -13,9 +13,12 @@ var _projectiles: ProjectileController
 var _origin: FloatingOrigin
 var _next_id: int = 5000
 var _visual: bool = false
+var _perception := CombatPerception.new()
 
 
 func _initialize() -> void:
+	# These fixtures use a fixed 60 Hz reference timeline.
+	Engine.physics_ticks_per_second = 60
 	_visual = "--visual" in OS.get_cmdline_user_args()
 	_run.call_deferred()
 
@@ -40,11 +43,12 @@ func _run() -> void:
 	await _check_impacts()
 	_fixture.queue_free()
 	await process_frame
-	await _check_journey()
+	if "--fixtures-only" not in OS.get_cmdline_user_args():
+		await _check_journey()
 	for failure in _failures:
 		printerr("FAIL: ", failure)
 	if _failures.is_empty():
-		print("PASS: ballistic combat, factions, mounts, impacts, spawning, lifecycle, and journey checks.")
+		print("PASS: combat fixtures%s." % ("" if "--fixtures-only" in OS.get_cmdline_user_args() else " and journey lifecycle"))
 	quit(0 if _failures.is_empty() else 1)
 
 
@@ -95,24 +99,54 @@ func _check_neighbor_filter() -> void:
 	var positions := PackedVector3Array()
 	var velocities := PackedVector3Array()
 	var axes := PackedVector3Array()
+	var corrections := PackedVector3Array()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 651
 	for index in range(24):
-		var position := Vector3((index / 2 - 6) * 35, (index % 3) * 2, 0) + Vector3.RIGHT * (index % 2) * 4
-		var ship := _add_ship(Factions.NEUTRAL, position)
+		var ship := _add_ship(Factions.NEUTRAL, Vector3.ZERO)
+		ship.hull_radius = rng.randf_range(1.0, 4.0)
+		ship.hull_half_segment = rng.randf_range(0.0, 6.0)
 		ships.append(ship)
-		positions.append(position)
-		velocities.append(Vector3(rng.randf_range(-18, 18), rng.randf_range(-2, 2), rng.randf_range(-18, 18)))
-		axes.append(Vector3.FORWARD.rotated(Vector3.UP, rng.randf_range(-PI, PI)))
 	var avoidance := ShipAvoidance.new()
-	for shift in [Vector3.ZERO, Vector3(0, 0, -1024)]:
-		for index in range(positions.size()):
-			positions[index] += shift
-		avoidance.prepare_neighbors(ships, positions, velocities)
+	for layout in range(5):
+		positions.clear()
+		velocities.clear()
+		axes.clear()
 		for index in range(ships.size()):
-			var complete := ShipAvoidance.correction(index, ships, positions, velocities, axes)
-			var filtered := ShipAvoidance.correction(index, ships, positions, velocities, axes, avoidance.neighbors(positions[index]))
-			_check(complete.distance_to(filtered) < 0.00001, "Spatial ship filtering preserves avoidance across cell boundaries and rebases.")
+			@warning_ignore("integer_division")
+			var position := Vector3((index / 2 - 6) * 35, (index % 3) * 2, 0) + Vector3.RIGHT * (index % 2) * 4
+			var velocity := Vector3(rng.randf_range(-18, 18), rng.randf_range(-2, 2), rng.randf_range(-18, 18))
+			if layout == 1:
+				position = Vector3(rng.randf_range(-8, 8), rng.randf_range(-3, 3), rng.randf_range(-8, 8))
+			elif layout == 2:
+				position = Vector3.ZERO
+				velocity = Vector3.ZERO
+			elif layout == 3:
+				position = Vector3(index * 2 - 24, 0, 0)
+				velocity = -position.normalized() * 18
+			elif layout == 4:
+				position *= 10
+				velocity = Vector3.FORWARD * 12
+			positions.append(position)
+			velocities.append(velocity)
+			axes.append(Vector3.FORWARD.rotated(Vector3.UP, rng.randf_range(-PI, PI)))
+		for reversed_order in [false, true]:
+			if reversed_order:
+				ships.reverse()
+				positions.reverse()
+				velocities.reverse()
+				axes.reverse()
+			for shift in [Vector3.ZERO, Vector3(0, 0, -1024)]:
+				for index in range(positions.size()):
+					positions[index] += shift
+				avoidance.calculate(ships, positions, velocities, axes, corrections)
+				for index in range(ships.size()):
+					var expected := _reference_avoidance(index, ships, positions, velocities, axes)
+					_check(expected.distance_to(corrections[index]) < 0.0001, "Shared avoidance pairs preserve the directed reference across hulls, overlaps, order changes, and rebases.")
+	avoidance.calculate([ships[0]], PackedVector3Array([Vector3.ZERO]), PackedVector3Array([Vector3.ZERO]), PackedVector3Array([Vector3.FORWARD]), corrections)
+	_check(corrections.size() == 1 and corrections[0] == Vector3.ZERO, "A resized singleton snapshot has no stale correction.")
+	avoidance.calculate([], PackedVector3Array(), PackedVector3Array(), PackedVector3Array(), corrections)
+	_check(corrections.is_empty(), "An empty avoidance snapshot clears its output.")
 	for ship in ships:
 		ship.queue_free()
 	await process_frame
@@ -149,10 +183,10 @@ func _check_mounts_and_health() -> void:
 	enemy.linear_velocity = Vector3.ZERO
 	player.combat.target = far_enemy
 	right.fire_at_targets_in_range = false
-	right.step(1.0, player, [player, enemy, far_enemy], _projectiles)
+	right.step(1.0, player, _observe([player, enemy, far_enemy]), _projectiles)
 	_check(right_weapon.shots_fired == 0, "Main-target-only mode does not fire at a pass-by target.")
 	right.fire_at_targets_in_range = true
-	right.step(1.0, player, [player, enemy, far_enemy], _projectiles)
+	right.step(1.0, player, _observe([player, enemy, far_enemy]), _projectiles)
 	_check(right_weapon.shots_fired == 1 and player.combat.target == far_enemy, "Pass-by fire does not change pursuit target.")
 	_check(left_weapon.cooldown == 0 and right_weapon.cooldown == 2 and right_weapon.weapon.reload_seconds == 2, "Cooldowns belong to independent equipped weapons.")
 	player.take_damage(5, Factions.PLAYER)
@@ -182,21 +216,23 @@ func _check_mounts_and_health() -> void:
 func _check_search_budget() -> void:
 	var player := _add_ship(Factions.PLAYER, Vector3.ZERO)
 	var ships: Array[Airship] = [player]
-	# Five nearer targets are outside the right-hand cone. The cursor must reach
-	# a sixth eligible target without an unbounded search on either update.
+	# Five nearer targets pass the cheap cone bound but cannot be intercepted.
+	# Failed attempts must not starve the sixth, reachable target.
 	for index in range(5):
-		ships.append(_add_ship(Factions.ENEMY, Vector3(-10 - index * 8, 0, 0)))
+		var fleeing := _add_ship(Factions.ENEMY, Vector3(10 + index * 8, 0, 0))
+		fleeing.linear_velocity = Vector3.RIGHT * 300
+		ships.append(fleeing)
 	var eligible := _add_ship(Factions.ENEMY, Vector3(60, 0, 0))
 	ships.append(eligible)
 	var slot := player.mounted_slots[1]
 	var weapon := slot.equipment as MountedWeapon
 	for search in range(2):
 		var solves := weapon.solve_count
-		slot.step(1.0, player, ships, _projectiles)
+		slot.step(1.0, player, _observe(ships), _projectiles)
 		_check(weapon.solve_count - solves <= MountedWeapon.SOLVE_BUDGET, "Every ready weapon search respects its ballistic solve budget.")
 		if search == 0:
 			_check(weapon.shots_fired == 0, "The first bounded search skips only ineligible nearby targets.")
-	_check(weapon.shots_fired == 1 and player.combat.target == null, "Rotating fallback searches reach a farther eligible opponent without changing pursuit.")
+	_check(weapon.shots_fired == 1 and player.combat.target == null, "Remembered fallback attempts reach a farther eligible opponent without changing pursuit.")
 	_projectiles.clear()
 	for ship in ships:
 		ship.queue_free()
@@ -231,7 +267,7 @@ func _check_equipment_assignment() -> void:
 	_check(slot.assign_equipment(utility_scene) and not slot.equipment is MountedWeapon, "A tier-one slot accepts non-weapon equipment.")
 	_check(not player.combat.has_target(), "Changing equipment invalidates the old combat bearing and target.")
 	player.mounted_slots[0].assign_equipment(null)
-	slot.step(1.0, player, [player, enemy], _projectiles)
+	slot.step(1.0, player, _observe([player, enemy]), _projectiles)
 	_check(not player.combat.prepare(1.0, player, [player, enemy], _fleet) and not player.combat.has_target(), "Empty and utility-only platforms continue travel instead of pursuing enemies.")
 	_check(slot.assign_equipment(null) and slot.equipment == null and slot.equipment_scene == null, "A slot can be explicitly left empty.")
 	_check(slot.assign_equipment(CANNON_SCENE), "An empty platform slot can be armed again.")
@@ -540,3 +576,47 @@ func _capture(label: String) -> void:
 func _check(condition: bool, message: String) -> void:
 	if not condition and message not in _failures:
 		_failures.append(message)
+
+
+# Independent directed oracle, retained only in validation.
+static func _reference_avoidance(index: int, ships: Array[Airship], positions: PackedVector3Array, velocities: PackedVector3Array, axes: PackedVector3Array) -> Vector3:
+	var ship := ships[index]
+	var result := Vector3.ZERO
+	for other_index in range(ships.size()):
+		if index == other_index:
+			continue
+		var other := ships[other_index]
+		var relative_position := positions[index] - positions[other_index]
+		var relative_velocity := velocities[index] - velocities[other_index]
+		var reach := ship.hull_half_segment + other.hull_half_segment + ship.hull_radius + other.hull_radius + 0.8
+		if relative_position.length() > reach + relative_velocity.length() * 2.0:
+			continue
+		var approach_time: float = 0.0
+		if relative_velocity.length_squared() > 0.001:
+			approach_time = clampf(-relative_position.dot(relative_velocity) / relative_velocity.length_squared(), 0.0, 2.0)
+		var first := positions[index] + velocities[index] * approach_time
+		var second := positions[other_index] + velocities[other_index] * approach_time
+		# The hull capsules cannot meet if their enclosing spheres are separated
+		# at the same predicted instant used by the exact segment calculation.
+		if first.distance_squared_to(second) >= reach * reach:
+			continue
+		var first_axis := axes[index] * ship.hull_half_segment
+		var second_axis := axes[other_index] * other.hull_half_segment
+		var closest := Geometry3D.get_closest_points_between_segments(first - first_axis, first + first_axis, second - second_axis, second + second_axis)
+		var separation: Vector3 = closest[0] - closest[1]
+		var clearance := ship.hull_radius + other.hull_radius + 0.8
+		var distance := separation.length()
+		if distance >= clearance:
+			continue
+		var direction := separation / distance if distance > 0.05 else (Vector3.RIGHT if ship.entity_id < other.entity_id else Vector3.LEFT)
+		# Exact head-on approaches need lateral steering rather than mutual braking.
+		if relative_velocity.length_squared() > 0.1 and absf(direction.dot(relative_velocity.normalized())) > 0.85:
+			direction = (Vector3.RIGHT if ship.entity_id < other.entity_id else Vector3.LEFT)
+		var urgency := (1.0 - distance / clearance) * (1.0 - 0.5 * approach_time / 2.0)
+		result += direction * urgency * 5.0
+	return result.limit_length(5.0)
+
+
+func _observe(ships: Array[Airship]) -> CombatPerception:
+	_perception.rebuild(ships)
+	return _perception
