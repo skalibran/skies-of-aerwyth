@@ -62,8 +62,8 @@ Problem:
   16000-meter half-width. The camera can move 9000 meters from the fleet and see
   another 30000 meters, so islands can appear/disappear within a permitted view.
 - Atmospheric fog builds from the camera and fully conceals scenery at 28000
-  meters, hiding the 30000-meter cutoff. Island streaming edges can still fall inside that visible
-  range, especially when the free camera approaches the fleet viewing boundary.
+  meters, hiding the 30000-meter cutoff. Island streaming edges can still fall
+  inside that visible range, especially near the fleet viewing boundary.
 - Simply loading more solid islands also increases navigation-query work.
 
 Completion criteria:
