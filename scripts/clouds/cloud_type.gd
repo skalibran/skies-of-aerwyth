@@ -10,10 +10,10 @@ extends Resource
 @export_range(0.1, 1.0, 0.01) var depth_ratio: float = 0.55
 @export_range(0.08, 1.0, 0.01) var height_ratio: float = 0.38
 @export_range(1, 20, 1) var puff_count: int = 7
-## Lobe radius relative to the sampling width; smaller values open gaps.
+## Lobe radius relative to the sampling width. Smaller values open gaps.
 @export_range(0.15, 0.65, 0.01) var puff_size: float = 0.3
 @export_range(0.0, 0.5, 0.01) var erosion: float = 0.1
-## Cut the normalized shape below this height; -1 retains a rounded underside.
+## Cut the normalized shape below this height. -1 retains a rounded underside.
 @export_range(-1.0, 0.0, 0.05) var base_cut: float = -0.7
 @export_range(0.0, 0.6, 0.01) var curl: float = 0.0
 

@@ -25,7 +25,7 @@ func _run() -> void:
 	_check_live_spawn_layers(journey)
 	_check_proximity_slots()
 	var initial := _snapshot(clouds)
-	print("Cloud field: %d clouds, %d cached meshes; Journey startup %d ms." % [initial.size(), clouds.meshes.size(), Time.get_ticks_msec() - started])
+	print("Cloud field: %d clouds, %d cached meshes. Journey startup %d ms." % [initial.size(), clouds.meshes.size(), Time.get_ticks_msec() - started])
 	_check(initial.size() > 0, "Journey starts with a populated cloud field.")
 	_check(clouds.meshes.size() == PROFILE.types.size() * PROFILE.variants_per_type, "Mesh cache is bounded by types and variants.")
 	_check(clouds.volumes.size() == clouds.meshes.size(), "Each shared mesh retains one matching occupancy volume.")

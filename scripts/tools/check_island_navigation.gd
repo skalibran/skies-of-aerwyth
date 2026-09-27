@@ -68,15 +68,16 @@ func _run() -> void:
 		_check(ship.position.distance_to(island.position) > island.navigation_radius + ship.hull_radius, "The moving hull stays outside island solids.")
 		if tick == 15 * Engine.physics_ticks_per_second:
 			var offset := ship.navigation.goal_offset
+			var random_state := ship.navigation.rng.state
 			var request := ship.navigation_velocity
 			ship.position.z += 10240
 			target.position.z += 10240
 			island.position.z += 10240
 			fleet.marker.position.z += 10240
 			ship.apply_movement_forces(dt, Vector3.ZERO, islands)
-			_check(ship.navigation.goal_offset == offset and ship.navigation_velocity.distance_to(request) < 0.02, "Rebasing preserves obstacle-relative route choices.")
+			_check(ship.navigation.goal_offset.distance_to(offset) < 0.01 and ship.navigation.rng.state == random_state and ship.navigation_velocity.distance_to(request) < 0.02, "Rebasing preserves obstacle-relative route choices.")
 	_check(ship.position.x > -130, "A bounded obstacle route makes progress toward the selected target.")
-	# An enclosing obstruction offers no legal outward route; the ship must wait.
+	# An enclosing obstruction offers no legal outward route. The ship must wait.
 	ship.freeze = true
 	ship.position = fleet.marker.position
 	island.position = fleet.marker.position
@@ -123,6 +124,8 @@ func _check_route_pacing() -> void:
 	fleet.marker = Node3D.new()
 	fixture.add_child(fleet.marker)
 	fleet.minimum_radius = 400.0
+	# Keep the waypoint short so this fixture isolates world-motion lookahead.
+	fleet.local_step = 50.0
 	var ship := KESTREL.instantiate() as Airship
 	ship.entity_id = 17
 	ship.freeze = true

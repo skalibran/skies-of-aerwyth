@@ -128,7 +128,7 @@ func _check_sampling() -> void:
 	var available_levels := int((PROFILE.grassland.height_range.y - PROFILE.grassland.height_range.x) / PROFILE.voxel_size) + 1
 	_check(grass_levels.size() >= available_levels / 2, "Grassland uses a substantial part of its expanded height range.")
 	_check(grass_levels.keys().max() > 200.0 and grass_levels.keys().min() < 0.0, "Grasslands rise above the previous plateau limit while retaining ponds.")
-	print("Grassland levels: ", grass_levels.keys(), "; sampled relief: grass ", grass_relief, ", mountains ", mountain_relief)
+	print("Grassland levels: ", grass_levels.keys(), ". Sampled relief: grass ", grass_relief, ", mountains ", mountain_relief)
 
 
 func _check_grid() -> void:
@@ -357,7 +357,7 @@ func _capture_water(journey: Journey) -> void:
 	await RenderingServer.frame_post_draw
 	var after := root.get_texture().get_image()
 	_check(after.save_png(directory.path_join("water-rebased.png")) == OK, "Rebased pond capture saved.")
-	# Ignore subpixel rasterization differences; a moved pattern would change whole squares.
+	# Ignore subpixel rasterization differences. A moved pattern would change whole squares.
 	var difference := 0.0
 	for y in range(0, before.get_height(), 4):
 		for x in range(0, before.get_width(), 4):
@@ -366,7 +366,7 @@ func _capture_water(journey: Journey) -> void:
 			difference += absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b)
 	var samples := ceilf(before.get_width() / 4.0) * ceilf(before.get_height() / 4.0)
 	_check(difference / samples < 0.01, "Rendered water and shorelines remain stable across origin shifts.")
-	print("Pond at ", pond, "; mean rendered rebase difference: ", difference / samples)
+	print("Pond at ", pond, ". Mean rendered rebase difference: ", difference / samples)
 	journey.origin.shift_segments(1)
 	material.set_shader_parameter("animation_speed", 0.4)
 	eye.global_position = pond + Vector3(80.0, 70.0, 100.0)

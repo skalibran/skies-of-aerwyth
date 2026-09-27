@@ -8,13 +8,13 @@ ENCOUNTER AUTHORING
 [ ] Define intended reinforcement placement beyond the current bounded random spawning.
 [ ] Playtest pacing, threat-budget growth, entry weights/costs, repetition limits,
     and guaranteed charged/bonus fleets. Difficulty score currently sums entry cost.
-[ ] Calibrate any future stat-derived cost estimates against measured combat outcomes;
-    preserve explicit authored costs and overrides.
+[ ] Calibrate any future stat-derived cost estimates against measured combat outcomes.
+    Preserve explicit authored costs and overrides.
 
 [ ] COMBAT-01: Endgame CPU and hardware acceptance.
     Measure the current 70-friendly/150-enemy workload after the movement refactor.
     Historical measurements in ../combat_performance.md describe earlier revisions.
-    Include native physics and whole-frame costs; Journey's script timer excludes them.
+    Include native physics and whole-frame costs. Journey's script timer excludes them.
     The accepted target is sustained 30 FPS on Steam Deck with headroom. Verify on
     that device in a release export. Desktop checks do not close this gate.
     Steam Deck deployment/testing remain deferred at the user's request.
@@ -23,32 +23,28 @@ ENCOUNTER AUTHORING
 
 [ ] COMBAT-02: Broader target and loadout authoring.
     Implement the GDD's category priorities independently of navigation. A selected
-    target may be across the fleet sphere; local waypoint distance must not filter it.
-    Define guiding/secondary weapon roles and diagnostics for empty/unknown bearings,
-    unusable preferences, short-range/slow weapons, vertical mounts, and mixed loadouts.
-    Define reachable engagement spacing for heterogeneous weapons. Navigation currently
-    caps the authored engagement distance to fit the sphere, while weapons independently
-    validate exact ballistics. Preserve transformed muzzle/cone checks for final shots.
-    Add coverage for these combinations and equipment removal/replacement.
+    target may be across the fleet sphere. Local waypoint distance must not filter it.
+    Add authoring diagnostics for empty/unknown positions, unusable preferences, and
+    attack spacing unsuitable for equipped short-range/slow weapons or mixed loadouts.
+    Keep movement independent of weapon cones and range. Preserve transformed muzzle
+    and cone checks for final shots. Current authored-position and equipment-change
+    coverage is described in ../combat.md under Target selection and navigation.
 
 [ ] COMBAT-03: Release reliability.
-    Exercise extended spawn/death/equipment-replacement/rebase and teardown cycles;
-    verify stable node/memory counts after warm-up. Focused checks cover finite runs.
-    Cover new reload cadences at the accepted 30 Hz before adding faster weapons;
-    reload currently emits at most once per physics tick and discards overshoot.
+    Exercise extended spawn/death/equipment-replacement/rebase and teardown cycles.
+    Verify stable node/memory counts after warm-up. Focused checks cover finite runs.
+    Cover new reload cadences at the accepted 30 Hz before adding faster weapons.
+    Reload currently emits at most once per physics tick and discards overshoot.
     Add adversarial current-speed crossing shots, several lethal projectiles in one
     tick, full-hull tunneling sweeps, and an obstacle immediately beyond the final
     lifetime-clipped segment. Existing impact fixtures retain 200 m/s solver references.
     Add build-time encounter resource validation or release-safe rejection with
-    resource paths; current content validators use debug assertions. Invalid
+    resource paths. Current content validators use debug assertions. Invalid
     authored content must not become an endlessly retried placement request.
-    Configure and verify a release export; the project has no export preset.
+    Configure and verify a release export. The project has no export preset.
 
 [ ] COMBAT-04: Hands-on combat acceptance.
     Playtest the moving battles and overlapping waves, sphere sizing, local movement and transitions.
     Automated checks do not establish movement feel or balance.
-    Decide whether Kestrel should keep its literal asymmetric preferred directions:
-    left is omitted while the unusable back preference remains authored.
-    Confirm the 1000 m/s cannon trial: at 1000-meter level range with gravity 30,
-    the arc rises about 3.75 meters, versus 112.9 meters at the 200 m/s reference.
-    Preserve those authored values until that decision.
+    Playtest the current 200-meter range and 500 m/s cannon launch speed.
+    Preserve authored weapon values while evaluating navigation and firing.

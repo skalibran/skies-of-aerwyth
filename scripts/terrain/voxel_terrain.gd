@@ -166,7 +166,7 @@ func build_pending(limit: int) -> void:
 
 
 func _build_initial_coverage(root_x: int, root_z: int) -> void:
-	# Coarse coverage appears immediately; source detail is refined in the background.
+	# Coarse coverage appears immediately. Source detail is refined in the background.
 	var size := profile.root_size()
 	for z in range(-chunk_radius, chunk_radius + 1):
 		var start := TerrainGrid.tile_start(root_z + z, size)

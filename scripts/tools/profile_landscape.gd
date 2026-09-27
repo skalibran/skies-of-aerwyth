@@ -190,7 +190,7 @@ func _compare_cells() -> void:
 					started = Time.get_ticks_usec()
 					var shape := mesh.create_trimesh_shape()
 					shape_ms.append((Time.get_ticks_usec() - started) / 1000.0)
-					# Resource cooking only; there is no wreck simulation in this experiment.
+					# This experiment only cooks resources. It does not simulate wrecks.
 					shape = null
 					var instance := MeshInstance3D.new()
 					instance.mesh = mesh

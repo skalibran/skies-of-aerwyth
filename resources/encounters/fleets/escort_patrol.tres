@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://dxptkbbfnfuq1" path="res://scripts/encounters/fleet_preset.gd" id="1"]
 [ext_resource type="Script" uid="uid://by5jkikbnrdqu" path="res://scripts/encounters/fleet_member.gd" id="2"]
-[ext_resource type="Resource" path="res://resources/ships/manta.tres" id="3"]
+[ext_resource type="Resource" uid="uid://wdfb0oo54sdt" path="res://resources/ships/manta.tres" id="3"]
 [ext_resource type="Resource" path="res://resources/ships/swift.tres" id="4"]
 
 [sub_resource type="Resource" id="Member0"]

@@ -13,7 +13,7 @@ func build(sampler: TerrainSampler, world_x: int, segment_z: int, offset_z: int,
 	return mesh
 
 
-## Worker jobs return plain mesh arrays; GPU resources are created on the main thread.
+## Worker jobs return plain mesh arrays. GPU resources are created on the main thread.
 func build_arrays(sampler: TerrainSampler, world_x: int, segment_z: int, offset_z: int, size: int, seal_edges: bool = true) -> Array:
 	_vertices.clear()
 	_normals.clear()
@@ -138,5 +138,5 @@ func _quad(corner: Vector3, u: Vector3, v: Vector3, normal: Vector3, color: Colo
 	for vertex in range(4):
 		_normals.append(normal)
 		_colors.append(color)
-	# Godot front faces are clockwise; u cross v points into the solid.
+	# Godot front faces are clockwise. The cross product of u and v points into the solid.
 	_indices.append_array(PackedInt32Array([start, start + 1, start + 2, start, start + 2, start + 3]))

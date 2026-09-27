@@ -19,12 +19,13 @@ func _run() -> void:
 	_check_coordinates()
 	_journey = JOURNEY_SCENE.instantiate() as Journey
 	root.add_child(_journey)
+	var initial_marker := _journey.fleet.marker.global_position
 	_check_marker_control()
 	await _frames(3 * _rate)
 	_check(_journey.ships.size() == 3 and _journey.fleet.members.size() == 3, "Normal play retains exactly three friendly Kestrels without automatic reinforcements.")
 	_check(_journey.projectiles.fired_count == 0 and _journey.encounters.planned_waves == 0, "The starting fleet travels before reaching the first threat milestone.")
 	_journey.combat_enabled = false
-	_check(_journey.fleet.marker.position.z < -10.0, "The fleet makes forward progress.")
+	_check(_journey.fleet.marker.position.z < initial_marker.z - 10.0, "The fleet makes forward progress.")
 	_check_initial_surroundings()
 	await _capture("fleet")
 	if _visual:
@@ -508,7 +509,7 @@ func _check_long_travel() -> void:
 	_check(_journey.island_spawner.records.size() > _journey.island_spawner.active.size(), "Passed islands retain their records after unloading.")
 	_check(_journey.ships[0].navigation.goals_reached > first_goal + 2, "Ships repeatedly reach moving navigation goals.")
 	_check_spawns()
-	print("Long travel: ", _journey.origin.shift_count, " shifts; ", _journey.island_spawner.records.size(), " records; ", _journey.island_spawner.active.size(), " live islands.")
+	print("Long travel: ", _journey.origin.shift_count, " shifts, ", _journey.island_spawner.records.size(), " records, ", _journey.island_spawner.active.size(), " live islands.")
 	# A fresh origin near an enormous route position keeps scene transforms small.
 	_set_distant_origin()
 	await _frames(3 * _rate)
@@ -551,11 +552,12 @@ func _check_marker_control() -> void:
 	start = fleet.marker.position
 	_advance_fleet(fleet, _delta, false)
 	_check(fleet.marker.position.z < start.z and fleet.speed == fleet.cruise_speed, "Clearing combat neither stops nor restarts marker acceleration.")
-	fleet.marker.position.z = -499.9
+	var milestone := _journey.encounters.profile.wave_distance(1)
+	fleet.marker.position.z = -milestone + 0.1
 	ship.position = fleet.marker.position + Vector3(0, 20, 0)
 	start = fleet.marker.position
 	_advance_fleet(fleet, _delta, true)
-	_check(fleet.marker.position.z < -500.0 and fleet.speed == fleet.cruise_speed, "Crossing a wave milestone does not cap travel or reduce speed.")
+	_check(fleet.marker.position.z < -milestone and fleet.speed == fleet.cruise_speed, "Crossing a wave milestone does not cap travel or reduce speed.")
 	var old_radius := fleet.radius
 	var big := SHIP_SCENE.instantiate() as Airship
 	fixture.add_child(big)

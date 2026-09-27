@@ -22,7 +22,7 @@ func _ready() -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	# Reuse the unit mesh; the marker parent supplies travel and origin shifts.
+	# Reuse the unit mesh. The marker parent supplies travel and origin shifts.
 	scale = Vector3.ONE * fleet.radius
 
 

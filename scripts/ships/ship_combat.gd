@@ -15,9 +15,10 @@ const DIRECTIONS: Dictionary[String, Vector3] = {
 const STRONG_VERTICAL_BIAS: float = 0.5
 
 var target: Airship
-var engagement_range: float = 120.0
+var positions := PackedStringArray()
 var _search_time: float = 0.0
-var _bearings: Array[Vector3] = []
+var _authored_positions := PackedStringArray()
+var _armed: bool = false
 
 
 static func direction(name: String) -> Vector3:
@@ -49,7 +50,9 @@ func forget(removed: Airship) -> void:
 
 func clear_target() -> void:
 	target = null
-	_bearings.clear()
+	positions.clear()
+	_authored_positions.clear()
+	_armed = false
 	_search_time = 0.0
 
 
@@ -57,15 +60,14 @@ func prepare(delta: float, ship: Airship, ships: Array[Airship], fleet: FleetCon
 	var reach := fleet.radius + fleet.entry_range
 	if has_target() and (not Factions.are_hostile(ship.faction, target.faction) or target.global_position.distance_to(fleet.marker.global_position) > reach):
 		clear_target()
-	if has_target() and _bearings.is_empty():
-		_collect_bearings(ship)
+	if positions.is_empty() or _authored_positions != ship.preferred_combat_positions:
+		_collect_positions(ship)
+	if not _armed or positions.is_empty():
+		target = null
+		return false
 	_search_time -= delta
-	engagement_range = minf(ship.engagement_distance, fleet.radius * 0.75)
 	if not has_target() and _search_time <= 0.0:
 		_search_time = 0.2
-		_collect_bearings(ship)
-		if _bearings.is_empty():
-			return false
 		var nearest: float = INF
 		for other in ships:
 			if not other.alive or other.is_queued_for_deletion() or not Factions.are_hostile(ship.faction, other.faction):
@@ -76,38 +78,17 @@ func prepare(delta: float, ship: Airship, ships: Array[Airship], fleet: FleetCon
 			if distance < nearest or (distance == nearest and is_instance_valid(target) and other.entity_id < target.entity_id):
 				target = other
 				nearest = distance
-	return has_target() and not _bearings.is_empty()
+	return has_target()
 
 
-func _collect_bearings(ship: Airship) -> void:
-	_bearings.clear()
-	for name in ship.preferred_combat_positions:
-		var candidate := direction(name)
-		if candidate == Vector3.ZERO:
-			continue
-		for slot in ship.mounted_slots:
-			if slot.equipment is MountedWeapon and slot.accepts_direction(ship.global_basis * candidate):
-				_bearings.append(candidate)
-				break
-
-
-func score_destination(ship: Airship, destination: Vector3, requested_velocity: Vector3) -> float:
-	if not has_target():
-		return 0.0
-	var course := destination - ship.global_position
-	var primary := ShipFlight.primary_axis(ship)
-	# Flight turns toward world velocity, including the moving marker's contribution.
-	var heading := ship.global_rotation.y
-	if Vector2(requested_velocity.x, requested_velocity.z).length_squared() > 1.0:
-		heading = atan2(-requested_velocity.x, -requested_velocity.z) - atan2(-primary.x, -primary.z)
-	var toward_target := (target.global_position - destination).normalized()
-	var local_target := Basis(Vector3.UP, -heading) * toward_target
-	var presentation: float = -1.0
-	for candidate in _bearings:
-		presentation = maxf(presentation, candidate.dot(local_target))
-	var current_distance := ship.global_position.distance_to(target.global_position)
-	var next_distance := destination.distance_to(target.global_position)
-	var range_gain := (absf(current_distance - engagement_range) - absf(next_distance - engagement_range)) / maxf(1.0, course.length())
-	# Distant entry favors approach; nearby maneuvers favor usable firing bearings.
-	var presentation_weight := 3.0 if current_distance < engagement_range * 2.0 else 1.0
-	return presentation * presentation_weight + range_gain * 2.0
+func _collect_positions(ship: Airship) -> void:
+	_authored_positions = ship.preferred_combat_positions.duplicate()
+	positions.clear()
+	_armed = false
+	for slot in ship.mounted_slots:
+		if slot.equipment is MountedWeapon:
+			_armed = true
+	# Movement follows authored positions. Equipment cones only govern firing.
+	for name in _authored_positions:
+		if direction(name) != Vector3.ZERO and name not in positions:
+			positions.append(name)

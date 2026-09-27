@@ -1,7 +1,7 @@
 class_name WaveOverride
 extends Resource
 
-## Wave 1 follows the first threat increase; default spacing is 500 meters.
+## Wave 1 follows first_wave_distance. Later waves are spaced by threat_distance.
 @export_range(1, 10000, 1, "or_greater") var wave_number: int = 1
 @export var guaranteed: Array[GuaranteedSpawn] = []
 ## Disable for an entirely authored encounter.

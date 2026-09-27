@@ -7,8 +7,8 @@ Supporting measurements: src/docs/terrain_performance.md.
 This file owns GEN-01 through GEN-05 and their active completion criteria.
 
 The current 50-meter scenery prototype passes its measured workload. These
-items block the associated production features or final shipping sign-off;
-they do not imply that the existing terrain needs a wholesale rewrite.
+items block the associated production features or final shipping sign-off.
+They do not imply that the existing terrain needs a wholesale rewrite.
 
 [ ] GEN-01 - Persistent generation identity and old-island reconstruction
 
@@ -44,14 +44,14 @@ Implemented wreck baseline:
 
 Remaining completion criteria:
 - Resolve water landing/sinking behavior with the user. Water currently has no
-  collider or buoyancy; a wreck can land on full-detail submerged terrain.
+  collider or buoyancy. A wreck can land on full-detail submerged terrain.
 - For scenery-model placement, use source height/biome samples, stable cell
   identities, and a dedicated placement seed. Reject underwater samples for
-  vegetation that belongs on dry land; never consume island or ship RNG.
+  vegetation that belongs on dry land. Never consume island or ship RNG.
 - Define support and display rules for persistent ground props independently of
   the temporary wreck visibility rule. Source queries must remain authoritative.
 - Validate combined combat/terrain/wreck costs on target low-end hardware under
-  GEN-05; finite workstation checks do not establish an endgame frame budget.
+  GEN-05. Finite workstation checks do not establish an endgame frame budget.
 
 [ ] GEN-03 - Island visibility does not cover the full camera view
 
@@ -64,7 +64,7 @@ Problem:
 - Atmospheric fog builds from the camera and fully conceals scenery at 28000
   meters, hiding the 30000-meter cutoff. Island streaming edges can still fall
   inside that visible range, especially near the fleet viewing boundary.
-- Simply loading more solid islands also increases navigation-query work.
+- Loading more solid islands also increases navigation-query work.
 
 Completion criteria:
 - Define distant island loading/fading separately from nearby collision and
@@ -79,8 +79,8 @@ Required before: Shipping and loading-flow sign-off.
 Problem:
 - Startup builds 81 coarse terrain patches synchronously, blocking for about
   0.9-1.1 seconds on the reviewed workstation.
-- Later mesh publication has a soft time budget and whole-layout swaps;
-  neither guarantees a maximum frame cost.
+- Later mesh publication has a soft time budget and whole-layout swaps.
+  Neither guarantees a maximum frame cost.
 - Settings validation relies on assertions, and worker completion assumes
   valid mesh results without a recoverable generation-failure path.
 
@@ -101,7 +101,7 @@ Problem:
   and 10.1 ms p95 without combat, vegetation, or wreck physics.
 - Combat work has since added conservative ship/island spatial filters. The
   scripted forward-flight 220-ship trial still measured 17.31 / 22.69 ms median/p95
-  in its first combat phase; see src/docs/combat.md for conditions and limits.
+  in its first combat phase. See src/docs/combat.md for conditions and limits.
 - Navigation-debug caching improved presentation cost, but occasional frame
   spikes remain. Terrain-only timings do not establish a whole-game budget.
 
@@ -115,10 +115,10 @@ Completion criteria:
 
 Terrain tuning validation:
 - Re-profile when changing voxel size, landforms, camera range, or Detail Distance.
-  Preserve geometry/color/grid contracts in check_terrain.gd; smaller cells can
+  Preserve geometry/color/grid contracts in check_terrain.gd. Smaller cells can
   increase meshing/cliff costs.
 - Decide terrain interaction before raising landforms into ship/island flight
-  space; current navigation handles floating islands only.
+  space. Current navigation handles floating islands only.
 
 Reviewed hardware: Ryzen 7 9800X3D / RTX 4090, Godot 4.7.1, D3D12, 1920x1080.
 Preserve existing mesh merging, adaptive detail, bounded worker generation,

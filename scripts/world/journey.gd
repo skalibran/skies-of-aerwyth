@@ -20,7 +20,7 @@ enum StepPhase { DECISIONS, AVOIDANCE, NAVIGATION, FORCE_SUBMISSION, PROJECTILES
 @export var wreck_controller: WreckController
 @export var encounters: EncounterDirector
 @export var combat_enabled: bool = true
-## Bound picker instantiation work; excess requests remain queued in order.
+## Bound picker instantiation work. Excess requests remain queued in order.
 @export_range(1, 8, 1) var friendly_spawns_per_tick: int = 2
 
 var ships: Array[Airship] = []
@@ -140,7 +140,7 @@ func step_simulation(delta: float) -> void:
 		step_timings_usec[StepPhase.PROJECTILES] = Time.get_ticks_usec() - measured_at
 		measured_at = Time.get_ticks_usec()
 	# Submit control once per engine tick. Hull motion/contact solving happens in
-	# native physics; queries below still use the latest completed body state.
+	# native physics. Queries below still use the latest completed body state.
 	var steering_usec: int = 0
 	for index in range(ships.size()):
 		ships[index].apply_movement_forces(delta, _corrections[index], island_spawner.navigation_candidates(ships[index]), profile_steps)

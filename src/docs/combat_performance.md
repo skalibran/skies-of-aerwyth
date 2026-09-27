@@ -1,6 +1,6 @@
 # Combat performance integration
 
-The measurements and spatial values below retain the units used when recorded. The subsequent [meter conversion](world_units.md) scales lengths, linear speeds, and linear accelerations by ten; its before/after measurements are recorded separately.
+The measurements and spatial values below retain the units used when recorded. The subsequent [meter conversion](world_units.md) scales lengths, linear speeds, and linear accelerations by ten. Its before/after measurements are recorded separately.
 
 Measured 2026-09-25 against `main` at `5b26406`. The selective integration reduces early-combat mean script cost by 30.1% at matched 60 Hz. Avoidance and weapon candidate work account for most of the saving. The 30 Hz playtest setting further reduces script work per simulated second, independently of the algorithm changes. These desktop measurements do not establish Steam Deck performance.
 
@@ -8,20 +8,20 @@ Measured 2026-09-25 against `main` at `5b26406`. The selective integration reduc
 
 - `ShipAvoidance` evaluates each unordered pair once, accumulating opposite corrections before clamping. Predictive capsule geometry, conservative neighbors, passing side, and accumulation order remain equivalent to the directed reference. Pair math stays inline because the earlier per-pair helper trial erased the saving.
 - `CombatPerception` provides a tick-local spatial view derived from Journey's registry. Searching mounts on a ship share nearby-hostile candidates, including muzzle offsets. It owns no pursuit or firing decisions.
-- `MountedWeapon` filters range and a conservative gravity/lead-expanded cone before selecting a tiny nearest-untried shortlist. Four total target attempts bound each ready step. Failed-attempt history prevents starvation when distance order changes; successful shots retain a firing target independently of pursuit. Every shot still calculates exact ballistics.
-- Acquisition and reload have separate clocks. Changing pursuit preserves the staggered acquisition deadline. Journey retains coarse, opt-in component timings with named phases; the benchmark aligns native physics, script delta, and event schedules at the selected rate.
+- `MountedWeapon` filters range and a conservative gravity/lead-expanded cone before selecting a tiny nearest-untried shortlist. Four total target attempts bound each ready step. Failed-attempt history prevents starvation when distance order changes. Successful shots retain a firing target independently of pursuit. Every shot still calculates exact ballistics.
+- Acquisition and reload have separate clocks. Changing pursuit preserves the staggered acquisition deadline. Journey retains coarse, opt-in component timings with named phases. The benchmark aligns native physics, script delta, and event schedules at the selected rate.
 
 Journey remains the registry/orchestration owner, ShipCombat owns pursuit and movement intent, and MountedWeapon owns firing. Live swept projectiles, ShipFlight, ship definitions, authored bearings, and ordinary spawns retain their existing implementations/settings. Category priorities and guiding-loadout planning were not imported from the larger experiment. Their status is tracked in [combat gates](todo/todo-combat.txt).
 
 ## Method
 
-Godot 4.7.1 stable, Jolt, Forward Plus through D3D12, Windows, Ryzen 7 9800X3D, RTX 4090, 1920 x 1080. Render rate was uncapped; profiling launches used neither `--fixed-fps` nor screenshot capture. The project baseline is 30 physics Hz with interpolation; the now-removed process-local overrides supplied the historical 60 Hz comparison.
+Godot 4.7.1 stable, Jolt, Forward Plus through D3D12, Windows, Ryzen 7 9800X3D, RTX 4090, 1920 x 1080. Render rate was uncapped. Profiling launches used neither `--fixed-fps` nor screenshot capture. The project baseline is 30 physics Hz with interpolation. The now-removed process-local overrides supplied the historical 60 Hz comparison.
 
 `check_combat_scale.gd` uses 70 player ships and 150 enemies, 5,000 health, two cannons per ship, two-second reload, launch speed 100, gravity 3, range 100, and eight-second projectile lifetime. All serialized benchmark configuration values match across the three final comparison runs. The encounter lasts 60 simulated seconds: two warm-up seconds, 28 debug-off seconds, then 30 debug-on seconds. Ten scheduled casualties are replaced, two origin shifts occur, and the camera/landscape keep moving. A separate twelve-second phase fires synchronized miss volleys above the scenery, reaching 1,760 simultaneous shots before cleanup.
 
-One fresh main run and one final integration run at each rate are reported here. They are paired scenario measurements, not repeated statistical trials. Main used the same rate-aware benchmark and split component instrumentation. Retained firing targets alter encounter outcomes, so these results cannot isolate each optimization's contribution. Debug-off and debug-on occur at different battle stages; their difference cannot isolate debug drawing cost.
+One fresh main run and one final integration run at each rate are reported here. They are paired scenario measurements, not repeated statistical trials. Main used the same rate-aware benchmark and split component instrumentation. Retained firing targets alter encounter outcomes, so these results cannot isolate each optimization's contribution. Debug-off and debug-on occur at different battle stages. Their difference cannot isolate debug drawing cost.
 
-Script timings cover the Journey call, excluding subsequent native body integration/contact solving. Godot's physics monitor overlaps this work and is sampled at a coarser cadence; do not add it to script time. Uncapped wall-frame distributions contain frames without a physics tick. Script CPU milliseconds per simulated second, phase elapsed time, and wall frames together describe the workload better than a single inferred FPS number.
+Script timings cover the Journey call, excluding subsequent native body integration/contact solving. Godot's physics monitor overlaps this work and is sampled at a coarser cadence. Do not add it to script time. Uncapped wall-frame distributions contain frames without a physics tick. Script CPU milliseconds per simulated second, phase elapsed time, and wall frames together describe the workload better than a single inferred FPS number.
 
 ## Matched 60 Hz result
 
@@ -35,7 +35,7 @@ Script timings cover the Journey call, excluding subsequent native body integrat
 | Later combat median / p95 | 12.750 / 16.809 ms | 9.771 / 11.566 ms | 31.2% p95 |
 | Miss-volley median / p95 | 6.556 / 9.357 ms | 5.879 / 6.910 ms | 26.2% p95 |
 
-Early decision/query work rose slightly, from 0.731 to 0.815 ms per tick, including the new spatial snapshot. Projectile processing remained small: 0.082 versus 0.086 ms. Sharing a perception query is an ownership improvement and supports cheaper candidate work; this comparison does not claim that the helper alone produced the weapon saving.
+Early decision/query work rose slightly, from 0.731 to 0.815 ms per tick, including the new spatial snapshot. Projectile processing remained small: 0.082 versus 0.086 ms. Sharing a perception query is an ownership improvement and supports cheaper candidate work. This comparison does not claim that the helper alone produced the weapon saving.
 
 | Whole-run evidence | Main 60 Hz | Integration 60 Hz | Integration 30 Hz |
 | --- | ---: | ---: | ---: |
@@ -49,7 +49,7 @@ Early decision/query work rose slightly, from 0.731 to 0.815 ms per tick, includ
 | Shots fired, including miss volleys | 11,449 | 12,123 | 12,164 |
 | Hostile / allied impacts | 6,227 / 2,534 | 6,640 / 2,777 | 6,692 / 2,757 |
 
-Main exceeded the 16.67 ms scripted-step budget and accumulated physics catch-up frames. The final integration's script p95 is inside that budget; native physics/render work still applies, and later wall-frame p95 remains slightly above 16.67 ms. This is not a claim of locked 60 FPS.
+Main exceeded the 16.67 ms scripted-step budget and accumulated physics catch-up frames. The final integration's script p95 is inside that budget. Native physics/render work still applies, and later wall-frame p95 remains slightly above 16.67 ms. This is not a claim of locked 60 FPS.
 
 The first integration run exposed a scheduling regression: early script median was 10.167 ms but p95 reached 33.948 ms. Resetting each weapon's acquisition timer when pursuit changed synchronized searches across the fleet. Preserving its existing deadline reduced final early p95 to 14.405 ms. A focused regression made twelve ships acquire pursuit together and verified their searches remained spread at 30 and 60 Hz. The maintained fixture now runs once at the 30 Hz project baseline.
 
@@ -65,9 +65,20 @@ Fewer ticks reduce repeated avoidance, movement, and projectile work. Time-based
 
 ## Correctness and resource observations
 
-All three scale runs passed functional assertions, including casualties/replacements, population, damage, allied interception, rebasing, the 1,760-shot workload, and projectile cleanup. Peak combat nodes stayed between 4,835 and 4,875; all miss phases peaked at 6,942. Godot's reported static memory peaked at 119.64 / 120.94 MB in main's early/later combat, 120.22 / 121.56 MB after integration at 60 Hz, and 120.64 / 121.76 MB at 30 Hz. Miss peaks were 134.73 / 135.25 / 135.37 MB respectively. These are short-run observations, not a leak or session-lifetime certification.
+All three scale runs passed functional assertions, including casualties/replacements, population, damage, allied interception, rebasing, the 1,760-shot workload, and projectile cleanup. Peak combat nodes stayed between 4,835 and 4,875. All miss phases peaked at 6,942. Godot's reported static memory peaked at 119.64 / 120.94 MB in main's early/later combat, 120.22 / 121.56 MB after integration at 60 Hz, and 120.64 / 121.76 MB at 30 Hz. Miss peaks were 134.73 / 135.25 / 135.37 MB respectively. These are short-run observations, not a leak or session-lifetime certification.
 
-Focused validation covers the directed avoidance oracle over mixed hulls, dense/coincident/head-on layouts, reordered registries and rebasing; spatial-query/full-scan agreement; exact shortlist ties and fairness; removal/exhaustion; retained-target validation; ten-shot/s firing at 30/60/120 Hz; staggered acquisition; and 900 seeded cone comparisons against the full ballistic solver. Existing ship-flight, movement/input, island-navigation, and 128-ship travel checks also passed. The combat runtime notes describe [repeatable validation](combat.md#validation).
+Focused validation covers:
+
+- The directed avoidance oracle over mixed hulls, dense/coincident/head-on layouts, reordered registries and rebasing.
+- Spatial-query/full-scan agreement.
+- Exact shortlist ties and fairness.
+- Removal/exhaustion.
+- Retained-target validation.
+- Ten-shot/s firing at 30/60/120 Hz.
+- Staggered acquisition.
+- 900 seeded cone comparisons against the full ballistic solver.
+
+Existing ship-flight, movement/input, island-navigation, and 128-ship travel checks also passed. The combat runtime notes describe [repeatable validation](combat.md#validation).
 
 The final headless editor import passed. A separate rendered ordinary encounter passed all fixtures and three simulated minutes of lifecycle checks at its 60 Hz reference rate: both faction caps reached 100, 189 ships were destroyed/replaced, and 27,895 shots were fired. Captures confirmed mixed-faction tint, mounted primitives, visible cannonballs, vertical spread, and the cohesive fleet after three minutes. This accelerated functional run is not an FPS benchmark or a hands-on assessment of the 30 Hz default.
 
@@ -83,9 +94,9 @@ After the [registry and targeting cleanup](combat.md#spatial-filtering-and-measu
 | Later combat | 10.224 / 12.293 ms | 10.207 / 12.455 ms | 16.085 ms |
 | Miss volleys | 5.634 / 6.274 ms | 5.873 / 8.690 ms | 7.473 ms |
 
-Combat mean cost stayed within 0.4% of the prior run. The miss phase had a higher timing tail, despite virtually unchanged median (5.702 versus 5.714 ms) and lower wall-frame p95. Its combat/query work is disabled and projectile code is unchanged; this single repeat does not establish the cause of the tail difference. All script p95 values stayed within the 33.33 ms step budget. Engine physics monitor p95 was 20.386 / 17.669 / 12.933 ms; as above, it overlaps script work. Peak reported static memory was 120.17 / 121.42 / 135.03 MB. No on-device or release-export claim follows from this desktop check.
+Combat mean cost stayed within 0.4% of the prior run. The miss phase had a higher timing tail, despite virtually unchanged median (5.702 versus 5.714 ms) and lower wall-frame p95. Its combat/query work is disabled and projectile code is unchanged. This single repeat does not establish the cause of the tail difference. All script p95 values stayed within the 33.33 ms step budget. Engine physics monitor p95 was 20.386 / 17.669 / 12.933 ms. As above, it overlaps script work. Peak reported static memory was 120.17 / 121.42 / 135.03 MB. No on-device or release-export claim follows from this desktop check.
 
-Audit logs and the new JSON are under `C:/Users/lukas/AppData/Local/Temp/aerwyth-combat-audit-18086b2c5e0a4d6a905eda7af3be289f/`, with the rendered comparison in `profile30/`. `targeting-before.log` preserves the intentionally failing reproductions; the final targeting, flight, combat, import, and scale logs are clean.
+Audit logs and the new JSON are under `C:/Users/lukas/AppData/Local/Temp/aerwyth-combat-audit-18086b2c5e0a4d6a905eda7af3be289f/`, with the rendered comparison in `profile30/`. `targeting-before.log` preserves the intentionally failing reproductions. The final targeting, flight, combat, import, and scale logs are clean.
 
 ## Reproduction and local evidence
 
@@ -95,15 +106,15 @@ The measurements above preserve the historical rate comparison. Current checks u
 --path <absolute-project-path> --script res://scripts/tools/check_combat_scale.gd --log-file <external-log-file> -- --profile
 ```
 
-`combat-220.json` records the effective configuration, phase timings, counters, and resource samples at the project physics rate. Do not use fixed render FPS for performance runs. Functional fixtures also use the project rate; alternate-rate comparisons are no longer part of validation.
+`combat-220.json` records the effective configuration, phase timings, counters, and resource samples at the project physics rate. Do not use fixed render FPS for performance runs. Functional fixtures also use the project rate. Alternate-rate comparisons are no longer part of validation.
 
-Local evidence for this pass is under `C:/Users/lukas/AppData/Local/Temp/aerwyth-clean-combat-13b851f876214525a2cead4cd18e302c/`: `baseline60/`, `final60/`, and `optimized30/` contain the reported JSON/logs. `optimized60/` retains the intermediate scheduling regression. Temporary captures/logs are not repository artifacts; the measurements above preserve the findings if those files are removed.
+Local evidence for this pass is under `C:/Users/lukas/AppData/Local/Temp/aerwyth-clean-combat-13b851f876214525a2cead4cd18e302c/`: `baseline60/`, `final60/`, and `optimized30/` contain the reported JSON/logs. `optimized60/` retains the intermediate scheduling regression. Temporary captures/logs are not repository artifacts. The measurements above preserve the findings if those files are removed.
 
 ## Death-smoke optimization (2026-09-26)
 
-The ordinary fleet view was CPU-limited by accumulated death effects. Smoke now stops and hides permanently on first ground contact. Kestrel's two authored points feed one GPU system, preserving 48 particles per point and the five-second lifetime. Systems share an immutable process material; physics-clock manual emission replaces per-render-frame material updates. Culling bounds discard expired trail positions using one-second buckets. See [smoke authoring](combat.md#death-smoke-authoring).
+The ordinary fleet view was CPU-limited by accumulated death effects. Smoke now stops and hides permanently on first ground contact. Kestrel's two authored points feed one GPU system, preserving 48 particles per point and the five-second lifetime. Systems share an immutable process material. Physics-clock manual emission replaces per-render-frame material updates. Culling bounds discard expired trail positions using one-second buckets. See [smoke authoring](combat.md#death-smoke-authoring).
 
-Compared the earlier FPS investigation with one fresh 90-second encounter after the final changes: Godot 4.7.1 development executable, Ryzen 7 9800X3D / RTX 4090, D3D12 Forward+, actual 1280 x 800 rendering, uncapped FPS, 30 Hz project physics, normal fleet camera, ten spawns per faction per second and 100 living ships per faction cap. Physics, combat, terrain, and wreck retention remained active. External scripts instantiate Journey, submit its step once per native physics frame, and collect wall-frame/render timings; launches ran serially with isolated APPDATA. No fixed render FPS was used for profiling.
+Compared the earlier FPS investigation with one fresh 90-second encounter after the final changes: Godot 4.7.1 development executable, Ryzen 7 9800X3D / RTX 4090, D3D12 Forward+, actual 1280 x 800 rendering, uncapped FPS, 30 Hz project physics, normal fleet camera, ten spawns per faction per second and 100 living ships per faction cap. Physics, combat, terrain, and wreck retention remained active. External scripts instantiate Journey, submit its step once per native physics frame, and collect wall-frame/render timings. Launches ran serially with isolated APPDATA. No fixed render FPS was used for profiling.
 
 | Encounter window | Before FPS | After FPS | Living, before / after | Wrecks, before / after | Active GPU smoke systems, before / after |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -116,7 +127,7 @@ In the 50-60 second window, mean wall-frame time fell from 25.83 to 10.26 ms (2.
 
 The final headless editor import, ship-flight check, and rendered wreck check passed. The wreck check verifies first-contact shutdown, no revival on LOD reveal, shared materials, multiple emission points in one GPU system, bounded trails, native settling, rebasing, expiry, and orphan-free teardown. Captures were inspected for falling trails, smoke-free settled wrecks, both source points, and fresh smoke after hiding/revealing an airborne source.
 
-Baseline evidence: `C:/Users/lukas/AppData/Local/Temp/aerwyth-fps-audit-qxzz0f57/current.json`. Final evidence: `C:/Users/lukas/AppData/Local/Temp/aerwyth-smoke-opt-c3o096_v/`, including `profile_batched.gd`, `batched.json`, `batched.log`, `wrecks-batched-visual.log`, `flight.log`, and captures. To repeat while the external harness is available, prepare isolated APPDATA and a unique external log as required by AGENTS.md, then run the console binary with `--path <absolute-project-path> --script <external-profile_batched.gd> --log-file <external-log>`; update the harness's output directory for each run. The prior pass with separate systems is retained as `first-pass-optimized.json`; the table reports the final batched implementation.
+Baseline evidence: `C:/Users/lukas/AppData/Local/Temp/aerwyth-fps-audit-qxzz0f57/current.json`. Final evidence: `C:/Users/lukas/AppData/Local/Temp/aerwyth-smoke-opt-c3o096_v/`, including `profile_batched.gd`, `batched.json`, `batched.log`, `wrecks-batched-visual.log`, `flight.log`, and captures. To repeat while the external harness is available, prepare isolated APPDATA and a unique external log as required by AGENTS.md, then run the console binary with `--path <absolute-project-path> --script <external-profile_batched.gd> --log-file <external-log>`. Update the harness's output directory for each run. The prior pass with separate systems is retained as `first-pass-optimized.json`. The table reports the final batched implementation.
 
 ## Cannon smoke and 500 health (2026-09-26)
 
@@ -128,15 +139,15 @@ A new 90-second ordinary encounter used the same workstation, renderer, resoluti
 | 50-60 s | 481.2 | 9.26 ms | 199 | 10 | 10 |
 | 80-90 s | 386.8 | 10.38 ms | 198 | 53 | 41 |
 
-All 15,482 shots emitted muzzle smoke through one shared batch, with no bursts dropped by its cosmetic budget. At 80-90 seconds, render CPU mean was 0.76 ms, GPU mean 0.35 ms, and Journey script mean 7.96 ms per physics tick. The much smaller wreck population accompanies higher health; this combined gameplay/presentation change does not isolate the cost of muzzle smoke or establish Steam Deck FPS.
+All 15,482 shots emitted muzzle smoke through one shared batch, with no bursts dropped by its cosmetic budget. At 80-90 seconds, render CPU mean was 0.76 ms, GPU mean 0.35 ms, and Journey script mean 7.96 ms per physics tick. The much smaller wreck population accompanies higher health. This combined gameplay/presentation change does not isolate the cost of muzzle smoke or establish Steam Deck FPS.
 
 The editor import, default combat fixtures, and focused headless/rendered cannon-smoke checks passed. Inspected captures show the plume and preservation across rebasing. The focused check also covers opt-in, successful-shot triggering, opposite muzzle directions, shared batching, cosmetic overload without lost projectiles, expiry, shooter removal, and teardown. Local evidence is under `C:/Users/lukas/AppData/Local/Temp/aerwyth-cannon-smoke-75phphyu/`, including `profile_cannon_smoke.gd`, `cannon-smoke.json`, `profile.log`, and `cannon-smoke-final.log`. The external harness uses the same invocation procedure as above.
 
 ## Concealed spawn arrival regression (2026-09-27)
 
-Twelve friendly Kestrel requests at startup reproduced a persistent stall behind their spawn isles. All twelve ships had blocked navigation and zero speed; their route allowances also stopped the marker. The navigator repeatedly searched 32 destinations inside the sphere at five travel speeds, then retried during steering, although the isle obstructed the entire set. The spawn positions themselves were collision-free.
+Twelve friendly Kestrel requests at startup reproduced a persistent stall behind their spawn isles. All twelve ships had blocked navigation and zero speed. Their route allowances also stopped the marker. The navigator repeatedly searched 32 destinations inside the sphere at five travel speeds, then retried during steering, although the isle obstructed the entire set. The spawn positions themselves were collision-free.
 
-Ships outside the sphere now retain an island-relative approach waypoint, chosen from six candidates around/above/below an obstruction, and stop using the repeated local-goal search. They resume direct approach as soon as it clears, preserving separation without crowding one exact waypoint. Failed searches wait 0.5 seconds. External detours do not constrain marker speed; final destinations remain inside the sphere. Picker instantiation is also bounded to two requests per tick, retaining the remaining requests in order.
+Ships outside the sphere now retain an island-relative approach waypoint, chosen from six candidates around/above/below an obstruction, and stop using the repeated local-goal search. They resume direct approach as soon as it clears, preserving separation without crowding one exact waypoint. Failed searches wait 0.5 seconds. External detours do not constrain marker speed. Final destinations remain inside the sphere. Picker instantiation is also bounded to two requests per tick, retaining the remaining requests in order.
 
 The same 20-second headless Journey harness queued twelve Kestrels with placement seed 71937, normal scenery, combat and encounters disabled, and native Jolt flight at the project 30 Hz. Both runs used Godot 4.7.1 on the development workstation. Timings cover Journey's script step, including placement and navigation, but exclude native integration, contacts, and rendering. The corrected run processes the initial queue over six ticks.
 
@@ -148,6 +159,28 @@ The same 20-second headless Journey harness queued twelve Kestrels with placemen
 | Blocked spawned ships at 20 s | 12 / 12 | 0 / 12 |
 | Marker speed at 20 s | 0 m/s | 25 m/s |
 
-The permanent `check_ship_arrival.gd` regression adds twelve friendlies and twelve enemies, requiring all 24 to reach the moving sphere within 120 simulated seconds. It also checks the queue budget, final-goal containment, detour rebasing and unloading. The rendered Forward Plus/D3D12 run passed with a 1.87 ms median script step and 4.38 ms p95; navigation p95 was 3.41 ms. Captures at 5, 30, and 90 seconds show the ships approaching and joining the fleet. Existing island-navigation, ship-flight, and picker checks passed. This focused scenery/arrival measurement does not establish endgame combat performance.
+The permanent `check_ship_arrival.gd` regression adds twelve friendlies and twelve enemies, requiring all 24 to reach the moving sphere within 120 simulated seconds. It also checks the queue budget, final-goal containment, detour rebasing and unloading. The rendered Forward Plus/D3D12 run passed with a 1.87 ms median script step and 4.38 ms p95. Navigation p95 was 3.41 ms. Captures at 5, 30, and 90 seconds show the ships approaching and joining the fleet. Existing island-navigation, ship-flight, and picker checks passed. This focused scenery/arrival measurement does not establish endgame combat performance.
 
-Evidence: `C:/Users/lukas/AppData/Local/Temp/aerwyth-spawn-stall-20260927-114915/`, with `probe.gd`, `baseline.log`, `comparison-final.log`, `arrival-visual.log`, and captures. Repeat the permanent check using the isolated launch environment in [AGENTS.md](../../AGENTS.md), `--fixed-fps 30 --script res://scripts/tools/check_ship_arrival.gd`, and a unique external log. Add `--headless` for functional runs; for rendering, set `AERWYTH_CAPTURE_DIR` and append `-- --visual`.
+Evidence: `C:/Users/lukas/AppData/Local/Temp/aerwyth-spawn-stall-20260927-114915/`, with `probe.gd`, `baseline.log`, `comparison-final.log`, `arrival-visual.log`, and captures. Repeat the permanent check using the isolated launch environment in [AGENTS.md](../../AGENTS.md), `--fixed-fps 30 --script res://scripts/tools/check_ship_arrival.gd`, and a unique external log. Add `--headless` for functional runs. For rendering, set `AERWYTH_CAPTURE_DIR` and append `-- --visual`.
+
+## Authored attack positions, 100 vs 100 (2026-09-27)
+
+A rendered run measured the authored attack-position controller with 100 player Kestrels and 100 enemy Kestrels. Godot 4.7.1 used Forward Plus/D3D12 at 1920 x 1080 on a Ryzen 7 9800X3D and RTX 4090, with uncapped rendering and the project 30 Hz physics rate. Native Jolt flight, scenery streaming, camera movement, projectile impacts, muzzle/death smoke, and two scheduled origin shifts remained active. The user's existing editor was left running.
+
+An external copy of `check_combat_scale.gd` changed the population, matching assertions, and starting grids. Each faction used a symmetric 10-by-10 grid with 120-meter column spacing, 150-meter row spacing, three altitude levels 140 meters apart, and a 360-meter gap between the nearest columns. The inherited stress settings were 5,000 health, a 1,800-meter minimum sphere radius, 160-meter local steps, and one forced casualty/replacement per faction every ten seconds. Normal encounters were disabled. These settings sustain 200 ships and differ from ordinary journey balance. Weapons retained their authored 200-meter range, 500 m/s launch speed, two-second reload, and five damage. Attack spacing was 150 meters.
+
+The run covered 60 simulated seconds of combat, excluding the first two seconds from timing summaries, then a separate 12-second synchronized miss-volley phase. The latter disabled weapon acquisition and manually fired 400 shots every two seconds, peaking at 1,600 simultaneous projectiles. Neither fixed render FPS nor screenshot capture was used.
+
+| Phase | Mean FPS | Wall-frame p95 | Script mean / p95 | GPU mean |
+| --- | ---: | ---: | ---: | ---: |
+| Combat, debug off, 2-30 s | 161.5 | 24.81 ms | 21.17 / 23.19 ms | 1.50 ms |
+| Combat, debug on, 30-60 s | 87.1 | 26.31 ms | 20.14 / 21.76 ms | 2.33 ms |
+| Miss volleys, debug off | 277.3 | 18.40 ms | 15.75 / 16.66 ms | 0.68 ms |
+
+FPS is the reciprocal of mean wall-frame time. Debug phases cover different combat stages, so their difference does not isolate debug drawing cost. Script p95 stayed below the 33.33 ms physics-step budget in every phase. Script timing excludes subsequent native integration and contacts. The sampled engine physics monitor reported p95 values of 33.44, 28.16, and 116.12 ms. Its coarse samples can repeat a spike across many rendered frames and must not be added to script time. Maximum wall-frame times were 76.97, 40.52, and 118.51 ms respectively. The run kept simulated and elapsed phase durations aligned despite these isolated stalls.
+
+Navigation dominated script work: 14.47 ms per tick in early combat and 13.17 ms later, representing 68% and 65% of the respective script means. Force submission averaged 2.67 / 2.62 ms, weapon work 2.38 / 2.50 ms, and avoidance 0.77 / 0.99 ms. These component timers do not identify which navigation subroutine is most expensive. Results from older controllers, populations, weapon ranges, or layouts are not a paired comparison.
+
+Functional assertions passed for population, replacement lifecycle, damage, rebasing, projectile peak, and cleanup. Combat fired 1,496 shots, recorded 1,388 damaging hits and 90 allied interceptions, and performed ten forced replacements. At both combat phase boundaries, all 200 ships had selected attack positions, none reported blocked navigation, and the marker cruised at 25 m/s. Those endpoint observations do not establish uninterrupted attack positioning throughout the battle. The miss phase added 2,400 shots. Peak reported static memory was 159.46 MB during combat and 171.10 MB during miss volleys. This workstation run does not close the hardware and playtest gates in [the combat task list](todo/todo-combat.txt).
+
+Evidence is under `C:/Users/lukas/AppData/Local/Temp/aerwyth-benchmark-100v100-yn53i0uh/`: `benchmark.gd`, `combat-100v100.json`, `profile.log`, `method.json`, and the source-state hashes. To repeat while the external harness is available, use a fresh isolated APPDATA, an existing external `AERWYTH_PROFILE_DIR`, and a unique log, then run the console executable with `--path <absolute-project-path> --script <external-benchmark.gd> --log-file <external-log> -- --profile`. The project scripts, scenes, and resources were unchanged during the run.

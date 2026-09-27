@@ -186,7 +186,7 @@ func _check_search_fairness() -> void:
 	probe.forget(farthest)
 	_perception.forget(farthest)
 	_check(probe.firing_target == null and farthest not in probe._shortlist, "Removed targets leave retention and shortlist state.")
-	# Exhaustion restarts fairly; vanished remaining targets cannot stall a sweep.
+	# Exhaustion restarts fairly. Vanished remaining targets cannot stall a sweep.
 	probe.cooldown = 0
 	probe.attempts.clear()
 	probe.reachable_id = _ships[1].entity_id

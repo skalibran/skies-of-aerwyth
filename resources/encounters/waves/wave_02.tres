@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://edm37kdw2nmx" path="res://scripts/encounters/wave_override.gd" id="1"]
 [ext_resource type="Script" uid="uid://dnw6f8m0o5jmb" path="res://scripts/encounters/guaranteed_spawn.gd" id="2"]
-[ext_resource type="Resource" path="res://resources/encounters/entries/manta.tres" id="3"]
+[ext_resource type="Resource" uid="uid://8fufk2eoj75u" path="res://resources/encounters/entries/manta.tres" id="3"]
 
 [sub_resource type="Resource" id="Guaranteed"]
 script = ExtResource("2")

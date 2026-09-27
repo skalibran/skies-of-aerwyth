@@ -46,7 +46,7 @@ var _slot_index: int = 0
 
 func _ready() -> void:
 	if not assign_equipment(_equipment_scene):
-		push_warning("Invalid equipment in slot %s; leaving it empty." % name)
+		push_warning("Invalid equipment in slot %s. The slot will stay empty." % name)
 	_update_cone_preview()
 
 

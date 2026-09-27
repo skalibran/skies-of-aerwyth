@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/world/journey.tscn" id="1"]
+[ext_resource type="Script" uid="uid://b5fldtksvo3lv" path="res://scripts/tools/staged_battle.gd" id="2"]
+
+[node name="StagedBattle" instance=ExtResource("1")]
+script = ExtResource("2")
+
+[node name="Encounters" parent="."]
+enabled = false
+
+[node name="OrbitCamera" parent="."]
+orbit_distance = 2800.0
+
+[node name="FleetController" parent="."]
+minimum_radius = 1400.0

@@ -33,7 +33,7 @@ func start(points: Array[Marker3D]) -> void:
 	if _points.is_empty():
 		stop()
 		return
-	# Amount authors density per source; one GPU system holds all source trails.
+	# Amount authors density per source. One GPU system holds all source trails.
 	particles.amount = _particles_per_point * _points.size()
 	# A fixed, world-aligned local frame leaves old puffs behind the moving hull.
 	# Local particles can then move together during an origin shift without reset.

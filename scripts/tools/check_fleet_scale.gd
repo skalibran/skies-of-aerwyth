@@ -29,7 +29,7 @@ func _initialize() -> void:
 func _run() -> void:
 	if _profile:
 		if DisplayServer.get_name() == "headless" or OS.get_environment("AERWYTH_PROFILE_DIR").is_empty():
-			printerr("Fleet profiling needs rendering and an external AERWYTH_PROFILE_DIR; omit --fixed-fps.")
+			printerr("Fleet profiling needs rendering and an external AERWYTH_PROFILE_DIR. Omit --fixed-fps.")
 			quit(1)
 			return
 		Engine.max_fps = 0
@@ -82,7 +82,7 @@ func _run() -> void:
 			_check(absf(after.to_scene(before.segment) - before.offset) < 0.01, "Rebasing the large fleet preserves progression within local float precision.")
 	_check(_journey.ships.size() == SHIP_COUNT, "All 128 ships remain registered.")
 	var traveled := JourneyProgress.distance_at(_journey.marker_route_position(), starting_route)
-	print("FLEET_PROGRESS: %.2f meters in 30 seconds; required > 1800 meters." % traveled)
+	print("FLEET_PROGRESS: %.2f meters in 30 seconds. Required > 1800 meters." % traveled)
 	_check(_journey.marker_route_position().compare(starting_route.advanced(-1800.0)) < 0, "The large fleet sustains forward progress.")
 	var total_goals: int = 0
 	for ship in _journey.ships:
@@ -108,7 +108,7 @@ func _run() -> void:
 		rig.zoom(350.0 - rig.camera.position.z)
 		await _capture("fleet-128-ship")
 	timings.sort()
-	print("128 ships, scripted simulation step: median %.3f ms, p95 %.3f ms; %d goals reached; %d ships blocked at least once." % [timings[timings.size() / 2], timings[int(timings.size() * 0.95)], total_goals, _blocked_ships.size()])
+	print("128 ships, scripted simulation step: median %.3f ms, p95 %.3f ms, %d goals reached, %d ships blocked at least once." % [timings[timings.size() / 2], timings[int(timings.size() * 0.95)], total_goals, _blocked_ships.size()])
 	_journey.queue_free()
 	await process_frame
 	for failure in _failures:

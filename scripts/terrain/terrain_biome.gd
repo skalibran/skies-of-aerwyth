@@ -12,7 +12,7 @@ extends Resource
 func elevation(noise_value: float) -> float:
 	if height_power != 1.0:
 		noise_value = pow(clampf(noise_value * 0.5 + 0.5, 0.0, 1.0), height_power) * 2.0 - 1.0
-	# Soft contrast preserves peaks; below one, relief fades continuously to flat at zero.
+	# Soft contrast preserves peaks. Below one, relief fades continuously to flat at zero.
 	var fraction := 0.5 + 0.5 * tanh(noise_value * height_contrast) / tanh(maxf(1.0, height_contrast))
 	return lerpf(height_range.x, height_range.y, clampf(fraction, 0.0, 1.0))
 

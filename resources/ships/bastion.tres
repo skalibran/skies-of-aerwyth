@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="ShipDefinition" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="ShipDefinition" format=3 uid="uid://cjw1d8ed6q7rt"]
 
-[ext_resource type="Script" path="res://scripts/ships/ship_definition.gd" id="1"]
+[ext_resource type="Script" uid="uid://brg0fw7j0m7co" path="res://scripts/ships/ship_definition.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/ships/bastion.tscn" id="2"]
 
 [resource]
@@ -8,4 +8,4 @@ script = ExtResource("1")
 display_name = "Bastion"
 ship_class = 2
 scene = ExtResource("2")
-spawn_cost = 60
+spawn_cost = 90

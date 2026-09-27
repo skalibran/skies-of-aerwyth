@@ -54,7 +54,7 @@ func redraw() -> void:
 	_vertex_count = 0
 	if not enabled or journey.ships.is_empty():
 		return
-	# All lines share this mesh transform; avoid inverting it for every vertex.
+	# All lines share this mesh transform. Avoid inverting it for every vertex.
 	_world_to_local = global_transform.affine_inverse()
 	var marker_position := journey.fleet.marker.get_global_transform_interpolated().origin
 	var selected_ship := journey.camera_rig.followed_ship

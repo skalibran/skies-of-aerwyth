@@ -53,8 +53,8 @@ func launch_for(target: Airship) -> Vector3:
 func _could_fit_cone(relative: Vector3, target_velocity: Vector3, forward: Vector3, half_angle: float, gravity_bound: float, inverse_speed: float) -> bool:
 	# v0 = relative / t + target_velocity + UP * gravity * t / 2.
 	# For every t within lifetime, bound how far lead/gravity can rotate v0
-	# away from the direct bearing. This is only a conservative rejection;
-	# the solved launch vector still passes the exact cone test afterward.
+	# away from the direct bearing. This is only a conservative rejection.
+	# The solved launch vector still passes the exact cone test afterward.
 	var deviation := (target_velocity.length() + gravity_bound) * inverse_speed
 	if deviation >= 1.0:
 		return true

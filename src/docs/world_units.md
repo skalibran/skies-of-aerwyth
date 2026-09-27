@@ -1,6 +1,6 @@
 # World units and tenfold conversion
 
-As of 2026-09-26, **one world unit is one meter**. The prototype was enlarged tenfold while preserving its camera framing, proportions, motion timing, and workload. Values are authored directly in meters; no runtime conversion layer or scaled physics parent is involved.
+As of 2026-09-26, **one world unit is one meter**. The prototype was enlarged tenfold while preserving its camera framing, proportions, motion timing, and workload. Values are authored directly in meters. No runtime conversion layer or scaled physics parent is involved.
 
 ## Dimensional rules
 
@@ -24,15 +24,15 @@ Collision shapes are sized directly. ShipFlight still computes mass-scaled linea
 
 Camera near/far planes, shadow distances, island generation/loading, navigation and targeting grids, formation dimensions, spawn regions, and debug geometry follow the same conversion. Terrain keeps the same patch counts, sample resolution, noise seeds, and worker limits. Noise wavelengths, warp amplitudes, progression distances, water depth bands, and square highlights scale together. The 2560-meter water pattern period divides each origin shift exactly.
 
-At conversion time, the unused Kestrel OBJ meshes imported at tenfold scale while the OBJ/VOX source geometry remained intact. Missing OBJ material companions were restored using the existing palette so reimport succeeded. The measurements and capsule dimensions here record that primitive-ship baseline; the subsequent [Kestrel model integration](combat.md#authored-ships-and-weapons) uses the authored 23-meter balloon and a fitted collider.
+At conversion time, the unused Kestrel OBJ meshes imported at tenfold scale while the OBJ/VOX source geometry remained intact. Missing OBJ material companions were restored using the existing palette so reimport succeeded. The measurements and capsule dimensions here record that primitive-ship baseline. The subsequent [Kestrel model integration](combat.md#authored-ships-and-weapons) uses the authored 23-meter balloon and a fitted collider.
 
 ## Validation and appearance
 
 Headless editor import and the existing targeting, combat, flight/contact, movement/input, island navigation, and 128-ship checks passed. The converted ballistic reference fixtures retain their original 3.083597 / 5.485838-second flight times at 600 / 1000 meters. Rendered terrain validation passed all three grids, progression, meshing, background streaming, cancellation, and rebasing. Frozen water animation gave a mean summed RGB rebase difference of 0.0000468.
 
-The rendered three-minute combat encounter reached both 100-ship caps, fired 28,293 shots, and recorded 192 destructions. The separate 220-ship benchmark passed registration/replacement, rebase, and projectile cleanup checks; synchronized misses still peaked at 1,760 live shots. Close ship views and before/after fleet, terrain, and pond captures were inspected. Framing, proportions, shorelines, fog, and visible terrain detail match closely.
+The rendered three-minute combat encounter reached both 100-ship caps, fired 28,293 shots, and recorded 192 destructions. The separate 220-ship benchmark passed registration/replacement, rebase, and projectile cleanup checks. Synchronized misses still peaked at 1,760 live shots. Close ship views and before/after fleet, terrain, and pond captures were inspected. Framing, proportions, shorelines, fog, and visible terrain detail match closely.
 
-This is visual and behavioral equivalence, not bit-for-bit simulation identity. Floating-point rounding can change contact trajectories and a few terrain quads near quantization thresholds. For example, the transition landscape's detailed mesh contained 857,952 triangles before conversion and 857,946 afterward; both used 246 patches.
+This is visual and behavioral equivalence, not bit-for-bit simulation identity. Floating-point rounding can change contact trajectories and a few terrain quads near quantization thresholds. For example, the transition landscape's detailed mesh contained 857,952 triangles before conversion and 857,946 afterward. Both used 246 patches.
 
 ## Performance comparison
 
@@ -46,6 +46,6 @@ The immediate baseline was commit `dd54f87`. Before/after runs used Godot 4.7.1,
 
 The script timer excludes subsequent native rigid-body integration/contact solving. Whole-frame timings include that work. Combat phase GPU p95 was 1.039 / 1.099 ms with debug off and 2.132 / 2.167 ms with debug on. Changing contact histories and workstation timing noise prevent interpreting small differences as an optimization.
 
-The isolated landscape benchmark retained matching patch counts and built-patch counts in every corresponding phase. Stationary grassland, transition, and mountain GPU p95 values were respectively 0.228 / 0.228, 0.254 / 0.256, and 0.273 / 0.273 ms. Their draw counts remained 82, 91, and 87. Coarse startup stayed approximately 0.85–1.10 seconds. These runs show **no material performance regression from the unit conversion**; hardware/release coverage remains as recorded in the [combat](todo/todo-combat.txt) and [generation](todo/blockers-terrain.txt) task lists.
+The isolated landscape benchmark retained matching patch counts and built-patch counts in every corresponding phase. Stationary grassland, transition, and mountain GPU p95 values were respectively 0.228 / 0.228, 0.254 / 0.256, and 0.273 / 0.273 ms. Their draw counts remained 82, 91, and 87. Coarse startup stayed approximately 0.85–1.10 seconds. These runs show **no material performance regression from the unit conversion**. Hardware/release coverage remains as recorded in the [combat](todo/todo-combat.txt) and [generation](todo/blockers-terrain.txt) task lists.
 
 Raw logs, JSON, and PNGs are outside the repository at `C:/Users/lukas/AppData/Local/Temp/aerwyth-meters-554f4199`, under `before/` and `after/`. Reproduce with `profile_landscape.gd` and `check_combat_scale.gd -- --profile --visual`, using the isolated environment and serial launch procedure in [AGENTS.md](../../AGENTS.md), `AERWYTH_PROFILE_DIR`, and `AERWYTH_CAPTURE_DIR`. Older performance documents retain their original units and measurements.

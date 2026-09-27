@@ -1,8 +1,8 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene format=3 uid="uid://cvt02no3x0ljv"]
 
 [ext_resource type="PackedScene" path="res://scenes/ships/ship.tscn" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/ships/mounted_slot.tscn" id="2"]
-[ext_resource type="PackedScene" path="res://scenes/weapons/rusty_cannon.tscn" id="3"]
+[ext_resource type="PackedScene" uid="uid://dgdooeqaxxrxt" path="res://scenes/weapons/rusty_cannon.tscn" id="3"]
 [ext_resource type="PackedScene" path="res://scenes/ships/ship_death_smoke.tscn" id="4"]
 
 [sub_resource type="CapsuleShape3D" id="Hull"]
@@ -10,18 +10,8 @@ radius = 8.0
 height = 34.0
 
 [sub_resource type="StandardMaterial3D" id="EnvelopeMaterial"]
-albedo_color = Color(0.80, 0.49, 0.19, 1)
+albedo_color = Color(0.8, 0.49, 0.19, 1)
 roughness = 0.8
-
-[sub_resource type="StandardMaterial3D" id="HullMaterial"]
-albedo_color = Color(0.20, 0.26, 0.30, 1)
-metallic = 0.35
-roughness = 0.65
-
-[sub_resource type="StandardMaterial3D" id="AccentMaterial"]
-albedo_color = Color(0.87, 0.75, 0.46, 1)
-metallic = 0.25
-roughness = 0.7
 
 [sub_resource type="CapsuleMesh" id="EnvelopeMesh"]
 material = SubResource("EnvelopeMaterial")
@@ -30,9 +20,19 @@ height = 24.0
 radial_segments = 12
 rings = 4
 
+[sub_resource type="StandardMaterial3D" id="HullMaterial"]
+albedo_color = Color(0.2, 0.26, 0.3, 1)
+metallic = 0.35
+roughness = 0.65
+
 [sub_resource type="BoxMesh" id="GondolaMesh"]
 material = SubResource("HullMaterial")
 size = Vector3(6, 4, 12)
+
+[sub_resource type="StandardMaterial3D" id="AccentMaterial"]
+albedo_color = Color(0.87, 0.75, 0.46, 1)
+metallic = 0.25
+roughness = 0.7
 
 [sub_resource type="CylinderMesh" id="NoseMesh"]
 material = SubResource("AccentMaterial")
@@ -45,9 +45,13 @@ radial_segments = 8
 material = SubResource("AccentMaterial")
 size = Vector3(2, 8, 6)
 
-[node name="Swift" node_paths=PackedStringArray("mounted_slots", "death_smoke_points") instance=ExtResource("1")]
+[node name="Swift" unique_id=1577090279 node_paths=PackedStringArray("mounted_slots", "death_smoke_points") instance=ExtResource("1")]
 mass = 6.0
-maximum_health = 250.0
+mounted_slots = [NodePath("VisualRoot/BowSlot")]
+death_smoke_scene = ExtResource("4")
+death_smoke_points = NodePath("VisualRoot/DeathSmokePoints")
+preferred_combat_positions = PackedStringArray("front", "front_left", "front_right")
+maximum_health = 125.0
 maximum_speed = 65.0
 acceleration = 6
 braking = 8
@@ -55,42 +59,33 @@ climb_speed = 7
 yaw_speed_degrees = 18
 yaw_acceleration_degrees = 15
 lateral_drag = 0.7
-mounted_slots = [NodePath("VisualRoot/BowSlot")]
-death_smoke_scene = ExtResource("4")
-death_smoke_points = NodePath("VisualRoot/DeathSmokePoints")
-preferred_combat_positions = PackedStringArray("front", "front_left", "front_right")
-spawn_layer = 2
 
 [node name="HullCollider" parent="." index="0"]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
 shape = SubResource("Hull")
 
 [node name="Envelope" parent="VisualRoot" index="0"]
-position = Vector3(0, 0, 0)
-rotation = Vector3(1.5707964, 0, 0)
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, -1, 0, 1, -4.371139e-08, 0, 0, 0)
 mesh = SubResource("EnvelopeMesh")
 
 [node name="Gondola" parent="VisualRoot" index="1"]
-position = Vector3(0, -5, 0)
-rotation = Vector3(0, 0, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -5, 0)
 mesh = SubResource("GondolaMesh")
 
-[node name="Nose" type="MeshInstance3D" parent="VisualRoot" index="2"]
-position = Vector3(0, 0, -13)
-rotation = Vector3(-1.5707964, 0, 0)
+[node name="Nose" type="MeshInstance3D" parent="VisualRoot" index="2" unique_id=193290164]
+transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0, -13)
 mesh = SubResource("NoseMesh")
 
-[node name="Tail" type="MeshInstance3D" parent="VisualRoot" index="3"]
-position = Vector3(0, 4, 5)
-rotation = Vector3(0, 0, 0)
+[node name="Tail" type="MeshInstance3D" parent="VisualRoot" index="3" unique_id=152524054]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 5)
 mesh = SubResource("TailMesh")
 
-[node name="BowSlot" parent="VisualRoot" index="4" instance=ExtResource("2")]
-position = Vector3(0, -5, -9)
-rotation = Vector3(0, 0, 0)
+[node name="BowSlot" parent="VisualRoot" index="4" unique_id=1443005377 instance=ExtResource("2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -5, -9)
 cone_half_angle = 65.0
 equipment_scene = ExtResource("3")
 
-[node name="DeathSmokePoints" type="Node3D" parent="VisualRoot" index="5"]
+[node name="DeathSmokePoints" type="Node3D" parent="VisualRoot" index="5" unique_id=1251939705]
 
-[node name="HullSmoke" type="Marker3D" parent="VisualRoot/DeathSmokePoints"]
-position = Vector3(0, -5, 4)
+[node name="HullSmoke" type="Marker3D" parent="VisualRoot/DeathSmokePoints" index="0" unique_id=1085614860]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -5, 4)

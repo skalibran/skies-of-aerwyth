@@ -12,7 +12,7 @@ extends Resource
 @export_range(1, 8, 1) var variants_per_type: int = 4
 
 @export_group("Distribution")
-## Reference spacing for layer density; actual slots also fit the cloud bounds.
+## Reference spacing for layer density. Actual slots also fit the cloud bounds.
 @export_enum("640 m:640", "1280 m:1280", "2560 m:2560") var cell_size: int = 1280
 ## Horizontal clearance between neighboring cloud bounds in the same layer.
 @export_range(0.0, 1000.0, 50.0) var cloud_gap: float = 200.0

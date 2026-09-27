@@ -16,17 +16,19 @@ const ENEMY_TINT := preload("res://materials/ships/enemy_tint.tres")
 @export var death_smoke_scene: PackedScene
 ## Direct Marker3D children supply positions for the ship-owned smoke effect.
 @export var death_smoke_points: Node3D
+## Allowed enemy bearings in fleet axes. Front is Z-, up is Y+, bottom places us above.
 @export var preferred_combat_positions := PackedStringArray()
-## Authored concealment source for ships added during play; independent of combat bias.
+## Authored concealment source for ships added during play, independent of combat bias.
 @export var spawn_layer: SpawnLayer = SpawnLayer.ISLE
 @export_range(1.0, 10000.0) var maximum_health: float = 500.0
 ## Time retained after the first ground contact, including settling.
 @export_range(0.1, 60.0) var wreck_lifetime: float = 25.0
 @export_range(0.1, 120.0) var wreck_airborne_lifetime: float = 45.0
 @export_range(0.1, 10.0) var wreck_settle_seconds: float = 3.0
-## Fraction of project gravity used by passive wrecks; momentum/damping stay native.
+## Fraction of project gravity used by passive wrecks. Momentum/damping stay native.
 @export_range(0.01, 1.0, 0.01) var wreck_gravity_scale: float = 0.2
-@export_range(100.0, 900.0) var engagement_distance: float = 600.0
+## Preferred attack spacing in meters, with 20% tolerance. Independent of weapon range.
+@export_range(10.0, 900.0) var engagement_distance: float = 150.0
 ## Primary horizontal propulsion axis in ship-local space. Altitude uses lift control.
 @export var primary_movement_direction := Vector3.FORWARD
 ## Propulsion target limit. Contact impulses and retained lateral momentum can exceed it.
@@ -74,8 +76,8 @@ func vertical_combat_bias() -> float:
 	return ShipCombat.vertical_bias(preferred_combat_positions)
 
 
-## Preferred combat side of an opponent's altitude; spawning uses spawn_layer instead.
-## Upward shooters approach from below; other roles prefer above, including neutral bias.
+## Preferred combat side of an opponent's altitude. Spawning uses spawn_layer instead.
+## Upward shooters approach from below. Other roles prefer above, including neutral bias.
 func preferred_altitude_side() -> int:
 	return -1 if vertical_combat_bias() >= ShipCombat.STRONG_VERTICAL_BIAS else 1
 

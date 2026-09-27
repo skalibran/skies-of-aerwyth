@@ -138,7 +138,7 @@ func sample_spawn_position(cloud: MeshInstance3D, hull_radius: float, rng: Rando
 	return cloud.global_position + local_position
 
 
-## Reuse the caller's array; visit only placement slots touched by the query sphere.
+## Reuse the caller's array. Visit only placement slots touched by the query sphere.
 func query_clouds(world_position: Vector3, result: Array[MeshInstance3D], proximity_distance: float = 0.0) -> void:
 	result.clear()
 	if not is_visible_in_tree() or origin == null:

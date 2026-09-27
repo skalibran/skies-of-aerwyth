@@ -67,7 +67,9 @@ func _guarantee(entry: SpawnEntry, count: int, charge: bool) -> GuaranteedSpawn:
 
 func _check_planner() -> void:
 	PROFILE.validate()
-	_check(PROFILE.threat_at(499.99) == 0 and PROFILE.threat_at(500.0) == 1 and PROFILE.threat_at(1000.0) == 2, "Threat increases exactly at distance boundaries.")
+	_check(PROFILE.threat_at(0.0) == 0 and PROFILE.threat_at(99.99) == 0 and PROFILE.threat_at(100.0) == 1, "The first wave starts after 100 meters of travel.")
+	_check(PROFILE.threat_at(1099.99) == 1 and PROFILE.threat_at(1100.0) == 2 and PROFILE.threat_at(2100.0) == 3, "Later waves retain 1000-meter spacing after the first wave.")
+	_check(PROFILE.wave_distance(1) == 100.0 and PROFILE.wave_distance(8) == 7100.0, "Wave distances include the initial travel offset once.")
 	_check(PROFILE.budget_at(1) == 15 and PROFILE.budget_at(8) == 120, "Authored linear budget growth is 15 points per threat.")
 	_check(PAIR.cost() == 12 and PATROL.cost() == 36, "Fleet costs sum complete member counts.")
 	var rng := RandomNumberGenerator.new()
@@ -109,7 +111,7 @@ func _check_planner() -> void:
 	authored.guaranteed = [_guarantee(PATROL, 1, false)]
 	var fixed := EncounterPlanner.build(profile, 1, rng)
 	_check(fixed.ships == [MANTA.ship, SWIFT.ship, SWIFT.ship] and fixed.spent == 0, "Fully authored waves honor guaranteed fleets without random fill.")
-	# Equal-cost options isolate weight from affordability; only one fits per wave.
+	# Equal-cost options isolate weight from affordability. Only one fits per wave.
 	profile = _profile(10)
 	var alternate := SpawnEntry.new()
 	alternate.ship = KESTREL.ship.duplicate() as ShipDefinition
@@ -151,10 +153,10 @@ func _check_scheduler() -> void:
 	root.add_child(director)
 	var announcements: Array[Vector2i] = []
 	director.wave_spawned.connect(func(number: int, score: int) -> void: announcements.append(Vector2i(number, score)))
-	fixture.progression.distance = 499.99
+	fixture.progression.distance = director.profile.wave_distance(1) - 0.01
 	director.step(1000.0, fixture)
 	_check(director.planned_waves == 0, "Elapsed time cannot substitute for travel.")
-	fixture.progression.distance = 500.0
+	fixture.progression.distance = director.profile.wave_distance(1)
 	director.step(0.0, fixture)
 	fixture.combat_enabled = false
 	director.step(1.0, fixture)
@@ -178,7 +180,7 @@ func _check_scheduler() -> void:
 	_check(announcements == [Vector2i(1, 12)], "A wave announces once on its first ship, including over-budget guaranteed cost.")
 	fixture.progression.distance = 0.0
 	director.step(1.0, fixture)
-	fixture.progression.distance = 2000.0
+	fixture.progression.distance = director.profile.wave_distance(4)
 	director.step(1.0 / _rate, fixture)
 	_check(director.threat_level == 4 and director.planned_waves == 2, "A distance jump updates threat and catches up at most one wave per tick.")
 	director.step(1.0 / _rate, fixture)
@@ -186,7 +188,7 @@ func _check_scheduler() -> void:
 	_check(director.planned_waves == 4 and fixture.placed.size() == 3 and fixture.placed.back() == MANTA.ship, "Crossed milestones include empty waves and keep each milestone's authored override.")
 	_check(announcements == [Vector2i(1, 12), Vector2i(3, 24)], "Empty waves stay silent and bonus entries contribute their full difficulty score.")
 	fixture.fleet.members.clear()
-	fixture.progression.distance = 2500.0
+	fixture.progression.distance = director.profile.wave_distance(5)
 	director.step(1.0, fixture)
 	_check(director.planned_waves == 4, "No new encounters are scheduled without living friendlies.")
 	director.free()
@@ -208,13 +210,14 @@ func _check_travel_battle_cycle() -> void:
 	for ship in journey.ships:
 		ship.maximum_health = 100000.0
 		ship.current_health = ship.maximum_health
-	for tick in range(45 * _rate):
+	var milestone_timeout := ceili(journey.encounters.profile.threat_distance / journey.fleet.cruise_speed + 25.0) * _rate
+	for tick in range(milestone_timeout):
 		await physics_frame
 		if journey.fleet.in_combat:
 			break
 	_check(journey.encounters.planned_waves == 1 and journey.fleet.in_combat, "Normal travel reaches the first wave and enters fleet-wide combat.")
 	var battle_start := journey.fleet.marker.global_position
-	for tick in range(45 * _rate):
+	for tick in range(milestone_timeout):
 		await physics_frame
 		for ship in journey.ships:
 			_check(ship.navigation.goal_offset.length() <= ship.navigation.usable_radius(ship) + 0.01, "Combat goals remain inside the translating fleet sphere.")
@@ -223,13 +226,13 @@ func _check_travel_battle_cycle() -> void:
 	_check(journey.fleet.in_combat and journey.fleet.marker.global_position.z < battle_start.z - 100.0, "The marker makes forward progress throughout an active battle.")
 	_check(wave_distances.size() == 2, "The next distance milestone can spawn a wave while previous enemies remain alive.")
 	for index in range(wave_distances.size()):
-		var milestone := (index + 1) * journey.encounters.profile.threat_distance
+		var milestone := journey.encounters.profile.wave_distance(index + 1)
 		_check(wave_distances[index] >= milestone and wave_distances[index] < milestone + journey.fleet.cruise_speed / _rate + 0.01, "Continuous travel triggers each crossed milestone once within one physics step.")
 	if _visual:
 		var debug := journey.get_node("FleetMarker/NavigationDebug") as ShipNavigationDebug
 		debug.enabled = true
 		await _capture("marker-battle")
-	# A cloud can need placement retries; queued ships still constitute active combat.
+	# A cloud can need placement retries. Queued ships still constitute active combat.
 	for tick in range(10 * _rate):
 		if journey.encounters._pending.is_empty():
 			break
@@ -258,6 +261,10 @@ func _check_journey() -> void:
 	root.add_child(journey)
 	journey.set_physics_process(false)
 	journey._enemy_spawn_rng.seed = 71937
+	_check(journey.fleet.marker.global_position == Vector3(0, 3800, 100) and journey.progression.distance == 0.0, "The fleet starts 100 meters behind Z0 with zero traveled distance.")
+	var first_wave := journey.progression.start_position.advanced(-journey.encounters.profile.wave_distance(1))
+	_check(first_wave.compare(RoutePosition.new()) == 0, "The first wave milestone is logical Z0.")
+	_check(journey.ships[0].global_position - journey.fleet.marker.global_position == Vector3(-45, -10, 20), "The initial ships move with the marker and retain their authored offsets.")
 	var announcement := (journey.get_node("MasterUI") as MasterUI).wave_announcement
 	_check(not announcement.visible, "The wave announcement starts hidden.")
 	for ship in journey.ships:
@@ -272,7 +279,7 @@ func _check_journey() -> void:
 	_check_boundaries(journey)
 	journey.step_simulation(1.0 / _rate)
 	_check(journey.encounters.planned_waves == 0, "Camera movement and rebasing cannot advance threat.")
-	_move_to_distance(journey, 500.0)
+	_move_to_distance(journey, journey.encounters.profile.wave_distance(1))
 	# Block the streamed field so every otherwise concealed candidate is rejected.
 	var blocker := StaticBody3D.new()
 	blocker.collision_layer = 2
@@ -301,12 +308,18 @@ func _check_journey() -> void:
 		journey.camera_rig.pitch = -0.55
 		await _capture("threat-boundaries")
 	var first_count := journey.encounters.spawned_count
-	_move_to_distance(journey, 1000.0)
+	_move_to_distance(journey, journey.encounters.profile.wave_distance(2))
 	journey.step_simulation(1.0 / _rate)
 	_check(planned.size() == 2 and MANTA.ship in planned[1].ships, "Wave two guarantees the authored corvette through Journey orchestration.")
-	_move_to_distance(journey, 4000.0)
-	for tick in range(20):
-		journey.encounters.step(1.0 / _rate, journey)
+	_move_to_distance(journey, journey.encounters.profile.wave_distance(8))
+	# The jump can leave the loaded cloud field. Advance ordinary streaming and
+	# placement retries before inspecting the completed eight-wave roster.
+	journey._stream_timer = 0.0
+	for tick in range(10 * _rate):
+		journey.step_simulation(1.0 / _rate)
+		await physics_frame
+		if journey.encounters.planned_waves == 8 and journey.encounters._pending.is_empty():
+			break
 	var total: int = 0
 	for plan in planned:
 		total += plan.ships.size()
@@ -411,7 +424,6 @@ func _check_boundaries(journey: Journey) -> void:
 	var boundaries := journey.get_node("ThreatBoundaries") as ThreatBoundaries
 	boundaries.update_boundaries()
 	var vertices: PackedVector3Array = boundaries.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
-	var spacing := journey.encounters.profile.threat_distance
 	_check(vertices.size() == 2 * (boundaries.last_level - boundaries.first_level + 1), "One horizontal line sections each visible threat milestone.")
 	for index in range(0, vertices.size(), 2):
 		var left := boundaries.to_global(vertices[index])
@@ -419,7 +431,7 @@ func _check_boundaries(journey: Journey) -> void:
 		var level: int = boundaries.first_level + index / 2
 		var route := RoutePosition.from_scene(left.z, journey.origin.segment)
 		var distance := JourneyProgress.distance_at(route, journey.progression.start_position)
-		_check(absf(distance - float(level) * spacing) < 0.1, "Boundary positions stay at logical threat milestones through travel, camera movement, and rebasing.")
+		_check(absf(distance - journey.encounters.profile.wave_distance(level)) < 0.1, "Boundary positions stay at logical threat milestones through travel, camera movement, and rebasing.")
 		_check(is_equal_approx(left.y, journey.fleet.marker.global_position.y) and left.y == right.y and left.z == right.z, "Threat lines extend horizontally at marker height.")
 		var camera := journey.camera_rig.camera
 		_check(left.x < camera.global_position.x - camera.far and right.x > camera.global_position.x + camera.far, "Threat line endpoints extend beyond the camera's visible range.")

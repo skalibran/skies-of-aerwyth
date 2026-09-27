@@ -185,7 +185,7 @@ func _update_follow_focus() -> void:
 	elif mode == Mode.FLEET:
 		global_position = fleet.marker.get_global_transform_interpolated().origin
 	elif mode == Mode.FREE:
-		# Follow translation only; the offset survives rebasing and never rotates with the marker.
+		# Follow translation only. The offset survives rebasing and never rotates with the marker.
 		global_position = fleet.marker.get_global_transform_interpolated().origin + _free_marker_offset
 
 

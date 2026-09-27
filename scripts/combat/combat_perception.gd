@@ -4,7 +4,7 @@ extends RefCounted
 const CELL_SIZE: float = 1000.0
 
 # Derived from Journey's registry each combat tick. This helper supplies nearby
-# candidates and membership checks; pursuit and firing policy stay with callers.
+# candidates and membership checks. Pursuit and firing policy stay with callers.
 var _cells: Dictionary[Vector3i, Array] = {}
 var _ship_cells: Dictionary[int, Vector3i] = {}
 var _weapon_neighbors: Dictionary[int, Array] = {}
@@ -63,7 +63,7 @@ func weapon_candidates(ship: Airship) -> Array[Airship]:
 	var id := ship.get_instance_id()
 	if not _weapon_neighbors.has(id):
 		# One broad-phase query serves every mount on this ship for this tick.
-		# Include muzzle offsets; mounts still check their own exact range/cone.
+		# Include muzzle offsets. Mounts still check their own exact range/cone.
 		var radius: float = 0.0
 		for slot in ship.mounted_slots:
 			var mounted := slot.equipment as MountedWeapon

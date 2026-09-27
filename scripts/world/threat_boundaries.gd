@@ -20,7 +20,8 @@ func _process(_delta: float) -> void:
 
 func update_boundaries() -> void:
 	var camera := journey.camera_rig.camera
-	var spacing := journey.encounters.profile.threat_distance
+	var profile := journey.encounters.profile
+	var spacing := profile.threat_distance
 	var viewport_size := camera.get_viewport().get_visible_rect().size
 	var aspect := maxf(1.0, viewport_size.x) / maxf(1.0, viewport_size.y)
 	# Cover even far-plane corners, so horizontal endpoints stay outside the view.
@@ -28,12 +29,13 @@ func update_boundaries() -> void:
 	var reach := camera.far * sqrt(1.0 + 2.0 * tangent * tangent)
 	var half_span := ceilf(reach / spacing) * spacing + spacing
 	var camera_route := RoutePosition.from_scene(camera.global_position.z, journey.origin.segment)
-	var distance := JourneyProgress.distance_at(camera_route, journey.progression.start_position)
-	var first := maxi(0, floori((distance - half_span) / spacing))
-	var last := ceili((distance + half_span) / spacing)
+	var distance := JourneyProgress.distance_at(camera_route, journey.progression.start_position) - profile.first_wave_distance
+	# Levels are one-based wave numbers, shared with encounter scheduling.
+	var first := maxi(1, floori((distance - half_span) / spacing) + 1)
+	var last := maxi(first, ceili((distance + half_span) / spacing) + 1)
 	if first != first_level or last != last_level or spacing != _spacing or half_span != _half_span:
 		_rebuild(first, last, spacing, half_span)
-	var first_route := journey.progression.start_position.advanced(-float(first_level) * spacing)
+	var first_route := journey.progression.start_position.advanced(-profile.wave_distance(first_level))
 	# Derive the local transform from logical coordinates after every origin shift.
 	global_position = Vector3(
 		camera.global_position.x,

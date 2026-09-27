@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="SpawnEntry" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="SpawnEntry" format=3 uid="uid://0d2ymgjrn8y4"]
 
-[ext_resource type="Script" path="res://scripts/encounters/spawn_entry.gd" id="1"]
-[ext_resource type="Resource" path="res://resources/ships/kestrel.tres" id="2"]
+[ext_resource type="Script" uid="uid://dikx3koffb8eu" path="res://scripts/encounters/spawn_entry.gd" id="1"]
+[ext_resource type="Resource" uid="uid://de6sbxv6a87ka" path="res://resources/ships/kestrel.tres" id="2"]
 
 [resource]
 script = ExtResource("1")

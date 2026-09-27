@@ -238,7 +238,7 @@ func _click(control: Control) -> void:
 	event.global_position = event.position
 	event.pressed = true
 	root.push_input(event, true)
-	# Real pointer gestures span frames; focus must survive until release activates the button.
+	# Real pointer gestures span frames. Focus must survive until release activates the button.
 	await _frames(2)
 	event.pressed = false
 	root.push_input(event, true)

@@ -34,7 +34,7 @@ func _initialize() -> void:
 func _run() -> void:
 	if _profile:
 		if DisplayServer.get_name() == "headless" or OS.get_environment("AERWYTH_PROFILE_DIR").is_empty():
-			printerr("Combat profiling requires rendering and an external AERWYTH_PROFILE_DIR; omit --fixed-fps.")
+			printerr("Combat profiling requires rendering and an external AERWYTH_PROFILE_DIR. Omit --fixed-fps.")
 			quit(1)
 			return
 		Engine.max_fps = 0
@@ -200,14 +200,14 @@ func _sample_counts() -> void:
 func _finish_phase() -> void:
 	var result := {"name": _phase, "step_ms": _summary(_steps), "frame_ms": _summary(_frames), "gpu_ms": _summary(_gpu), "peak_shots": _peak_shots, "peak_nodes": _peak_nodes, "peak_memory_bytes": _peak_memory, "end_nodes": Performance.get_monitor(Performance.OBJECT_NODE_COUNT), "end_memory_bytes": Performance.get_monitor(Performance.MEMORY_STATIC)}
 	result["engine_physics_ms"] = _summary(_physics_ms)
-	result["step_scope"] = "Journey GDScript work; excludes subsequent native rigid-body integration/contact solving"
+	result["step_scope"] = "Journey GDScript work, excluding subsequent native rigid-body integration/contact solving"
 	result["simulated_seconds"] = float(_steps.size()) / Engine.physics_ticks_per_second
 	result["elapsed_seconds"] = float(Time.get_ticks_usec() - _phase_started_usec) / 1000000.0
 	result["script_ms_per_simulated_second"] = result.step_ms.mean * Engine.physics_ticks_per_second
 	var budget_ms := 1000.0 / Engine.physics_ticks_per_second
 	result["physics_budget_ms"] = budget_ms
 	result["step_p95_within_budget"] = result.step_ms.p95 <= budget_ms
-	print("PERFORMANCE %s: script step p95 %.3f ms / %.3f ms budget (%s); assess engine physics and wall frames too." % [_phase, result.step_ms.p95, budget_ms, "within" if result.step_p95_within_budget else "EXCEEDED"])
+	print("PERFORMANCE %s: script step p95 %.3f ms / %.3f ms budget (%s). Assess engine physics and wall frames too." % [_phase, result.step_ms.p95, budget_ms, "within" if result.step_p95_within_budget else "EXCEEDED"])
 	if _component_samples > 0:
 		var components := {}
 		var names := Journey.StepPhase.keys()
@@ -233,7 +233,7 @@ func _configuration() -> Dictionary:
 	var slots: Array[Dictionary] = []
 	for slot in ship.mounted_slots:
 		slots.append({"tier": slot.tier, "half_angle_degrees": slot.cone_half_angle, "position": var_to_str(slot.position), "rotation": var_to_str(slot.rotation), "pass_by": slot.fire_at_targets_in_range})
-	# Keep comparison inputs with the raw measurements; branches may change defaults.
+	# Keep comparison inputs with the raw measurements. Branches may change defaults.
 	return {
 		"engine": Engine.get_version_info().string,
 		"controller": "RigidBody3D / force-controlled ShipFlight",

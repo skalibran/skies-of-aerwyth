@@ -47,7 +47,7 @@ static func _acceleration(ship: Airship, desired: Vector3, delta: float) -> Vect
 	var movement := Vector3(ship.linear_velocity.x, 0.0, ship.linear_velocity.z)
 	var longitudinal := movement.dot(forward)
 	var lateral := movement - forward * longitudinal
-	# Propulsion follows the hull; existing momentum and collision impulses stay
+	# Propulsion follows the hull. Existing momentum and collision impulses stay
 	# with the physics body. Turning reduces throttle instead of rotating velocity.
 	var alignment := maxf(0.0, forward.dot(horizontal.normalized()))
 	var requested_speed := horizontal.length() * alignment * alignment

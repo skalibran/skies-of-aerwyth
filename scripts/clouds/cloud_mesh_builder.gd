@@ -7,7 +7,7 @@ var _normals := PackedVector3Array()
 var _indices := PackedInt32Array()
 
 
-## Build the final dimensions from fixed-size cubes; instances need no scaling.
+## Build the final dimensions from fixed-size cubes. Instances need no scaling.
 func build(cloud_type: CloudType, shape_seed: int, span: float, voxel_size: float) -> ArrayMesh:
 	cloud_type.validate()
 	assert(voxel_size > 0.0 and span >= voxel_size * 2.0)
@@ -59,7 +59,7 @@ func _sample_shape(cloud_type: CloudType, shape_seed: int, dimensions: Vector3i)
 		var size_variation := rng.randf_range(0.6, 1.25)
 		var radius := cloud_type.puff_size * size_variation
 		var puff_radii := Vector3(radius, minf(0.9, 0.7 * size_variation), minf(0.9, radius / cloud_type.depth_ratio))
-		# Spread lobes across the footprint; smaller lobes rise less from a common base.
+		# Spread lobes across the footprint. Smaller lobes rise less from a common base.
 		var along := (float(puff) + rng.randf_range(0.2, 0.8)) / cloud_type.puff_count
 		var center := Vector3(lerpf(-0.8, 0.8, along), -0.75 + puff_radii.y, rng.randf_range(-0.65, 0.65))
 		# Keep rounded puff tips inside the sample box instead of clipping flat tops.

@@ -5,23 +5,23 @@ Runtime contracts and accepted content constraints: ../movement.md and ../encoun
 Audit and route-regression results: ../navigation_encounter_review.md.
 Combat hardware, release, and broader hands-on acceptance: todo-combat.txt.
 
-[ ] ENCOUNTER-03: Reconcile Manta cost with encounter fixtures and documentation.
-    resources/ships/manta.tres currently inherits ShipDefinition's 10-point cost.
-    check_encounters.gd and the documented patrol/wave totals expect 24, causing
-    two pre-existing cost assertions to fail during the cloud-spawn validation.
-    Confirm the intended authored cost, then align the resource or expectations
-    and recalculate the documented random-pool ceiling.
+[ ] ENCOUNTER-03: Reconcile ship costs with encounter fixtures and documentation.
+    The authored resources now set Manta to 30 points and Bastion to 90.
+    check_encounters.gd still expects Manta at 24 and Bastion at 60, causing
+    three cost assertions to fail during the first-wave positioning check.
+    Align fixture expectations and documented patrol/wave totals with the
+    authored costs, and recalculate the documented random-pool ceiling.
 
 [ ] NAV-02: Accept combat maneuvering while the marker moves.
-    Scoring uses the same world velocity as flight, including marker motion.
+    Attack positions use fixed fleet axes. Flight still follows actual world velocity.
     At 25 m/s cruise and 12 m/s local correction, requested horizontal velocity
     cannot reverse along Z. Broadside/forward weapons need hands-on acceptance
-    against targets ahead, behind, and across the sphere. The stationary-marker
-    priority-target fixture is not evidence for all moving combat arrangements.
+    against targets ahead, behind, and across the sphere. The focused moving checks
+    do not cover all moving combat arrangements.
 
 [ ] ENCOUNTER-02: Decide progression beyond the authored random-pool ceiling.
     Existing per-option limits total 324 points and 20 ships. From wave 29 onward,
     the minimum 75% spending target exceeds that ceiling, so every ordinary wave
     contains all options at their limits, differing only in placement/order.
     Wave 100 has 1500 budget but still spends 324. Decide tiered pools, scaled
-    limits, or a deliberate plateau; retain separate costs and selection weights.
+    limits, or a deliberate plateau. Retain separate costs and selection weights.

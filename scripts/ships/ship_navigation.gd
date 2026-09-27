@@ -10,6 +10,11 @@ const ARRIVAL_RETRY_SECONDS: float = 0.5
 
 ## One local destination owner for travel, combat, and obstacle avoidance.
 var goal_offset := Vector3.ZERO
+## Selected authored enemy bearing and our world-aligned offset from that enemy.
+## An empty position means ordinary navigation, even while a target is retained.
+var attack_position: String = ""
+var attack_offset := Vector3.ZERO
+var _attack_waypoint := Vector3.ZERO
 var goals_reached: int = 0
 var arrival_radius: float = 10.0
 var blocked: bool = false
@@ -36,6 +41,7 @@ func initialize(controller: FleetController, ship: Airship) -> void:
 	_was_in_combat = fleet.in_combat
 	_arrival_island = null
 	_arrival_retry = 0.0
+	attack_position = ""
 
 
 func usable_radius(ship: Airship) -> float:
@@ -57,7 +63,10 @@ static func search_radius(ship: Airship, maximum_island_radius: float) -> float:
 		var center := relative.limit_length(ship.navigation.usable_radius(ship) * 0.9)
 		goal_reach = relative.distance_to(center) + controller.local_step
 		goal_reach = maxf(goal_reach, relative.distance_to(ship.navigation.goal_offset))
-	# Contacts can exceed propulsion limits; displaced ships can sample well inside
+		if ship.combat_engaged and ship.combat.has_target():
+			# Endpoint clearance can involve scenery beyond the next local waypoint.
+			goal_reach = maxf(goal_reach, ship.global_position.distance_to(ship.combat.target.global_position) + ship.engagement_distance * 1.2)
+	# Contacts can exceed propulsion limits. Displaced ships can sample well inside
 	# the sphere. Include both their full goal segment and the braking/turn lookahead.
 	var horizon := maxf(maxf(ship.linear_velocity.length(), relative_speed), request_speed) / ship.braking + turn + 1.0
 	if controller != null:
@@ -71,8 +80,10 @@ func prepare(delta: float, ship: Airship) -> void:
 	_arrival_retry = maxf(0.0, _arrival_retry - delta)
 	if _was_in_combat != fleet.in_combat or _target != ship.combat.target:
 		_goal_age = INF
+		attack_position = ""
 	_was_in_combat = fleet.in_combat
 	_target = ship.combat.target
+	_follow_attack_waypoint()
 
 
 func plan(ship: Airship, islands: Array[FloatingIsland]) -> void:
@@ -85,14 +96,14 @@ func plan(ship: Airship, islands: Array[FloatingIsland]) -> void:
 	var relative := ship.global_position - fleet.marker.global_position
 	var arrived := relative.distance_to(goal_offset) <= arrival_radius
 	var refresh := is_inf(_goal_age) or (arrived and _goal_age >= MINIMUM_GOAL_AGE) or (ship.combat_engaged and _goal_age >= COMBAT_GOAL_INTERVAL)
-	if not refresh and _goal_clear(ship, goal_offset, intended, islands):
+	if not refresh and _attack_valid(ship, islands) and _goal_clear(ship, goal_offset, intended, islands):
 		safe_marker_speed = fleet.requested_speed
 		blocked = false
 		return
 	if arrived:
 		goals_reached += 1
 	# Search at the desired pace first, even while the marker is stopped. Slower
-	# choices remain useful detours; they do not imply that all flight must stop.
+	# choices remain useful detours. They do not imply that all flight must stop.
 	for step in range(SPEED_STEPS + 1):
 		var trial_speed := fleet.requested_speed * (1.0 - float(step) / SPEED_STEPS)
 		if _choose_goal(ship, islands, Vector3.FORWARD * trial_speed):
@@ -107,6 +118,7 @@ func plan(ship: Airship, islands: Array[FloatingIsland]) -> void:
 
 
 func steer(ship: Airship, avoidance: Vector3, islands: Array[FloatingIsland]) -> Vector3:
+	_follow_attack_waypoint()
 	if _outside(ship):
 		return _steer_arrival(ship, avoidance, islands)
 	_update_detour_time(ship, islands)
@@ -115,7 +127,7 @@ func steer(ship: Airship, avoidance: Vector3, islands: Array[FloatingIsland]) ->
 	var refresh := is_inf(_goal_age) or (arrived and _goal_age >= MINIMUM_GOAL_AGE) or (ship.combat_engaged and _goal_age >= COMBAT_GOAL_INTERVAL)
 	# Other friendly routes may have reduced the marker pace after planning.
 	# Validate the actual course too, including separation and the new center.
-	if refresh or not _goal_clear(ship, goal_offset, fleet.velocity, islands):
+	if refresh or not _attack_valid(ship, islands) or not _goal_clear(ship, goal_offset, fleet.velocity, islands):
 		if arrived:
 			goals_reached += 1
 		if not _choose_goal(ship, islands, fleet.velocity):
@@ -136,6 +148,7 @@ func _outside(ship: Airship) -> bool:
 
 
 func _plan_arrival(ship: Airship, islands: Array[FloatingIsland]) -> void:
+	attack_position = ""
 	# The final destination stays inside the sphere. Only the approach leg may
 	# go around scenery outside it, without holding up the distant fleet marker.
 	goal_offset = (ship.global_position - fleet.marker.global_position).limit_length(usable_radius(ship) * 0.9)
@@ -143,7 +156,7 @@ func _plan_arrival(ship: Airship, islands: Array[FloatingIsland]) -> void:
 	_goal_age = INF
 	var destination := fleet.marker.global_position + goal_offset
 	var marker_velocity := Vector3.FORWARD * fleet.requested_speed
-	# Leave the detour as soon as the fleet is reachable; converging vessels
+	# Leave the detour as soon as the fleet is reachable. Converging vessels
 	# must not queue for the exact same temporary waypoint.
 	if _arrival_route_clear(ship, destination, marker_velocity, islands):
 		_arrival_island = null
@@ -241,6 +254,9 @@ func _arrival_course_clear(ship: Airship, request: Vector3, destination: Vector3
 
 
 func _choose_goal(ship: Airship, islands: Array[FloatingIsland], marker_velocity: Vector3) -> bool:
+	if ship.combat_engaged and _choose_attack_goal(ship, islands, marker_velocity):
+		return true
+	attack_position = ""
 	var relative := ship.global_position - fleet.marker.global_position
 	var radius := usable_radius(ship)
 	var center := relative.limit_length(radius * 0.9)
@@ -254,9 +270,6 @@ func _choose_goal(ship: Airship, islands: Array[FloatingIsland], marker_velocity
 		match index:
 			0: direction = forward
 			1: direction = -relative.normalized()
-			2:
-				if ship.combat.has_target():
-					direction = (ship.combat.target.global_position - ship.global_position).normalized()
 			3: direction = Vector3.LEFT
 			4: direction = Vector3.RIGHT
 			5: direction = Vector3.UP
@@ -271,11 +284,13 @@ func _choose_goal(ship: Airship, islands: Array[FloatingIsland], marker_velocity
 		var world_goal := fleet.marker.global_position + candidate
 		var course := (world_goal - ship.global_position).normalized()
 		var request := _bounded_velocity(ship, world_goal, marker_velocity)
-		var score := forward.dot(course) * 1.5 + rng.randf() * 0.5
+		# Turning follows world velocity. A rearward local goal can slow
+		# forward flight. Rewarding its local course would herd ships ahead.
+		var horizontal := Vector3(request.x, 0.0, request.z)
+		var alignment := forward.dot(horizontal.normalized()) if horizontal.length_squared() > 1.0 else 1.0
+		var score := alignment * 1.5 + rng.randf() * 0.5
 		# Prefer inward turns before momentum carries the hull to the edge.
 		score += course.dot(-relative.normalized()) * edge_weight * 5.0
-		if ship.combat_engaged:
-			score += ship.combat.score_destination(ship, world_goal, request)
 		if score > best_score:
 			best_score = score
 			best_goal = candidate
@@ -287,10 +302,124 @@ func _choose_goal(ship: Airship, islands: Array[FloatingIsland], marker_velocity
 	return true
 
 
+func _follow_attack_waypoint() -> void:
+	if not attack_position.is_empty() and is_instance_valid(_target):
+		goal_offset = _target.global_position + _attack_waypoint - fleet.marker.global_position
+
+
+func _attack_valid(ship: Airship, islands: Array[FloatingIsland]) -> bool:
+	if attack_position.is_empty():
+		return true
+	return ship.combat.has_target() and attack_position in ship.combat.positions and _attack_point_clear(ship, attack_offset, islands)
+
+
+func _attack_point_clear(ship: Airship, offset: Vector3, islands: Array[FloatingIsland]) -> bool:
+	var distance := offset.length()
+	if distance < ship.engagement_distance * 0.8 - 0.01 or distance > ship.engagement_distance * 1.2 + 0.01:
+		return false
+	var target := ship.combat.target
+	var clearance := ship.hull_radius + ship.hull_half_segment + target.hull_radius + target.hull_half_segment + HULL_CLEARANCE
+	if distance < clearance:
+		return false
+	var destination := target.global_position + offset
+	return destination.distance_to(fleet.marker.global_position) <= usable_radius(ship) and _path_clear(ship, destination, islands, destination)
+
+
+func _choose_attack_goal(ship: Airship, islands: Array[FloatingIsland], marker_velocity: Vector3) -> bool:
+	if not ship.combat.has_target():
+		return false
+	# Keep an available position instead of switching broadsides as distances change.
+	if not attack_position.is_empty() and _attack_valid(ship, islands):
+		var waypoint := _attack_route(ship, attack_offset, marker_velocity, islands)
+		if waypoint.is_finite():
+			_set_attack_goal(ship, attack_position, attack_offset, waypoint)
+			return true
+	var previous := attack_position
+	attack_position = ""
+	var best_position: String = ""
+	var best_offset := Vector3.ZERO
+	var best_waypoint := Vector3.INF
+	var best_cost: float = INF
+	for name in ship.combat.positions:
+		var bearing := ShipCombat.direction(name)
+		# Small spread around each authored direction avoids a shared exact destination.
+		var spread := Vector3(rng.randf_range(-0.12, 0.12), rng.randf_range(-0.12, 0.12), rng.randf_range(-0.12, 0.12))
+		bearing = (bearing + spread - bearing * spread.dot(bearing)).normalized()
+		for factor: float in [1.0, 0.8, 1.2]:
+			var offset := -bearing * ship.engagement_distance * factor
+			if not _attack_point_clear(ship, offset, islands):
+				continue
+			var waypoint := _attack_route(ship, offset, marker_velocity, islands)
+			if not waypoint.is_finite():
+				continue
+			var cost := ship.global_position.distance_squared_to(ship.combat.target.global_position + offset)
+			if name == previous:
+				cost = -1.0
+			if cost < best_cost:
+				best_cost = cost
+				best_position = name
+				best_offset = offset
+				best_waypoint = waypoint
+			break
+	if best_position.is_empty():
+		return false
+	_set_attack_goal(ship, best_position, best_offset, best_waypoint)
+	return true
+
+
+func _set_attack_goal(ship: Airship, name: String, offset: Vector3, waypoint: Vector3) -> void:
+	attack_position = name
+	attack_offset = offset
+	_attack_waypoint = waypoint - ship.combat.target.global_position
+	goal_offset = waypoint - fleet.marker.global_position
+	_goal_age = 0.0
+	blocked = false
+
+
+func _attack_route(ship: Airship, offset: Vector3, marker_velocity: Vector3, islands: Array[FloatingIsland]) -> Vector3:
+	var destination := ship.combat.target.global_position + offset
+	var error := destination - ship.global_position
+	var direct := ship.global_position + error.limit_length(fleet.local_step)
+	if _attack_path_clear(ship, direct) and _goal_clear(ship, direct - fleet.marker.global_position, marker_velocity, islands):
+		return direct
+	# Transit may cross other sectors, but must make progress toward an allowed endpoint.
+	var best := Vector3.INF
+	var best_distance := error.length_squared()
+	for index in range(CANDIDATE_COUNT):
+		var direction := Vector3(rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0), rng.randf_range(-1.0, 1.0)).normalized()
+		match index:
+			0: direction = Vector3.LEFT
+			1: direction = Vector3.RIGHT
+			2: direction = Vector3.UP
+			3: direction = Vector3.DOWN
+			4: direction = Vector3.FORWARD
+			5: direction = Vector3.BACK
+		var candidate := ship.global_position + direction * minf(fleet.local_step, error.length())
+		var distance := candidate.distance_squared_to(destination)
+		if distance >= best_distance or not _attack_path_clear(ship, candidate):
+			continue
+		if _goal_clear(ship, candidate - fleet.marker.global_position, marker_velocity, islands):
+			best_distance = distance
+			best = candidate
+	return best
+
+
+func _attack_path_clear(ship: Airship, destination: Vector3) -> bool:
+	var target := ship.combat.target
+	var course := destination - ship.global_position
+	var from_target := ship.global_position - target.global_position
+	var fraction := clampf(-from_target.dot(course) / maxf(0.001, course.length_squared()), 0.0, 1.0)
+	var closest := from_target + course * fraction
+	var clearance := ship.hull_radius + ship.hull_half_segment + target.hull_radius + target.hull_half_segment + HULL_CLEARANCE
+	return closest.length_squared() >= minf(from_target.length_squared(), clearance * clearance) - 0.01
+
+
 func _goal_clear(ship: Airship, candidate: Vector3, marker_velocity: Vector3, islands: Array[FloatingIsland]) -> bool:
 	if candidate.length() > usable_radius(ship):
 		return false
 	var destination := fleet.marker.global_position + candidate
+	if not attack_position.is_empty() and not _attack_path_clear(ship, destination):
+		return false
 	if not _path_clear(ship, destination, islands):
 		return false
 	return _course_clear(ship, _bounded_velocity(ship, destination, marker_velocity), islands)

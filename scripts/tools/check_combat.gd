@@ -81,7 +81,7 @@ func _check_ballistics() -> void:
 	_check(ShipCombat.DIRECTIONS.size() == 18, "Eight horizontal and five bearings on each vertical side are authorable.")
 	for name in ShipCombat.DIRECTIONS:
 		_check(is_equal_approx(ShipCombat.direction(name).length(), 1.0), "Combat directions are normalized.")
-	_check(ShipCombat.direction("front") == Vector3.FORWARD and ShipCombat.direction("up") == Vector3.UP, "Bearings use ship-local forward and altitude.")
+	_check(ShipCombat.direction("front") == Vector3.FORWARD and ShipCombat.direction("up") == Vector3.UP, "Attack bearings use fleet forward and world altitude.")
 
 
 func _check_vertical_bias() -> void:
@@ -183,13 +183,13 @@ func _check_neighbor_filter() -> void:
 
 func _check_mounts_and_health() -> void:
 	var player := _add_ship(Factions.PLAYER, Vector3.ZERO)
-	var enemy := _add_ship(Factions.ENEMY, Vector3(600, 0, 0))
+	var enemy := _add_ship(Factions.ENEMY, Vector3(150, 0, 0))
 	var far_enemy := _add_ship(Factions.ENEMY, Vector3(10000, 0, 0))
-	_check(player.maximum_health == 500 and player.current_health == 500 and enemy.current_health == 500, "Both factions start with 500 health.")
+	_check(player.current_health == player.maximum_health and enemy.current_health == enemy.maximum_health and player.maximum_health == enemy.maximum_health, "Both factions start at their authored maximum health.")
 	await physics_frame
 	_check(Factions.are_hostile(player.faction, enemy.faction) and not Factions.are_hostile(player.faction, &"visitors"), "String factions share one hostility rule.")
 	_check(player.mounted_slots.size() == 2 and player.maximum_speed == 50 and is_equal_approx(player.hull_radius, 10.5), "Kestrel uses its authored flight tuning and two mounts with its fitted model collider.")
-	_check(player.preferred_combat_positions == PackedStringArray(["front_left", "left_back", "back", "back_right", "right", "front_right"]), "Kestrel preserves the specified enabled bearings.")
+	_check(player.preferred_combat_positions == PackedStringArray(["front_left", "left", "left_back", "back_right", "right", "front_right"]), "Kestrel authors symmetric left/right bearing preferences.")
 	var left := player.mounted_slots[0]
 	var right := player.mounted_slots[1]
 	var left_weapon := left.equipment as MountedWeapon
@@ -202,13 +202,13 @@ func _check_mounts_and_health() -> void:
 	var axis := -right.global_basis.z
 	_check(right.accepts_direction(axis.rotated(Vector3.UP, deg_to_rad(right.cone_half_angle))) and not right.accepts_direction(axis.rotated(Vector3.UP, deg_to_rad(right.cone_half_angle + 1))), "Authored cone boundaries are respected.")
 	_check(right_weapon.launch_for(enemy) != Vector3.ZERO and left_weapon.launch_for(enemy) == Vector3.ZERO, "Only the eligible broadside fires toward a target.")
-	enemy.global_position.x = -600
+	enemy.global_position.x = -150
 	_check(left_weapon.launch_for(enemy) != Vector3.ZERO and right_weapon.launch_for(enemy) == Vector3.ZERO, "The opposite broadside can fire independently.")
-	enemy.global_position.x = 600
+	enemy.global_position.x = 150
 	enemy.linear_velocity = Vector3(0, 0, right_weapon.weapon.launch_speed * 1.5)
 	player.combat.prepare(2.1, player, [player, enemy], _fleet)
 	player.combat.prepare(0.0, player, [player, enemy], _fleet)
-	_check(player.combat.engagement_range <= _fleet.radius * 0.75, "Combat spacing fits the current maneuvering sphere.")
+	_check(player.combat.positions == player.preferred_combat_positions, "Authored attack positions remain independent of ballistic firing solutions.")
 	enemy.linear_velocity = Vector3.ZERO
 	player.combat.target = far_enemy
 	right.fire_at_targets_in_range = false
@@ -248,10 +248,10 @@ func _check_search_budget() -> void:
 	# Five nearer targets pass the cheap cone bound but cannot be intercepted.
 	# Failed attempts must not starve the sixth, reachable target.
 	for index in range(5):
-		var fleeing := _add_ship(Factions.ENEMY, Vector3(100 + index * 80, 0, 0))
+		var fleeing := _add_ship(Factions.ENEMY, Vector3(75 + index * 15, 0, 0))
 		fleeing.linear_velocity = Vector3.RIGHT * 3000
 		ships.append(fleeing)
-	var eligible := _add_ship(Factions.ENEMY, Vector3(600, 0, 0))
+	var eligible := _add_ship(Factions.ENEMY, Vector3(175, 0, 0))
 	ships.append(eligible)
 	var slot := player.mounted_slots[1]
 	var weapon := slot.equipment as MountedWeapon
@@ -330,7 +330,7 @@ func _check_impacts() -> void:
 	_fire_at(player, Vector3.ZERO, enemy.global_position)
 	await _advance_projectiles(8.1)
 	_check(enemy.current_health == enemy.maximum_health - 5, "Swept ballistic hit deals exactly five damage at the project physics rate.")
-	# The collision target moves independently after launch; prediction must lead it.
+	# The collision target moves independently after launch. Prediction must lead it.
 	enemy.linear_velocity = Vector3(0, 0, 50)
 	var moving_time := Ballistics.intercept_time(enemy.global_position, enemy.linear_velocity, 200, 30, 8)
 	_projectiles.fire(player, Vector3.ZERO, Ballistics.launch_velocity(enemy.global_position, enemy.linear_velocity, 30, moving_time), CANNON)
@@ -488,7 +488,7 @@ func _check_journey() -> void:
 			journey.camera_rig.zoom(2200.0 - journey.camera_rig.camera.position.z)
 	_check(journey.projectiles.damaging_hits > 0 and journey.destroyed_count > 0, "Combat causes damage and retires destroyed ships into falling wrecks.")
 	_check(spawner.batches == 180, "Spawner continues on one-second cadence.")
-	_check(maximum_players > starting_players and maximum_enemies > 0, "Both combat populations receive reinforcements despite ongoing casualties; controlled batches below verify the caps.")
+	_check(maximum_players > starting_players and maximum_enemies > 0, "Both combat populations receive reinforcements despite ongoing casualties. Controlled batches below verify the caps.")
 	if _visual:
 		journey.camera_rig.focus_fleet()
 		journey.camera_rig.zoom(4500.0 - journey.camera_rig.camera.position.z)
