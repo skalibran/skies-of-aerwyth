@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CloudType" format=3 uid="uid://c6pdvfgt3syr3"]
+
+[ext_resource type="Script" uid="uid://csdc2e3lplp2j" path="res://scripts/clouds/cloud_type.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Altocumulus"
+altitude_range = Vector2(2700, 7200)
+depth_ratio = 0.65
+height_ratio = 0.18
+puff_count = 5
+puff_size = 0.32
+base_cut = -1.0
+base_color = Color(0.75, 0.8, 0.86, 1)

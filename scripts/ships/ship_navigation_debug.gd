@@ -4,6 +4,7 @@ extends MeshInstance3D
 const GOAL_COLOR := Color(0.1, 0.85, 1.0)
 const DESIRED_COLOR := Color(1.0, 0.55, 0.1)
 const VELOCITY_COLOR := Color(0.3, 1.0, 0.25)
+const TARGET_COLOR := Color(1.0, 0.2, 0.85)
 const GOAL_RING_SEGMENTS: int = 24
 
 @export var journey: Journey
@@ -56,6 +57,7 @@ func redraw() -> void:
 	# All lines share this mesh transform; avoid inverting it for every vertex.
 	_world_to_local = global_transform.affine_inverse()
 	var marker_position := journey.fleet.marker.get_global_transform_interpolated().origin
+	var selected_ship := journey.camera_rig.followed_ship
 	for ship in journey.ships:
 		var ship_position := ship.get_global_transform_interpolated().origin
 		if ship.combat_engaged:
@@ -68,6 +70,9 @@ func redraw() -> void:
 			_draw_goal(goal, ship.navigation.arrival_radius)
 		_draw_arrow(ship_position, ship.navigation_velocity * velocity_seconds, DESIRED_COLOR)
 		_draw_arrow(ship_position, ship.linear_velocity * velocity_seconds, VELOCITY_COLOR)
+		if ship == selected_ship and ship.alive and not ship.is_queued_for_deletion() and ship.combat.has_target():
+			var target_position := ship.combat.target.get_global_transform_interpolated().origin
+			_line(ship_position, target_position, TARGET_COLOR)
 	if _vertex_count > 0:
 		_lines.surface_end()
 

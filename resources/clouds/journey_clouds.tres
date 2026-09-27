@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="CloudProfile" format=3 uid="uid://c1wolkrtmddku"]
+
+[ext_resource type="Script" uid="uid://vsf6mi8ynucb" path="res://scripts/clouds/cloud_profile.gd" id="1"]
+[ext_resource type="Script" uid="uid://csdc2e3lplp2j" path="res://scripts/clouds/cloud_type.gd" id="2"]
+[ext_resource type="Resource" path="res://resources/clouds/stratus.tres" id="3"]
+[ext_resource type="Resource" uid="uid://bj44gcxn6o6jp" path="res://resources/clouds/cumulus.tres" id="4"]
+[ext_resource type="Resource" uid="uid://c6pdvfgt3syr3" path="res://resources/clouds/altocumulus.tres" id="5"]
+[ext_resource type="Resource" uid="uid://cmk2kwsnwkanp" path="res://resources/clouds/cirrus.tres" id="6"]
+[ext_resource type="Script" uid="uid://ubryvswrap2i" path="res://scripts/clouds/cloud_layer.gd" id="7"]
+
+[sub_resource type="Resource" id="LowLayer"]
+script = ExtResource("7")
+display_name = "Low"
+altitude = 2100.0
+height_variation = 200.0
+
+[sub_resource type="Resource" id="MiddleLayer"]
+script = ExtResource("7")
+altitude = 5200.0
+
+[sub_resource type="Resource" id="HighLayer"]
+script = ExtResource("7")
+display_name = "High"
+altitude = 8200.0
+height_variation = 400.0
+density = 0.2
+
+[resource]
+script = ExtResource("1")
+types = Array[ExtResource("2")]([ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6")])
+layers = Array[ExtResource("7")]([SubResource("LowLayer"), SubResource("MiddleLayer"), SubResource("HighLayer")])

@@ -27,6 +27,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	_check_ballistics()
+	_check_vertical_bias()
 	_fixture = Node3D.new()
 	root.add_child(_fixture)
 	_fleet = FleetController.new()
@@ -77,10 +78,36 @@ func _check_ballistics() -> void:
 	_check(Ballistics.intercept_time(Vector3.ZERO, Vector3.ZERO, 200, 30, 8) < 0, "Coincident targets do not produce invalid division.")
 	_check(Ballistics.intercept_time(Vector3.INF, Vector3.ZERO, 200, 30, 8) < 0, "Invalid inputs are rejected.")
 	_check(Ballistics.intercept_time(Vector3.ONE, Vector3.ZERO, 0, 30, 8) < 0, "Invalid speed is rejected.")
-	_check(ShipCombat.DIRECTIONS.size() == 14, "All fourteen authorable bearings exist.")
+	_check(ShipCombat.DIRECTIONS.size() == 18, "Eight horizontal and five bearings on each vertical side are authorable.")
 	for name in ShipCombat.DIRECTIONS:
 		_check(is_equal_approx(ShipCombat.direction(name).length(), 1.0), "Combat directions are normalized.")
 	_check(ShipCombat.direction("front") == Vector3.FORWARD and ShipCombat.direction("up") == Vector3.UP, "Bearings use ship-local forward and altitude.")
+
+
+func _check_vertical_bias() -> void:
+	var ship := KESTREL.instantiate() as Airship
+	_check(is_zero_approx(ship.vertical_combat_bias()) and ship.preferred_altitude_side() == 1, "Neutral broadside ships prefer above before entering the scene tree.")
+	for name: String in ["front_up", "left_up", "up", "right_up", "back_up"]:
+		ship.preferred_combat_positions = PackedStringArray([name])
+		_check(ship.vertical_combat_bias() >= ShipCombat.STRONG_VERTICAL_BIAS and ship.preferred_altitude_side() == -1, "Each upward bearing prefers approaching from below: " + name)
+	for name: String in ["front_bottom", "left_bottom", "bottom", "right_bottom", "back_bottom"]:
+		ship.preferred_combat_positions = PackedStringArray([name])
+		_check(ship.vertical_combat_bias() <= -ShipCombat.STRONG_VERTICAL_BIAS and ship.preferred_altitude_side() == 1, "Each downward bearing prefers approaching from above: " + name)
+	ship.preferred_combat_positions = PackedStringArray(["up", "bottom"])
+	_check(is_zero_approx(ship.vertical_combat_bias()) and ship.preferred_altitude_side() == 1, "Balanced vertical bearings have neutral bias and prefer above.")
+	ship.preferred_combat_positions = PackedStringArray(["front_up", "front", "left", "right"])
+	_check(ship.vertical_combat_bias() < ShipCombat.STRONG_VERTICAL_BIAS and ship.preferred_altitude_side() == 1, "A weak upward option does not override the neutral upper preference.")
+	ship.preferred_combat_positions = PackedStringArray(["up", "up", "bottom", "unknown"])
+	_check(is_zero_approx(ship.vertical_combat_bias()), "Duplicate and unknown bearings do not skew authored bias.")
+	ship.preferred_combat_positions = PackedStringArray()
+	_check(is_zero_approx(ship.vertical_combat_bias()) and ship.preferred_altitude_side() == 1, "Empty preferences are neutral.")
+	ship.faction = Factions.ENEMY
+	ship.preferred_combat_positions = PackedStringArray(["up"])
+	_check(ship.preferred_altitude_side() == -1, "The combat role preference is independent of faction.")
+	ship.free()
+	var manta := preload("res://scenes/ships/manta.tscn").instantiate() as Airship
+	_check(manta.vertical_combat_bias() < -ShipCombat.STRONG_VERTICAL_BIAS and manta.preferred_altitude_side() == 1, "The authored downward Manta role prefers the upper approach.")
+	manta.free()
 
 
 func _add_ship(faction: StringName, position: Vector3) -> Airship:

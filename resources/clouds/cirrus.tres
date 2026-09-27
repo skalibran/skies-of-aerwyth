@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CloudType" format=3 uid="uid://cmk2kwsnwkanp"]
+
+[ext_resource type="Script" uid="uid://csdc2e3lplp2j" path="res://scripts/clouds/cloud_type.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Cirrus"
+altitude_range = Vector2(6200, 10700)
+depth_ratio = 0.22
+height_ratio = 0.08
+puff_count = 4
+puff_size = 0.25
+erosion = 0.15
+base_cut = -1.0
+curl = 0.5
+top_color = Color(0.96, 0.98, 1, 1)
+base_color = Color(0.84, 0.89, 0.95, 1)

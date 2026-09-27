@@ -1,4 +1,4 @@
-[gd_scene load_steps=29 format=3]
+[gd_scene load_steps=30 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/journey.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/ships/kestrel.tscn" id="2"]
@@ -23,6 +23,7 @@
 [ext_resource type="Resource" path="res://resources/ships/bastion.tres" id="22"]
 [ext_resource type="PackedScene" path="res://scenes/world/threat_boundaries.tscn" id="23"]
 [ext_resource type="PackedScene" path="res://scenes/fleet/fleet_navigation_sphere.tscn" id="24"]
+[ext_resource type="PackedScene" path="res://scenes/clouds/clouds.tscn" id="25"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial"]
 sky_top_color = Color(0.10, 0.35, 0.70, 1)
@@ -60,13 +61,14 @@ roughness = 1.0
 material = SubResource("MarkerMaterial")
 size = Vector3(4, 4, 4)
 
-[node name="Journey" type="Node3D" node_paths=PackedStringArray("initial_ships", "fleet", "origin", "island_spawner", "camera_rig", "terrain", "water", "progression", "projectiles", "wreck_controller", "encounters")]
+[node name="Journey" type="Node3D" node_paths=PackedStringArray("initial_ships", "fleet", "origin", "island_spawner", "clouds", "camera_rig", "terrain", "water", "progression", "projectiles", "wreck_controller", "encounters")]
 script = ExtResource("1")
 initial_ships = Array[NodePath]([NodePath("Ships/Ship1"), NodePath("Ships/Ship2"), NodePath("Ships/Ship3")])
 available_ships = Array[ExtResource("16")]([ExtResource("17"), ExtResource("20"), ExtResource("21"), ExtResource("22")])
 fleet = NodePath("FleetController")
 origin = NodePath("FloatingOrigin")
 island_spawner = NodePath("IslandSpawner")
+clouds = NodePath("Clouds")
 camera_rig = NodePath("OrbitCamera")
 terrain = NodePath("VoxelTerrain")
 water = NodePath("Water")
@@ -88,6 +90,11 @@ origin = NodePath("../FloatingOrigin")
 progression = NodePath("../Progression")
 
 [node name="Water" parent="." instance=ExtResource("11")]
+
+[node name="Clouds" parent="." node_paths=PackedStringArray("origin", "terrain", "camera") instance=ExtResource("25")]
+origin = NodePath("../FloatingOrigin")
+terrain = NodePath("../VoxelTerrain")
+camera = NodePath("../OrbitCamera/Camera3D")
 
 [node name="Progression" type="Node" parent="."]
 script = ExtResource("10")

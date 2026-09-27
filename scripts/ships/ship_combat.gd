@@ -7,9 +7,12 @@ const DIRECTIONS: Dictionary[String, Vector3] = {
 	"back": Vector3(0, 0, 1), "back_right": Vector3(1, 0, 1),
 	"right": Vector3(1, 0, 0), "front_right": Vector3(1, 0, -1),
 	"front_up": Vector3(0, 1, -1), "up": Vector3(0, 1, 0),
+	"left_up": Vector3(-1, 1, 0), "right_up": Vector3(1, 1, 0),
 	"back_up": Vector3(0, 1, 1), "back_bottom": Vector3(0, -1, 1),
 	"bottom": Vector3(0, -1, 0), "front_bottom": Vector3(0, -1, -1),
+	"left_bottom": Vector3(-1, -1, 0), "right_bottom": Vector3(1, -1, 0),
 }
+const STRONG_VERTICAL_BIAS: float = 0.5
 
 var target: Airship
 var engagement_range: float = 120.0
@@ -19,6 +22,20 @@ var _bearings: Array[Vector3] = []
 
 static func direction(name: String) -> Vector3:
 	return DIRECTIONS.get(name, Vector3.ZERO).normalized()
+
+
+## Authored target-bearing bias: negative aims below, positive aims above.
+## Independent of scene readiness, current target, and temporary visual banking.
+static func vertical_bias(positions: PackedStringArray) -> float:
+	var seen := PackedStringArray()
+	var total: float = 0.0
+	for name in positions:
+		var bearing := direction(name)
+		if bearing == Vector3.ZERO or name in seen:
+			continue
+		seen.append(name)
+		total += bearing.y
+	return total / seen.size() if not seen.is_empty() else 0.0
 
 
 func has_target() -> bool:

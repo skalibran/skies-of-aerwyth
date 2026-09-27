@@ -70,6 +70,7 @@ mounted_slots = [NodePath("VisualRoot/PortForeSlot"), NodePath("VisualRoot/PortM
 death_smoke_scene = ExtResource("4")
 death_smoke_points = NodePath("VisualRoot/DeathSmokePoints")
 preferred_combat_positions = PackedStringArray("front_left", "left", "left_back", "back_right", "right", "front_right")
+spawn_layer = 2
 
 [node name="HullCollider" parent="." index="0"]
 shape = SubResource("Hull")

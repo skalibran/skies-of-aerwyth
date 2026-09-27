@@ -1,0 +1,23 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/clouds/cloud_spawner.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/clouds/journey_clouds.tres" id="2"]
+[ext_resource type="Script" path="res://scripts/clouds/cloud_dissolve.gd" id="3"]
+[ext_resource type="Shader" path="res://shaders/clouds/cloud_surface.gdshader" id="4"]
+[ext_resource type="Texture2D" path="res://assets/textures/clouds/camera_fade_blue_noise.png" id="5"]
+
+[sub_resource type="ShaderMaterial" id="CloudMaterial"]
+shader = ExtResource("4")
+shader_parameter/camera_fade_blue_noise = ExtResource("5")
+shader_parameter/distance_fade_start = 8000.0
+shader_parameter/distance_fade_end = 10000.0
+
+[node name="Clouds" type="Node3D"]
+script = ExtResource("1")
+profile = ExtResource("2")
+material = SubResource("CloudMaterial")
+
+[node name="Dissolve" type="Node" parent="." node_paths=PackedStringArray("clouds")]
+process_priority = 10
+script = ExtResource("3")
+clouds = NodePath("..")

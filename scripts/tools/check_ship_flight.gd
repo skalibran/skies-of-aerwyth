@@ -18,12 +18,15 @@ func _run() -> void:
 	_fixture = Node3D.new()
 	root.add_child(_fixture)
 	_fleet = FleetController.new()
+	# Fixed-limit flight fixtures isolate authored tuning from outside-sphere assistance.
+	_fleet.arrival_max_multiplier = 1.0
 	_fleet.marker = Node3D.new()
 	_fixture.add_child(_fleet)
 	_fixture.add_child(_fleet.marker)
 	await _check_turn()
 	await _check_braking_and_axis()
 	_check_moving_navigation_heading()
+	await _check_arrival_boost()
 	await _check_navigation()
 	await _check_contacts()
 	await _check_impulse_recovery()
@@ -114,6 +117,89 @@ func _check_moving_navigation_heading() -> void:
 	ship.free()
 	target.free()
 	_fleet.initialize()
+
+
+func _check_arrival_boost() -> void:
+	_fleet.arrival_max_multiplier = 10.0
+	var ship := _ship(KESTREL)
+	ship.freeze = true
+	for direction: Vector3 in [Vector3.FORWARD, Vector3.BACK, Vector3.UP, Vector3.DOWN]:
+		ship.position = direction * (_fleet.radius - 1.0)
+		_check(ShipFlight.speed_multiplier(ship) == 1.0, "Ships inside the sphere retain normal flight limits on every axis.")
+		ship.position = direction * (_fleet.radius + 500.0)
+		_check(is_equal_approx(ShipFlight.speed_multiplier(ship), 5.5), "Arrival assistance grows with 3D distance from the sphere surface.")
+		ship.position = direction * (_fleet.radius + 2000.0)
+		_check(ShipFlight.speed_multiplier(ship) == 10.0, "Arrival assistance remains capped for distant ships.")
+	ship.position = Vector3.BACK * (_fleet.radius + 1500.0)
+	ship.navigation.plan(ship, [])
+	var request := ship.navigation.steer(ship, Vector3.ZERO, [])
+	_check(request.z < -ship.maximum_speed, "Outside-sphere navigation can request faster approach than normal cruise.")
+	var acceleration := ShipFlight._acceleration(ship, request, _delta)
+	_check(acceleration.z < -ship.acceleration, "Boosted approach uses stronger propulsion instead of only raising a speed cap.")
+	ship.position = Vector3.UP * (_fleet.radius + 1500.0)
+	ship.navigation.plan(ship, [])
+	request = ship.navigation.steer(ship, Vector3.ZERO, [])
+	_check(request.y < -ship.climb_speed, "Vertical arrivals receive the same distance-based assistance.")
+	var multiplier := ShipFlight.speed_multiplier(ship)
+	ship.position.z += 10240.0
+	_fleet.marker.position.z += 10240.0
+	_check(ShipFlight.speed_multiplier(ship) == multiplier, "Origin rebasing preserves arrival assistance.")
+	ship.free()
+	_fleet.marker.position = Vector3.ZERO
+	for faction: StringName in [Factions.PLAYER, Factions.ENEMY]:
+		var ordinary := await _arrival_trial(faction, 1.0)
+		var boosted := await _arrival_trial(faction, 10.0)
+		_check(boosted.y <= 0.0 and ordinary.y > 500.0, "Both factions reach the sphere quickly while the ordinary-speed reference is still distant.")
+		_check(boosted.z > 50.0, "Native flight exceeds normal Kestrel speed during a distant arrival.")
+		print("ARRIVAL ", faction, ": boosted_seconds=", boosted.x, ", ordinary_remaining=", ordinary.y, ", peak_speed=", boosted.z)
+	_fleet.arrival_max_multiplier = 1.0
+	_fleet.initialize()
+
+
+func _arrival_trial(faction: StringName, multiplier: float) -> Vector3:
+	_fleet.arrival_max_multiplier = multiplier
+	_fleet.marker.position = Vector3.ZERO
+	_fleet.speed = 0.0
+	_fleet.velocity = Vector3.ZERO
+	var anchor := _ship(KESTREL)
+	anchor.freeze = true
+	var ship := _ship(KESTREL, faction)
+	ship.navigation.rng.seed = 31337
+	ship.position = Vector3(0.0, 1200.0, 1600.0 if faction == Factions.PLAYER else -1600.0)
+	ship.rotation.y = 0.0 if faction == Factions.PLAYER else PI
+	ship.reset_physics_interpolation()
+	_fleet.initialize()
+	var authored := Vector4(ship.maximum_speed, ship.climb_speed, ship.acceleration, ship.braking)
+	var elapsed: float = 0.0
+	var peak_speed: float = 0.0
+	var remaining: float = INF
+	for tick in range(75 * _rate):
+		await physics_frame
+		_fleet.prepare_step(_delta)
+		ship.prepare_navigation(_delta, [anchor, ship], _fleet, false)
+		ship.navigation.plan(ship, [])
+		var marker_before := _fleet.marker.position
+		_fleet.advance(_delta)
+		_check(_fleet.marker.position.z < marker_before.z, "The marker keeps moving while ships approach from outside the sphere.")
+		if elapsed > _fleet.cruise_speed / _fleet.acceleration:
+			_check(_fleet.speed == _fleet.cruise_speed, "Arriving ships preserve full marker cruise after initial acceleration.")
+		anchor.position = _fleet.marker.position
+		ship.apply_movement_forces(_delta, Vector3.ZERO, [])
+		elapsed += _delta
+		peak_speed = maxf(peak_speed, ship.linear_velocity.length())
+		remaining = ship.position.distance_to(_fleet.marker.position) - _fleet.radius
+		_check(ship.navigation.goal_offset.length() <= ship.navigation.usable_radius(ship) + 0.01, "Boosted arrivals retain destinations inside the fleet sphere.")
+		if remaining <= 0.0:
+			_check(ShipFlight.speed_multiplier(ship) == 1.0, "The arrival boost expires automatically at the sphere boundary.")
+			_check(ship.linear_velocity.length() <= ship.maximum_speed + 1.0, "The approach tapers back to normal flight speed before entering.")
+			break
+	_check(Vector4(ship.maximum_speed, ship.climb_speed, ship.acceleration, ship.braking) == authored, "Arrival assistance never mutates shared authored flight tuning.")
+	ship.free()
+	anchor.free()
+	_fleet.marker.position = Vector3.ZERO
+	_fleet.speed = 0.0
+	_fleet.velocity = Vector3.ZERO
+	return Vector3(elapsed, remaining, peak_speed)
 
 
 func _check_navigation() -> void:

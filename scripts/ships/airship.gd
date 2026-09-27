@@ -4,6 +4,8 @@ extends RigidBody3D
 signal health_changed(current: float, maximum: float)
 signal died(ship: Airship)
 
+enum SpawnLayer { LOWER_CLOUD, UPPER_CLOUD, ISLE }
+
 const ENEMY_TINT := preload("res://materials/ships/enemy_tint.tres")
 
 @export var entity_id: int = 0
@@ -15,6 +17,8 @@ const ENEMY_TINT := preload("res://materials/ships/enemy_tint.tres")
 ## Direct Marker3D children supply positions for the ship-owned smoke effect.
 @export var death_smoke_points: Node3D
 @export var preferred_combat_positions := PackedStringArray()
+## Authored concealment source for ships added during play; independent of combat bias.
+@export var spawn_layer: SpawnLayer = SpawnLayer.ISLE
 @export_range(1.0, 10000.0) var maximum_health: float = 500.0
 ## Time retained after the first ground contact, including settling.
 @export_range(0.1, 60.0) var wreck_lifetime: float = 25.0
@@ -64,6 +68,16 @@ func _ready() -> void:
 		mounted_slots[index].initialize_phase(entity_id, index)
 		mounted_slots[index].equipment_changed.connect(_on_equipment_changed.bind(mounted_slots[index]))
 	_apply_faction_tint(visual_root)
+
+
+func vertical_combat_bias() -> float:
+	return ShipCombat.vertical_bias(preferred_combat_positions)
+
+
+## Preferred combat side of an opponent's altitude; spawning uses spawn_layer instead.
+## Upward shooters approach from below; other roles prefer above, including neutral bias.
+func preferred_altitude_side() -> int:
+	return -1 if vertical_combat_bias() >= ShipCombat.STRONG_VERTICAL_BIAS else 1
 
 
 func _apply_faction_tint(root: Node3D) -> void:

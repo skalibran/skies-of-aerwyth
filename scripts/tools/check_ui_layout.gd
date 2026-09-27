@@ -21,6 +21,9 @@ func _run() -> void:
 	_journey = JOURNEY.instantiate() as Journey
 	_journey.encounters.enabled = false
 	root.add_child(_journey)
+	_check(_journey.ships.size() == 3, "Journey retains its three authored starting Kestrels.")
+	for ship in _journey.initial_ships:
+		_check(ship.global_position.distance_to(_journey.fleet.marker.global_position) < _journey.fleet.radius, "Starting ships remain at their authored positions near the marker.")
 	await _frames(3)
 	_journey.set_physics_process(false)
 	for ship in _journey.ships:
@@ -136,7 +139,14 @@ func _check_ship_picker(master: MasterUI) -> void:
 		ship.freeze = true
 		spawned.append(ship)
 		_check(ship.faction == Factions.PLAYER and ship in _journey.fleet.members and ship in _journey.origin._roots, "Spawned ships join player flight and origin registries.")
-		_check(ship.global_position.distance_to(_journey.fleet.marker.global_position) <= ship.navigation.usable_radius(ship) + 0.1, "Random placement stays inside the fleet sphere, including after rebasing.")
+		var radius := ship.hull_radius + ship.hull_half_segment + ShipNavigation.HULL_CLEARANCE
+		_check(ship.global_position.z - radius >= _journey.fleet.marker.global_position.z + 500.0, "Friendly hulls spawn at least 500 meters on Z+ relative to the marker.")
+		var concealed := false
+		for isle in _journey.island_spawner.obstacles:
+			if isle.global_position.z - _journey.fleet.marker.global_position.z >= 500.0 and isle.hides_sphere(_journey.camera_rig.camera.global_position, ship.global_position, radius):
+				concealed = true
+				break
+		_check(ship.spawn_layer == Airship.SpawnLayer.ISLE and concealed, "The authored Kestrel spawn uses an isle to conceal its whole hull, including after rebasing.")
 		_check(_journey.camera_rig.mode == camera_mode and root.gui_get_focus_owner() == null, "Pointer spawning neither picks the world nor keeps camera controls locked.")
 	_check(spawned[0].entity_id != spawned[1].entity_id and spawned[1].entity_id != spawned[2].entity_id, "Repeated spawning assigns independent stable IDs.")
 	_check(spawned[1].position.distance_to(spawned[2].position) > 31.0, "Repeated random spawns do not stack hulls.")
@@ -199,7 +209,7 @@ func _check_blocked_spawn(picker: ShipPicker) -> void:
 	blocker.collision_layer = 2
 	var collider := CollisionShape3D.new()
 	var box := BoxShape3D.new()
-	box.size = Vector3.ONE * 2000.0
+	box.size = Vector3.ONE * 100000.0
 	collider.shape = box
 	blocker.add_child(collider)
 	_journey.add_child(blocker)

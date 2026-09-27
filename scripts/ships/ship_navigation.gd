@@ -6,6 +6,7 @@ const CANDIDATE_COUNT: int = 32
 const MINIMUM_GOAL_AGE: float = 1.0
 const COMBAT_GOAL_INTERVAL: float = 3.0
 const SPEED_STEPS: int = 4
+const ARRIVAL_RETRY_SECONDS: float = 0.5
 
 ## One local destination owner for travel, combat, and obstacle avoidance.
 var goal_offset := Vector3.ZERO
@@ -20,6 +21,9 @@ var _goal_age: float = INF
 var _was_in_combat: bool = false
 var _target: Airship
 var _detour_time: float = 0.0
+var _arrival_island: FloatingIsland
+var _arrival_offset := Vector3.ZERO
+var _arrival_retry: float = 0.0
 
 
 func initialize(controller: FleetController, ship: Airship) -> void:
@@ -30,6 +34,8 @@ func initialize(controller: FleetController, ship: Airship) -> void:
 	blocked = false
 	_goal_age = INF
 	_was_in_combat = fleet.in_combat
+	_arrival_island = null
+	_arrival_retry = 0.0
 
 
 func usable_radius(ship: Airship) -> float:
@@ -41,10 +47,12 @@ static func search_radius(ship: Airship, maximum_island_radius: float) -> float:
 	var controller := ship.navigation.fleet
 	var relative_speed := ship.linear_velocity.length()
 	var request_speed := ship.maximum_speed
+	var local_speed: float = 0.0
 	var goal_reach: float = 0.0
 	if controller != null:
+		local_speed = controller.local_speed * ShipFlight.speed_multiplier(ship)
 		relative_speed = (ship.linear_velocity - controller.velocity).length()
-		request_speed = maxf(request_speed, maxf(controller.velocity.length(), controller.requested_speed) + controller.local_speed)
+		request_speed = maxf(request_speed, maxf(controller.velocity.length(), controller.requested_speed) + local_speed)
 		var relative := ship.global_position - controller.marker.global_position
 		var center := relative.limit_length(ship.navigation.usable_radius(ship) * 0.9)
 		goal_reach = relative.distance_to(center) + controller.local_step
@@ -54,12 +62,13 @@ static func search_radius(ship: Airship, maximum_island_radius: float) -> float:
 	var horizon := maxf(maxf(ship.linear_velocity.length(), relative_speed), request_speed) / ship.braking + turn + 1.0
 	if controller != null:
 		var clearance := maximum_island_radius + ship.hull_radius + ship.hull_half_segment + ship.island_clearance
-		horizon = maxf(horizon, clearance / controller.local_speed + turn + 1.0)
+		horizon = maxf(horizon, clearance / local_speed + turn + 1.0)
 	return maximum_island_radius + ship.hull_radius + ship.hull_half_segment + ship.island_clearance + maxf(goal_reach, request_speed * horizon)
 
 
 func prepare(delta: float, ship: Airship) -> void:
 	_goal_age += delta
+	_arrival_retry = maxf(0.0, _arrival_retry - delta)
 	if _was_in_combat != fleet.in_combat or _target != ship.combat.target:
 		_goal_age = INF
 	_was_in_combat = fleet.in_combat
@@ -67,6 +76,10 @@ func prepare(delta: float, ship: Airship) -> void:
 
 
 func plan(ship: Airship, islands: Array[FloatingIsland]) -> void:
+	if _outside(ship):
+		_plan_arrival(ship, islands)
+		return
+	_arrival_island = null
 	_update_detour_time(ship, islands)
 	var intended := Vector3.FORWARD * fleet.requested_speed
 	var relative := ship.global_position - fleet.marker.global_position
@@ -94,6 +107,8 @@ func plan(ship: Airship, islands: Array[FloatingIsland]) -> void:
 
 
 func steer(ship: Airship, avoidance: Vector3, islands: Array[FloatingIsland]) -> Vector3:
+	if _outside(ship):
+		return _steer_arrival(ship, avoidance, islands)
 	_update_detour_time(ship, islands)
 	var relative := ship.global_position - fleet.marker.global_position
 	var arrived := relative.distance_to(goal_offset) <= arrival_radius
@@ -114,6 +129,115 @@ func steer(ship: Airship, avoidance: Vector3, islands: Array[FloatingIsland]) ->
 	if not _course_clear(ship, request, islands):
 		request = _bounded_velocity(ship, destination, fleet.velocity)
 	return request
+
+
+func _outside(ship: Airship) -> bool:
+	return ship.global_position.distance_squared_to(fleet.marker.global_position) > pow(usable_radius(ship), 2.0)
+
+
+func _plan_arrival(ship: Airship, islands: Array[FloatingIsland]) -> void:
+	# The final destination stays inside the sphere. Only the approach leg may
+	# go around scenery outside it, without holding up the distant fleet marker.
+	goal_offset = (ship.global_position - fleet.marker.global_position).limit_length(usable_radius(ship) * 0.9)
+	safe_marker_speed = fleet.requested_speed
+	_goal_age = INF
+	var destination := fleet.marker.global_position + goal_offset
+	var marker_velocity := Vector3.FORWARD * fleet.requested_speed
+	# Leave the detour as soon as the fleet is reachable; converging vessels
+	# must not queue for the exact same temporary waypoint.
+	if _arrival_route_clear(ship, destination, marker_velocity, islands):
+		_arrival_island = null
+		blocked = false
+		return
+	if is_instance_valid(_arrival_island) and not _arrival_island.is_queued_for_deletion():
+		var waypoint := _arrival_island.to_global(_arrival_offset)
+		if ship.global_position.distance_to(waypoint) > arrival_radius and _arrival_route_clear(ship, waypoint, Vector3.ZERO, islands):
+			blocked = false
+			return
+	_arrival_island = null
+	blocked = true
+	if _arrival_retry > 0.0:
+		return
+	_arrival_retry = ARRIVAL_RETRY_SECONDS
+	var obstruction: FloatingIsland
+	var nearest: float = INF
+	for island in islands:
+		if not is_instance_valid(island) or island.is_queued_for_deletion():
+			continue
+		var distance := ship.global_position.distance_squared_to(island.global_position)
+		if distance < nearest and not _arrival_route_clear(ship, destination, marker_velocity, [island]):
+			obstruction = island
+			nearest = distance
+	if obstruction == null:
+		return
+	var hull := ship.hull_radius + ship.hull_half_segment
+	var speed := fleet.local_speed * ShipFlight.speed_multiplier(ship)
+	var margin := maxf(60.0, speed * 1.5)
+	var reach := obstruction.navigation_radius + hull + ship.island_clearance + margin
+	var toward := (ship.global_position - obstruction.global_position) * Vector3(1, 0, 1)
+	toward = toward.normalized() if toward.length_squared() > 0.01 else Vector3.BACK
+	var sideways := toward.cross(Vector3.UP)
+	var best_cost: float = INF
+	for index in range(6):
+		var candidate := obstruction.global_position
+		if index < 4:
+			candidate += sideways * reach * (1.0 if index % 2 == 0 else -1.0)
+			if index >= 2:
+				candidate += toward * reach * 0.6
+			candidate.y = ship.global_position.y
+		else:
+			candidate.y += obstruction.top_offset + hull + margin if index == 4 else obstruction.bottom_offset - hull - margin
+		if not _arrival_route_clear(ship, candidate, Vector3.ZERO, islands):
+			continue
+		# The next leg must get past this obstruction, even if another island
+		# farther along the journey will require its own subsequent detour.
+		if not _path_clear(ship, destination, [obstruction], candidate):
+			continue
+		var cost := ship.global_position.distance_to(candidate) + candidate.distance_to(destination)
+		cost += ShipFlight.turn_time(ship, candidate - ship.global_position) * speed
+		if cost < best_cost:
+			best_cost = cost
+			_arrival_island = obstruction
+			_arrival_offset = obstruction.to_local(candidate)
+	blocked = _arrival_island == null
+
+
+func _steer_arrival(ship: Airship, avoidance: Vector3, islands: Array[FloatingIsland]) -> Vector3:
+	if blocked:
+		return Vector3.ZERO
+	var detouring := is_instance_valid(_arrival_island) and not _arrival_island.is_queued_for_deletion()
+	var destination := _arrival_island.to_global(_arrival_offset) if detouring else fleet.marker.global_position + goal_offset
+	var marker_velocity := Vector3.ZERO if detouring else fleet.velocity
+	var request := _velocity_to(ship, destination, marker_velocity)
+	var multiplier := ShipFlight.speed_multiplier(ship)
+	# Separation must still work while several ships approach the same isle.
+	# Preserve inward progress while allowing lateral spacing around this leg.
+	var course := (destination - ship.global_position).normalized()
+	var correction := avoidance - course * minf(0.0, avoidance.dot(course) + (request - marker_velocity).dot(course) * 0.5)
+	var corrected := (request + correction - marker_velocity).limit_length(fleet.local_speed * multiplier)
+	corrected.y = clampf(corrected.y, -ship.climb_speed * multiplier, ship.climb_speed * multiplier)
+	corrected += marker_velocity
+	if not detouring and (corrected - marker_velocity).dot(fleet.marker.global_position - ship.global_position) <= 0.0:
+		corrected = request
+	if _arrival_course_clear(ship, corrected, destination, islands):
+		return corrected
+	if _arrival_course_clear(ship, request, destination, islands):
+		return request
+	_arrival_island = null
+	blocked = true
+	return Vector3.ZERO
+
+
+func _arrival_route_clear(ship: Airship, destination: Vector3, marker_velocity: Vector3, islands: Array[FloatingIsland]) -> bool:
+	return _path_clear(ship, destination, islands) and _arrival_course_clear(ship, _velocity_to(ship, destination, marker_velocity), destination, islands)
+
+
+func _arrival_course_clear(ship: Airship, request: Vector3, destination: Vector3, islands: Array[FloatingIsland]) -> bool:
+	# A turn at the waypoint ends this leg. Do not reject a safe approach because
+	# extrapolating its velocity for an entire turn would cross scenery beyond it.
+	var horizon := maxf(ship.linear_velocity.length(), request.length()) / ship.braking + ShipFlight.turn_time(ship, request) + 1.0
+	horizon = minf(horizon, ship.global_position.distance_to(destination) / maxf(request.length(), 0.001))
+	return _path_clear(ship, ship.global_position + request * horizon, islands)
 
 
 func _choose_goal(ship: Airship, islands: Array[FloatingIsland], marker_velocity: Vector3) -> bool:
@@ -185,10 +309,11 @@ func _update_detour_time(ship: Airship, islands: Array[FloatingIsland]) -> void:
 	# Braking distance alone lets fast translating fleets approach too closely.
 	# Cache for this query so candidate scoring does not repeatedly scan its islands.
 	_detour_time = 0.0
+	var local_speed := fleet.local_speed * ShipFlight.speed_multiplier(ship)
 	for island in islands:
 		if is_instance_valid(island) and not island.is_queued_for_deletion():
 			var clearance := island.navigation_radius + ship.hull_radius + ship.hull_half_segment + ship.island_clearance
-			_detour_time = maxf(_detour_time, clearance / fleet.local_speed)
+			_detour_time = maxf(_detour_time, clearance / local_speed)
 
 
 func _goal_velocity(ship: Airship, destination: Vector3) -> Vector3:
@@ -197,9 +322,12 @@ func _goal_velocity(ship: Airship, destination: Vector3) -> Vector3:
 
 func _velocity_to(ship: Airship, destination: Vector3, marker_velocity: Vector3) -> Vector3:
 	var error := destination - ship.global_position
-	var request := marker_velocity + error.normalized() * minf(fleet.local_speed, sqrt(2.0 * ship.braking * error.length()))
-	request.y = clampf(request.y, -ship.climb_speed, ship.climb_speed)
-	return request.limit_length(ship.maximum_speed)
+	var multiplier := ShipFlight.speed_multiplier(ship)
+	var climb_speed := ship.climb_speed * multiplier
+	# Base braking remains conservative as the boost tapers toward the sphere.
+	var request := marker_velocity + error.normalized() * minf(fleet.local_speed * multiplier, sqrt(2.0 * ship.braking * error.length()))
+	request.y = clampf(request.y, -climb_speed, climb_speed)
+	return request.limit_length(ship.maximum_speed * multiplier)
 
 
 func _horizon(ship: Airship) -> float:
@@ -212,25 +340,25 @@ func _steering_horizon(ship: Airship, requested: Vector3, marker_velocity: Vecto
 
 func _bounded_velocity(ship: Airship, destination: Vector3, marker_velocity: Vector3, avoidance := Vector3.ZERO) -> Vector3:
 	var relative := ship.global_position - fleet.marker.global_position
+	var multiplier := ShipFlight.speed_multiplier(ship)
+	var local_speed := fleet.local_speed * multiplier
+	var climb_speed := ship.climb_speed * multiplier
 	var requested := _velocity_to(ship, destination, marker_velocity)
 	var horizon := _steering_horizon(ship, requested, marker_velocity)
 	var relative_request := requested + avoidance - marker_velocity
 	# Limit lift before checking the endpoint so the checked path matches flight.
-	relative_request.y = clampf(relative_request.y, -ship.climb_speed, ship.climb_speed)
-	relative_request = relative_request.limit_length(fleet.local_speed)
+	relative_request.y = clampf(relative_request.y, -climb_speed, climb_speed)
+	relative_request = relative_request.limit_length(local_speed)
 	var endpoint := relative + relative_request * horizon
 	var radius := usable_radius(ship)
 	if endpoint.length() > radius:
 		relative_request = (endpoint.limit_length(radius) - relative) / horizon
-	# When already displaced, all purposeful motion approaches the sphere.
-	if relative.length() > radius:
-		relative_request = (destination - ship.global_position).limit_length(fleet.local_speed)
-		relative_request.y = clampf(relative_request.y, -ship.climb_speed, ship.climb_speed)
-	return marker_velocity + relative_request.limit_length(fleet.local_speed)
+	return marker_velocity + relative_request.limit_length(local_speed)
 
 
-func _path_clear(ship: Airship, destination: Vector3, islands: Array[FloatingIsland]) -> bool:
-	var start := ship.global_position
+func _path_clear(ship: Airship, destination: Vector3, islands: Array[FloatingIsland], start := Vector3.INF) -> bool:
+	if not start.is_finite():
+		start = ship.global_position
 	var segment := Vector2(destination.x - start.x, destination.z - start.z)
 	var hull := ship.hull_radius + ship.hull_half_segment
 	for island in islands:

@@ -131,3 +131,23 @@ A new 90-second ordinary encounter used the same workstation, renderer, resoluti
 All 15,482 shots emitted muzzle smoke through one shared batch, with no bursts dropped by its cosmetic budget. At 80-90 seconds, render CPU mean was 0.76 ms, GPU mean 0.35 ms, and Journey script mean 7.96 ms per physics tick. The much smaller wreck population accompanies higher health; this combined gameplay/presentation change does not isolate the cost of muzzle smoke or establish Steam Deck FPS.
 
 The editor import, default combat fixtures, and focused headless/rendered cannon-smoke checks passed. Inspected captures show the plume and preservation across rebasing. The focused check also covers opt-in, successful-shot triggering, opposite muzzle directions, shared batching, cosmetic overload without lost projectiles, expiry, shooter removal, and teardown. Local evidence is under `C:/Users/lukas/AppData/Local/Temp/aerwyth-cannon-smoke-75phphyu/`, including `profile_cannon_smoke.gd`, `cannon-smoke.json`, `profile.log`, and `cannon-smoke-final.log`. The external harness uses the same invocation procedure as above.
+
+## Concealed spawn arrival regression (2026-09-27)
+
+Twelve friendly Kestrel requests at startup reproduced a persistent stall behind their spawn isles. All twelve ships had blocked navigation and zero speed; their route allowances also stopped the marker. The navigator repeatedly searched 32 destinations inside the sphere at five travel speeds, then retried during steering, although the isle obstructed the entire set. The spawn positions themselves were collision-free.
+
+Ships outside the sphere now retain an island-relative approach waypoint, chosen from six candidates around/above/below an obstruction, and stop using the repeated local-goal search. They resume direct approach as soon as it clears, preserving separation without crowding one exact waypoint. Failed searches wait 0.5 seconds. External detours do not constrain marker speed; final destinations remain inside the sphere. Picker instantiation is also bounded to two requests per tick, retaining the remaining requests in order.
+
+The same 20-second headless Journey harness queued twelve Kestrels with placement seed 71937, normal scenery, combat and encounters disabled, and native Jolt flight at the project 30 Hz. Both runs used Godot 4.7.1 on the development workstation. Timings cover Journey's script step, including placement and navigation, but exclude native integration, contacts, and rendering. The corrected run processes the initial queue over six ticks.
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| Mean script step | 36.32 ms | 2.40 ms |
+| Script step p95 | 46.53 ms | 3.33 ms |
+| Mean navigation phase | 35.74 ms | 1.85 ms |
+| Blocked spawned ships at 20 s | 12 / 12 | 0 / 12 |
+| Marker speed at 20 s | 0 m/s | 25 m/s |
+
+The permanent `check_ship_arrival.gd` regression adds twelve friendlies and twelve enemies, requiring all 24 to reach the moving sphere within 120 simulated seconds. It also checks the queue budget, final-goal containment, detour rebasing and unloading. The rendered Forward Plus/D3D12 run passed with a 1.87 ms median script step and 4.38 ms p95; navigation p95 was 3.41 ms. Captures at 5, 30, and 90 seconds show the ships approaching and joining the fleet. Existing island-navigation, ship-flight, and picker checks passed. This focused scenery/arrival measurement does not establish endgame combat performance.
+
+Evidence: `C:/Users/lukas/AppData/Local/Temp/aerwyth-spawn-stall-20260927-114915/`, with `probe.gd`, `baseline.log`, `comparison-final.log`, `arrival-visual.log`, and captures. Repeat the permanent check using the isolated launch environment in [AGENTS.md](../../AGENTS.md), `--fixed-fps 30 --script res://scripts/tools/check_ship_arrival.gd`, and a unique external log. Add `--headless` for functional runs; for rendering, set `AERWYTH_CAPTURE_DIR` and append `-- --visual`.

@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="CloudType" format=3 uid="uid://bj44gcxn6o6jp"]
+
+[ext_resource type="Script" uid="uid://csdc2e3lplp2j" path="res://scripts/clouds/cloud_type.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+altitude_range = Vector2(1500, 3700)
+puff_count = 5
+puff_size = 0.38

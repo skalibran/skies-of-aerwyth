@@ -2,6 +2,12 @@ class_name ShipFlight
 extends RefCounted
 
 
+static func speed_multiplier(ship: Airship) -> float:
+	if not ship.alive or ship.navigation.fleet == null:
+		return 1.0
+	return ship.navigation.fleet.arrival_multiplier(ship.global_position)
+
+
 static func primary_axis(ship: Airship) -> Vector3:
 	var axis := Vector3(ship.primary_movement_direction.x, 0.0, ship.primary_movement_direction.z)
 	return axis.normalized() if axis.length_squared() > 0.0001 else Vector3.FORWARD
@@ -30,9 +36,12 @@ static func apply_forces(ship: Airship, desired: Vector3, delta: float) -> void:
 
 
 static func _acceleration(ship: Airship, desired: Vector3, delta: float) -> Vector3:
-	var lift_limit := minf(ship.climb_speed, ship.maximum_speed)
+	var multiplier := speed_multiplier(ship)
+	var speed_limit := ship.maximum_speed * multiplier
+	var acceleration := ship.acceleration * multiplier
+	var lift_limit := minf(ship.climb_speed * multiplier, speed_limit)
 	var lift_speed := clampf(desired.y, -lift_limit, lift_limit)
-	var horizontal_limit := sqrt(maxf(0.0, ship.maximum_speed * ship.maximum_speed - lift_speed * lift_speed))
+	var horizontal_limit := sqrt(maxf(0.0, speed_limit * speed_limit - lift_speed * lift_speed))
 	var horizontal := Vector3(desired.x, 0.0, desired.z).limit_length(horizontal_limit)
 	var forward := ship.global_basis * primary_axis(ship)
 	var movement := Vector3(ship.linear_velocity.x, 0.0, ship.linear_velocity.z)
@@ -42,10 +51,10 @@ static func _acceleration(ship: Airship, desired: Vector3, delta: float) -> Vect
 	# with the physics body. Turning reduces throttle instead of rotating velocity.
 	var alignment := maxf(0.0, forward.dot(horizontal.normalized()))
 	var requested_speed := horizontal.length() * alignment * alignment
-	var rate := ship.acceleration if requested_speed > longitudinal else ship.braking
+	var rate := acceleration if requested_speed > longitudinal else ship.braking * multiplier
 	var thrust := clampf((requested_speed - longitudinal) / delta, -rate, rate)
 	var result := forward * thrust - lateral * (1.0 - exp(-ship.lateral_drag * delta)) / delta
-	result.y = clampf((lift_speed - ship.linear_velocity.y) / delta, -ship.acceleration, ship.acceleration)
+	result.y = clampf((lift_speed - ship.linear_velocity.y) / delta, -acceleration, acceleration)
 	return result
 
 

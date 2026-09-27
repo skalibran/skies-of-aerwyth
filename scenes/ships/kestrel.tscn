@@ -5,7 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://dgdooeqaxxrxt" path="res://scenes/weapons/rusty_cannon.tscn" id="3"]
 [ext_resource type="ArrayMesh" uid="uid://bbrhc5devnwfv" path="res://resources/models/airships/kestrel/balloon.obj" id="4"]
 [ext_resource type="ArrayMesh" uid="uid://p2u4e8vamq5f" path="res://resources/models/airships/kestrel/hull.obj" id="5"]
-[ext_resource type="Material" path="res://materials/ships/kestrel_palette.tres" id="6"]
+[ext_resource type="Material" uid="uid://uw236aog2b06" path="res://materials/ships/kestrel_palette.tres" id="6"]
 [ext_resource type="PackedScene" path="res://scenes/ships/ship_death_smoke.tscn" id="7"]
 
 [sub_resource type="CapsuleShape3D" id="KestrelHull"]
@@ -17,6 +17,7 @@ mounted_slots = [NodePath("VisualRoot/LeftSlot"), NodePath("VisualRoot/RightSlot
 death_smoke_scene = ExtResource("7")
 death_smoke_points = NodePath("VisualRoot/DeathSmokePoints")
 preferred_combat_positions = PackedStringArray("front_left", "left_back", "back", "back_right", "right", "front_right")
+spawn_layer = 2
 maximum_speed = 50.0
 acceleration = 4.0
 braking = 6.0

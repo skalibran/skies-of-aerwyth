@@ -577,12 +577,15 @@ func _check_marker_control() -> void:
 	_check(fleet.radius == battle_radius, "Casualties cannot shrink the combat sphere around surviving ships.")
 	_advance_fleet(fleet, _delta, false)
 	_check(fleet.radius < battle_radius, "A cleared, occupied interior allows gradual contraction.")
-	ship.position = fleet.marker.position + Vector3(0, 0, fleet.radius + 50)
-	start = fleet.marker.position
-	_advance_fleet(fleet, _delta)
-	_check(fleet.marker.position == start, "Travel waits when a displaced trailing ship cannot fit within the moving sphere.")
+	for combat_active: bool in [false, true]:
+		for offset: Vector3 in [Vector3.BACK * (fleet.radius - 1.0), Vector3.BACK * (fleet.radius + 50.0), Vector3(0, 1200, 1600)]:
+			ship.position = fleet.marker.position + offset
+			start = fleet.marker.position
+			_advance_fleet(fleet, _delta, combat_active)
+			_check(fleet.marker.position.z < start.z and fleet.speed == fleet.cruise_speed, "Trailing and cloud-spawned ships do not slow the marker inside or outside combat.")
 	fleet.unregister_ship(ship)
 	fleet.register_ship(big)
+	start = fleet.marker.position
 	_advance_fleet(fleet, _delta)
 	_check(fleet.marker.position == start and fleet.speed == 0.0, "An empty friendly fleet stops safely even with surviving enemies.")
 	fixture.queue_free()

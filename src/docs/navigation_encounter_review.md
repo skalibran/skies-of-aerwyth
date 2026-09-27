@@ -134,7 +134,9 @@ hulls. No global route planner, terrain avoidance, or out-of-combat speed boost 
 introduced.
 
 FleetController keeps all living ships in `occupants` for footprint and maneuvering
-room, and friendlies in `members` for propulsion, trailing clearance and route pace.
+room, and friendlies in `members` for propulsion and route pace. The later
+[arrival boost](movement.md#arrival-boost) replaces the trailing-clearance slowdown,
+allowing distant ships to catch up while the marker continues moving.
 Enemy registration cannot shift the marker; enemy deaths remove their footprint via
 Journey's existing lifecycle. Growth remains gradual, combat prevents contraction,
 and an empty friendly fleet stops even if enemies remain.

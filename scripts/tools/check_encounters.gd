@@ -204,6 +204,7 @@ func _check_travel_battle_cycle() -> void:
 		ship.current_health = ship.maximum_health
 	)
 	root.add_child(journey)
+	journey._enemy_spawn_rng.seed = 71937
 	for ship in journey.ships:
 		ship.maximum_health = 100000.0
 		ship.current_health = ship.maximum_health
@@ -228,6 +229,12 @@ func _check_travel_battle_cycle() -> void:
 		var debug := journey.get_node("FleetMarker/NavigationDebug") as ShipNavigationDebug
 		debug.enabled = true
 		await _capture("marker-battle")
+	# A cloud can need placement retries; queued ships still constitute active combat.
+	for tick in range(10 * _rate):
+		if journey.encounters._pending.is_empty():
+			break
+		await physics_frame
+	_check(journey.encounters._pending.is_empty(), "Overlapping waves finish placement retries before the clearing fixture.")
 	var before_clear := journey.fleet.marker.global_position
 	for ship in journey.ships.duplicate():
 		if ship.faction == Factions.ENEMY:
@@ -255,10 +262,6 @@ func _check_journey() -> void:
 	_check(not announcement.visible, "The wave announcement starts hidden.")
 	for ship in journey.ships:
 		ship.freeze = true
-	# A leading, sideways hull must determine clearance instead of the marker alone.
-	journey.ships[0].position.z -= 200.0
-	journey.ships[0].rotation.y = PI * 0.5
-	journey.ships[0].reset_physics_interpolation()
 	_check_boundaries(journey)
 	var planned: Array[EncounterPlanner.Plan] = []
 	journey.encounters.wave_planned.connect(func(_number: int, plan: EncounterPlanner.Plan) -> void: planned.append(plan))
@@ -269,18 +272,18 @@ func _check_journey() -> void:
 	_check_boundaries(journey)
 	journey.step_simulation(1.0 / _rate)
 	_check(journey.encounters.planned_waves == 0, "Camera movement and rebasing cannot advance threat.")
-	# A real physics blocker covers the entire forward region and all candidate hulls.
+	_move_to_distance(journey, 500.0)
+	# Block the streamed field so every otherwise concealed candidate is rejected.
 	var blocker := StaticBody3D.new()
 	blocker.collision_layer = 2
 	var collider := CollisionShape3D.new()
 	var box := BoxShape3D.new()
-	box.size = Vector3(4000, 1000, 4000)
+	box.size = Vector3.ONE * 100000.0
 	collider.shape = box
 	blocker.add_child(collider)
 	journey.add_child(blocker)
 	blocker.global_position = journey.fleet.marker.global_position
 	await _frames(2)
-	_move_to_distance(journey, 500.0)
 	journey.step_simulation(1.0 / _rate)
 	_check(journey.encounters.planned_waves == 1 and journey.encounters.spawned_count == 0, "A distance milestone plans a wave but rejects positions blocked by scenery.")
 	_check(not announcement.visible, "Planning a blocked wave leaves the composed UI hidden.")
@@ -335,8 +338,13 @@ func _check_journey() -> void:
 			journey.camera_rig.pitch = -0.25
 			await _capture(entry.ship.display_name.to_lower())
 		ship.free()
-	# Run native movement and weapons together with the generated mixed roster.
+	# Bring the validated roster into weapon range without waiting for arrival travel.
+	var enemy_index: int = 0
 	for ship in journey.ships:
+		if ship.faction == Factions.ENEMY:
+			ship.global_position = journey.fleet.marker.global_position + Vector3((enemy_index % 8 - 4) * 120.0, 100.0, -400.0 - floori(enemy_index / 8.0) * 120.0)
+			enemy_index += 1
+			ship.reset_physics_interpolation()
 		ship.freeze = false
 	journey.camera_rig.orbit_distance = 1700.0
 	journey.camera_rig.focus_fleet()
@@ -373,12 +381,21 @@ func _check_spawn(ship: Airship, journey: Journey) -> void:
 	if ship.faction != Factions.ENEMY:
 		return
 	ship.freeze = true
-	var offset := ship.global_position - journey.fleet.marker.global_position
-	_check(absf(offset.x) <= Journey.ENEMY_SPAWN_HALF_WIDTH + 0.1 and absf(offset.y) <= Journey.ENEMY_SPAWN_ALTITUDE_SPREAD + 0.1, "Enemy placement stays within the forward region's width and altitude band.")
-	var rear_z := ship.global_position.z + ship.hull_radius + ship.hull_half_segment * absf(ship.global_basis.z.z)
-	for friendly in journey.fleet.members:
-		var front_z := friendly.global_position.z - friendly.hull_radius - friendly.hull_half_segment * absf(friendly.global_basis.z.z)
-		_check(front_z - rear_z >= Journey.ENEMY_SPAWN_GAP - 0.1, "Enemy hulls spawn at least 100 meters ahead of every friendly hull, including yawed leaders.")
+	var radius := ship.hull_radius + ship.hull_half_segment + ShipNavigation.HULL_CLEARANCE
+	var marker := journey.fleet.marker.global_position
+	_check(ship.global_position.z + radius <= marker.z - 500.0, "Enemy hulls spawn at least 500 meters on Z- relative to the marker.")
+	if ship.spawn_layer == Airship.SpawnLayer.ISLE:
+		var concealed := false
+		for isle in journey.island_spawner.obstacles:
+			if marker.z - isle.global_position.z >= 500.0 and isle.hides_sphere(journey.camera_rig.camera.global_position, ship.global_position, radius):
+				concealed = true
+				break
+		_check(concealed, "An eligible isle conceals the spawned enemy hull, including after rebasing.")
+	else:
+		var layer := journey.clouds.profile.preferred_spawn_layer(marker.y, -1 if ship.spawn_layer == Airship.SpawnLayer.LOWER_CLOUD else 1)
+		var cloud := journey.clouds.closest_spawn_cloud(marker, -1.0, radius, layer, 500.0)
+		_check(cloud != null and journey.clouds.volumes[cloud.mesh].contains_sphere(ship.global_position - cloud.global_position, radius), "Enemy cloud spawns use their authored layer and conceal the whole hull.")
+		_check(cloud != null and is_zero_approx(journey.clouds.volumes[cloud.mesh].sample_density(journey.camera_rig.camera.global_position - cloud.global_position)), "Enemy spawn clouds exclude the camera.")
 	var toward_party := journey.fleet.marker.global_position - ship.global_position
 	toward_party.y = 0.0
 	_check((-ship.global_basis.z).dot(toward_party.normalized()) > 0.999, "Incoming enemies face the party at placement.")

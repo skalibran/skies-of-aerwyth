@@ -83,6 +83,16 @@ Range is targeting distance, not arc length. Misses continue falling until impac
 
 ## Targeting and movement
 
+### Queryable vertical role
+
+`Airship.vertical_combat_bias()` returns the average Y component of its unique, valid, normalized `preferred_combat_positions`, from -1 (targets below) to +1 (targets above). Horizontal bearings contribute zero; opposite bearings cancel. Unknown names and duplicates are ignored, and an empty list is neutral. This describes the authored role independently of faction, scene readiness, current target, or visual banking; it does not measure the currently equipped weapons or their live firing solutions. `ShipCombat.vertical_bias(positions)` exposes the same calculation for callers with a direction list.
+
+`Airship.preferred_altitude_side()` returns -1 when upward bias is at least 0.5, so upward shooters approach from below their opponents. Otherwise it returns +1, giving downward and neutral roles the upper approach. A single upper diagonal qualifies; a weak upward option mixed with several horizontal bearings may remain neutral. All five upper bearings (`front_up`, `left_up`, `up`, `right_up`, `back_up`) and their lower counterparts (`front_bottom`, `left_bottom`, `bottom`, `right_bottom`, `back_bottom`) are supported alongside the eight horizontal bearings.
+
+Spawning uses the independent authored `Airship.spawn_layer` choice; see [ship spawning](ship_spawning.md). The combat-role queries remain available to other scripts and do not reposition the fleet marker or change navigation goals.
+
+### Target selection and navigation
+
 [ShipCombat](../../scripts/ships/ship_combat.gd) selects and retains an eligible hostile independently of navigation. The current nearest-first selector is replaceable by the planned priority system: choosing a target on the far side of the sphere does not require changing navigation or increasing local waypoint distance. Empty or utility-only loadouts continue ordinary movement. Only bearings compatible with a mounted weapon contribute presentation scores; the literal authored Kestrel preferences remain unchanged.
 
 [ShipNavigation](../../scripts/ships/ship_navigation.gd) owns every destination and final movement request. It samples nearby positions inside the fleet sphere, considering turn feasibility, approaching the boundary, island clearance, target range and weapon presentation. Far targets favor approach through successive local goals; nearby targets favor firing passes. Engagement distance is capped at 75% of the current sphere radius. The selector accepts targets within the sphere plus its entry band, while actual firing range, cones and ballistics remain weapon-owned. See [movement](movement.md) for ownership, containment, momentum, and validation.

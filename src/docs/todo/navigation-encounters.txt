@@ -5,6 +5,13 @@ Runtime contracts and accepted content constraints: ../movement.md and ../encoun
 Audit and route-regression results: ../navigation_encounter_review.md.
 Combat hardware, release, and broader hands-on acceptance: todo-combat.txt.
 
+[ ] ENCOUNTER-03: Reconcile Manta cost with encounter fixtures and documentation.
+    resources/ships/manta.tres currently inherits ShipDefinition's 10-point cost.
+    check_encounters.gd and the documented patrol/wave totals expect 24, causing
+    two pre-existing cost assertions to fail during the cloud-spawn validation.
+    Confirm the intended authored cost, then align the resource or expectations
+    and recalculate the documented random-pool ceiling.
+
 [ ] NAV-02: Accept combat maneuvering while the marker moves.
     Scoring uses the same world velocity as flight, including marker motion.
     At 25 m/s cruise and 12 m/s local correction, requested horizontal velocity

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="CloudType" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/clouds/cloud_type.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Stratus"
+altitude_range = Vector2(1300, 2700)
+weight = 0.8
+depth_ratio = 0.8
+height_ratio = 0.12
+puff_count = 5
+puff_size = 0.5
+erosion = 0.1
+base_cut = -0.6
+top_color = Color(0.91, 0.94, 0.97, 1)
+base_color = Color(0.66, 0.72, 0.79, 1)

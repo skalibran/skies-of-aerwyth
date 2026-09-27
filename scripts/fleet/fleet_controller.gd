@@ -13,6 +13,12 @@ extends Node
 ## Opponents approaching from outside can influence combat destinations inside.
 @export_range(100.0, 2000.0) var entry_range: float = 600.0
 
+@export_group("Arrival")
+## Distance outside the sphere where ships receive the full arrival boost.
+@export_range(100.0, 10000.0, 50.0, "suffix:m") var arrival_boost_distance: float = 1000.0
+## Scales linear flight and approach limits; one disables the boost.
+@export_range(1.0, 20.0, 0.5) var arrival_max_multiplier: float = 10.0
+
 var members: Array[Airship] = []
 ## Both factions share navigation space; only player members set travel pace.
 var occupants: Array[Airship] = []
@@ -44,6 +50,11 @@ func initialize() -> void:
 	radius = required_radius()
 
 
+func arrival_multiplier(world_position: Vector3) -> float:
+	var outside_distance := maxf(0.0, world_position.distance_to(marker.global_position) - radius)
+	return lerpf(1.0, arrival_max_multiplier, clampf(outside_distance / maxf(arrival_boost_distance, 1.0), 0.0, 1.0))
+
+
 func required_radius() -> float:
 	var footprint: float = 0.0
 	var turn_room := minimum_radius
@@ -72,10 +83,6 @@ func prepare_step(delta: float, combat_active: bool = false) -> void:
 	requested_speed = cruise_speed
 	for ship in members:
 		requested_speed = minf(requested_speed, maxf(0.0, ship.maximum_speed - local_speed))
-		var relative := ship.global_position - marker.global_position
-		var room := radius - ship.hull_radius - ship.hull_half_segment - relative.length()
-		if relative.z > 0.0:
-			requested_speed = minf(requested_speed, cruise_speed * clampf(room / (radius * 0.25), 0.0, 1.0))
 
 
 func advance(delta: float) -> void:
@@ -84,7 +91,7 @@ func advance(delta: float) -> void:
 	var sustainable := requested_speed
 	for ship in members:
 		sustainable = minf(sustainable, ship.navigation.safe_marker_speed)
-	# Combat uses the same travel pace. Only fleet clearance can slow the marker.
+	# Ships catch up using arrival assistance; only propulsion and routes limit pace.
 	speed = minf(move_toward(speed, sustainable, acceleration * delta), sustainable)
 	velocity = Vector3.FORWARD * speed
 	marker.global_position += velocity * delta
